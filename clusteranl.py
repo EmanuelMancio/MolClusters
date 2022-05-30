@@ -11,11 +11,19 @@ import numpy as np
 
 
 class Cluster:
-    def __init__(self, moli: int, moli_name: str, molj: int, molj_name: str, initial_time: float) -> None:
+    def __init__(
+        self,
+        moli: int,
+        moli_name: str,
+        molj: int,
+        molj_name: str,
+        initial_time: float,
+        dist: float,
+    ) -> None:
         self._cluster: Type[nx.Graph] = nx.Graph()
-        self._cluster.add_node(moli,name=moli_name)
-        self._cluster.add_node(molj,name=molj_name)
-        self._cluster.add_edge(moli, molj)
+        self._cluster.add_node(moli, name=moli_name)
+        self._cluster.add_node(molj, name=molj_name)
+        self._cluster.add_edge(moli, molj, weight=dist, distance=dist)
         self.initial_time: float = initial_time
 
     def add_mol(self, ref_mol: int, molid: str, mol_name: str) -> None:
@@ -25,24 +33,24 @@ class Cluster:
         if molid in self:
             raise ValueError(f"mol {molid} already in the cluster, use add_con instead")
 
-        self._cluster.add_node(molid,name=mol_name)
+        self._cluster.add_node(molid, name=mol_name)
         self._cluster.add_edge(ref_mol, molid)
 
-    def add_con(self, moli:int, molj:int) -> None:
+    def add_con(self, moli: int, molj: int, dist: float) -> None:
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster, use add_mol instead")
         if molj not in self:
             raise ValueError(f"mol {molj} not in the cluster, use add_mol instead")
 
-        self._cluster.add_edge(moli, molj)
+        self._cluster.add_edge(moli, molj, weight=dist, distance=dist)
 
-    def remove_mol(self, molid):
+    def remove_mol(self, molid) -> None:
         if molid not in self:
             raise ValueError(f"mol {molid} not in the cluster")
 
         self._cluster.remove_node(molid)
 
-    def remove_con(self, moli, molj):
+    def remove_con(self, moli, molj) -> None:
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster")
         if molj not in self:
@@ -50,17 +58,20 @@ class Cluster:
 
         self._cluster.remove_edge(moli, molj)
 
-    def __contains__(self,item):
+    def get_lifetime(self, time: float) -> float:
+        return time - self.initial_time
+
+    def __contains__(self, item) -> bool:
         return item in self._cluster
 
     def __iter__(self) -> Iterator:
         return iter(self._cluster)
 
-    def __getitem__(self,key: int):
+    def __getitem__(self, key: int):
         return self._cluster[key]
 
-    def __eq__(self, other: "Cluster"):
-        if not isinstance(other,Cluster):
+    def __eq__(self, other: "Cluster") -> bool:
+        if not isinstance(other, Cluster):
             return NotImplemented
 
         this_molids = list(self._cluster)
@@ -71,7 +82,10 @@ class Cluster:
     def __len__(self) -> int:
         return len(self._cluster)
 
-def parse_pairs(pairs: Type[np.ndarray], sel1, sel2, time: float) -> List[Type[Cluster]]:
+
+def parse_pairs(
+    pairs: Type[np.ndarray], sel1, sel2, time: float
+) -> List[Type[Cluster]]:
     # TODO: Implements parse_pairs
     return []
 
@@ -87,7 +101,7 @@ def analyze_trajectory(
         cutoff (float): cm-cm distance to be considered in the analyses
     """
 
-    clusters : List[Type[Cluster]]= []
+    clusters: List[Type[Cluster]] = []
 
     sel1 = universe.select_atoms(f"resname {cluster_residues[0]}")
     sel2 = universe.select_atoms(f"resname {cluster_residues[1]}")
@@ -109,7 +123,6 @@ def analyze_trajectory(
         clusters = parse_pairs(pairs, sel1, sel2, conf.time)
 
         # TODO: Implement cluster evolution analysis
-
 
 
 if __name__ == "__main__":
