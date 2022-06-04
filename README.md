@@ -1,4 +1,4 @@
-# Cluster Analyzer
+# Molecular Clusters
 Script to analyze formation and life-time of molecular clusters from a molecular dynamics simulation
 
 
@@ -27,4 +27,8 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## License
 
-[GNU GPLv3](https://choosealicense.com/licenses/gpl-3.0/)
+This script is licensed under the [GNU GPLv3](https://choosealicense.com/licenses/gpl-3.0/) license - see [LICENSE](LICENSE) for more details
+
+## Acknowledgments
+
+<!-- TODO: add acknowledgments text -->
