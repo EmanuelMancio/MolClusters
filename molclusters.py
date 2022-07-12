@@ -22,7 +22,14 @@ class Cluster:
         self._cluster: Type[nx.Graph] = nx.Graph()
         self._cluster.add_node(moli.resid, name=moli.resname)
         self._cluster.add_node(molj.resid, name=molj.resname)
-        self._cluster.add_edge(moli.resid, molj.resid, weight=dist, distance=dist)
+        if dist == 0.0:
+            self._cluster.add_edge(
+                moli.resid, molj.resid, distance=dist, weight=np.inf
+            )
+        else:
+            self._cluster.add_edge(
+                moli.resid, molj.resid, distance=dist, weight=np.exp(dist)
+            )
         self.initial_time: float = initial_time
 
     def add_mol(
