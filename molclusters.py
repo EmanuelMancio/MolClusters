@@ -143,16 +143,31 @@ def analyze_trajectory(
         # TODO: Implement cluster evolution analysis
 
 
+def parse_input_file(in_file: Type[arg.FileType]) -> Dict[str,Dict[str,Tuple[float,str]]]:
+    cls_args: Dict[str,Dict[str,Tuple[float,str]]] = {}
+
+    for line in in_file:
+        line_elements = line.split()
+        try:
+            if line_elements[0] in cls_args:
+                cls_args[line_elements[0]][line_elements[1]] = (float(line_elements[2]), "cm")
+            else:
+                cls_args[line_elements[0]] = {line_elements[1]: (float(line_elements[2]), "cm")}
+        except IndexError:
+            pass
+
+    return cls_args
+
+
 if __name__ == "__main__":
     parser = arg.ArgumentParser()
 
     parser.add_argument("traj", type=str, help="Trajectory File")
     parser.add_argument("top", type=str, help="Topology file")
-    parser.add_argument("cutoff", type=float)
-    parser.add_argument("residues", type=str, nargs=2)
+    parser.add_argument("in", type=arg.FileType("r"), help="Input file with distances information")
 
     args = parser.parse_args()
 
-    clst_residues = args.residues
+    cls_args = parse_input_file(args["in"])
 
     uni = mda.Universe(args.top, args.traj)
