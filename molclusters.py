@@ -10,6 +10,7 @@ from MDAnalysis import core
 import networkx as nx
 import numpy as np
 
+CLS_ID = 0
 
 class Cluster:
     def __init__(
@@ -23,14 +24,16 @@ class Cluster:
         self._cluster.add_node(moli.resid, name=moli.resname)
         self._cluster.add_node(molj.resid, name=molj.resname)
         if dist == 0.0:
-            self._cluster.add_edge(
-                moli.resid, molj.resid, distance=dist, weight=np.inf
-            )
+            self._cluster.add_edge(moli.resid, molj.resid, distance=dist, weight=np.inf)
         else:
             self._cluster.add_edge(
                 moli.resid, molj.resid, distance=dist, weight=np.exp(dist)
             )
         self.initial_time: float = initial_time
+
+        global CLS_ID
+        self.id = CLS_ID
+        CLS_ID += 1
 
     def add_mol(
         self, ref_mol: Type[core.groups.Residue], mol: Type[core.groups.Residue]
