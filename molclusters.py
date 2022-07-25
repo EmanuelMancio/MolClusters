@@ -3,7 +3,7 @@
 """ Cluster Analyzer Script """
 
 import argparse as arg
-from typing import Iterator, Type, List
+from typing import Iterator, Type, List, Dict, Tuple
 
 import MDAnalysis as mda
 from MDAnalysis import core
