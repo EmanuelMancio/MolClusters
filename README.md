@@ -4,7 +4,7 @@ Script to analyze formation and life-time of molecular clusters from a molecular
 
 ## Dependencies
 
-The script is written to support python versions greater than 3.6 and depends in the following packages:
+The script is written to support python versions greater than 3.7 and depends in the following packages:
 
 - [MDAnalysis](https://www.mdanalysis.org/)
 - [NetworkX](https://networkx.org/)
