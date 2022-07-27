@@ -12,6 +12,7 @@ import numpy as np
 
 CLS_ID = 0
 
+
 class Cluster:
     def __init__(
         self,
@@ -36,7 +37,10 @@ class Cluster:
         CLS_ID += 1
 
     def add_mol(
-        self, ref_mol: Type[core.groups.Residue], mol: Type[core.groups.Residue]
+        self,
+        ref_mol: Type[core.groups.Residue],
+        mol: Type[core.groups.Residue],
+        dist: float,
     ) -> None:
         if ref_mol.resid not in self:
             raise ValueError(f"ref_mol {ref_mol.resid} not in the cluster")
@@ -47,7 +51,7 @@ class Cluster:
             )
 
         self._cluster.add_node(mol.resid, name=mol.resname)
-        self._cluster.add_edge(ref_mol.resid, mol.resid)
+        self.add_con(ref_mol, mol, dist)
 
     def add_con(self, moli: int, molj: int, dist: float) -> None:
         if moli not in self:
