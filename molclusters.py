@@ -1,6 +1,6 @@
 #!python
 
-""" Cluster Analyzer Script """
+"""Cluster Analyzer Script."""
 
 import argparse as arg
 from typing import Iterator, Type, List, Dict, Tuple
@@ -24,12 +24,7 @@ class Cluster:
         self._cluster: Type[nx.Graph] = nx.Graph()
         self._cluster.add_node(moli.resid, name=moli.resname)
         self._cluster.add_node(molj.resid, name=molj.resname)
-        if dist == 0.0:
-            self._cluster.add_edge(moli.resid, molj.resid, distance=dist, weight=np.inf)
-        else:
-            self._cluster.add_edge(
-                moli.resid, molj.resid, distance=dist, weight=np.exp(dist)
-            )
+        self.add_con(moli, molj, dist)
         self.initial_time: float = initial_time
 
         global CLS_ID
@@ -53,13 +48,23 @@ class Cluster:
         self._cluster.add_node(mol.resid, name=mol.resname)
         self.add_con(ref_mol, mol, dist)
 
-    def add_con(self, moli: int, molj: int, dist: float) -> None:
+    def add_con(
+        self,
+        moli: Type[core.groups.Residue],
+        molj: Type[core.groups.Residue],
+        dist: float,
+    ) -> None:
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster, use add_mol instead")
         if molj not in self:
             raise ValueError(f"mol {molj} not in the cluster, use add_mol instead")
 
-        self._cluster.add_edge(moli, molj, weight=dist, distance=dist)
+        if dist == 0.0:
+            self._cluster.add_edge(moli.resid, molj.resid, distance=dist, weight=np.inf)
+        else:
+            self._cluster.add_edge(
+                moli.resid, molj.resid, distance=dist, weight=np.exp(1 / dist)
+            )
 
     def remove_mol(self, mol: Type[core.groups.Residue]) -> None:
         if mol.resid not in self:
