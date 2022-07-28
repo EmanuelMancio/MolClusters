@@ -85,6 +85,9 @@ class Cluster:
     def get_lifetime(self, time: float) -> float:
         return time - self.initial_time
 
+    def merge(self, other: "Cluster") -> None:
+        self._cluster = nx.compose(self._cluster, other._cluster)
+
     def __contains__(self, item) -> bool:
         return item in self._cluster
 
