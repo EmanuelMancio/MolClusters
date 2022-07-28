@@ -101,10 +101,7 @@ class Cluster:
         if not isinstance(other, Cluster):
             return NotImplemented
 
-        this_molids: List[int] = list(self._cluster)
-        other_molids: List[int] = list(other)
-
-        return this_molids.sort() == other_molids.sort()
+        return nx.utils.graphs_equal(self._cluster, other._cluster)
 
     def __len__(self) -> int:
         return len(self._cluster)
