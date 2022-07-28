@@ -88,8 +88,11 @@ class Cluster:
     def merge(self, other: "Cluster") -> None:
         self._cluster = nx.compose(self._cluster, other._cluster)
 
-    def __contains__(self, item) -> bool:
+    def __contains__(self, item: int) -> bool:
         return item in self._cluster
+
+    def __contains__(self, item: Type[core.groups.Residue]) -> bool:
+        return item.resid in self._cluster
 
     def __iter__(self) -> Iterator:
         return iter(self._cluster)
