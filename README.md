@@ -1,6 +1,6 @@
 # Molecular Clusters
-Script to analyze formation and life-time of molecular clusters from a molecular dynamics simulation
 
+Script to analyze formation and life-time of molecular clusters from a molecular dynamics simulation
 
 ## Dependencies
 
@@ -12,7 +12,7 @@ The script is written to support python versions greater than 3.7 and depends on
 
 You can install the dependencies in any way you prefer. To install the libraries with [Anaconda](https://www.anaconda.com/download/), do the following:
 
-```
+```bash
 conda install mdanalysis -c conda-forge
 conda install numpy networkx
 ```
