@@ -459,7 +459,7 @@ def analyze_trajectory(
                 clusters.pop(i)
 
         # Identify new clusters
-        for mol in r_cluster:
+        for mol in conn_tab:
             if mol not in r_cluster:
                 mols_to_clus = list(conn_tab[mol])
                 new_cluster = Cluster(
