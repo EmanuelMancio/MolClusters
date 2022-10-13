@@ -146,7 +146,7 @@ class Cluster:
         return item in self._cluster
 
     def __iter__(self) -> Iterator:
-        return iter(self._cluster)
+        return iter(self._cluster.copy())
 
     def __getitem__(self, key: int):
         return self._cluster[key]
