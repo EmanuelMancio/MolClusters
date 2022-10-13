@@ -364,7 +364,7 @@ def analyze_trajectory(
 
     print_clusters_index(universe, clusters)
 
-    for conf in universe.trajectory[1:]:
+    for i, conf in enumerate(universe.trajectory[1:], start=1):
         connection_table(conn_tab, selections, cluster_args, uni.dimensions)
 
         # order of operations:
@@ -376,54 +376,58 @@ def analyze_trajectory(
         # 6° Cluster Merge
         # 7° Cluster Formation
 
-        merge = []
+        merge = set()
+        graphs_from_sep = []
 
-        for clst in clusters:
-            for mol in clusters[clst]:
+        for id, clst in clusters.items():
+            for mol in clst:
                 mol_con = set(clst[mol])
                 new_con = set(conn_tab[mol])
 
                 con_to_add = new_con.difference(mol_con)
                 con_to_rem = mol_con.difference(new_con)
+                con_to_edit = mol_con.intersection(new_con)
 
-                clusters[clst].remove_cons(mol, con_to_rem)  # remove connections
+                clst.remove_cons(mol, con_to_rem)  # remove connections
 
                 for con in con_to_add:
-
                     try:
                         # identify clusters to merge
-                        if r_cluster[con] != clst.id:
-                            merge.append([clusters[clst].id, r_cluster[con]])
+                        if r_cluster[con] != id:
+                            to_merge = [id, r_cluster[con]]
+                            to_merge.sort()
+                            merge.add(tuple(to_merge))
 
                         # add connections between molecules of the cluster
                         else:
-                            clusters[clst].add_con(mol, con, conn_tab[mol][con])
+                            clst.add_con(mol, con, conn_tab[mol][con])
                     except KeyError:
                         # add free molecules to cluster
-                        clusters[clst].add_mol(mol, con, conn_tab[mol][con])
-                        r_cluster[con] = clusters[clst].id
-
-                graphs_from_sep = clst.separation()
-
-                for graph in graphs_from_sep:
-                    # remove molecules
-                    if len(graph) == 1:
-                        r_cluster.pop(list(graph)[0])
-                    else:
-                        # generate new cluster from separation
-                        tmp_cls = Cluster.from_graph(graph, conf.time)
-                        clusters[tmp_cls.id] = tmp_cls
-
-                        for mol in tmp_cls:
-                            r_cluster[mol] = tmp_cls.id
+                        resname = uni.residues[con - 1].resname
+                        clst.add_mol(mol, con, resname, conn_tab[mol][con])
+                        r_cluster[con] = id
 
                 # change distances to new values
-                for con in new_con:
-                    clusters[clst].set_dist(mol, con, conn_tab[mol][con])
+                for con in con_to_edit:
+                    clst.set_dist(mol, con, conn_tab[mol][con])
+
+            graphs_from_sep += clst.separate()
+
+        for graph in graphs_from_sep:
+            # remove molecules
+            if len(graph) == 1:
+                r_cluster.pop(list(graph)[0])
+            else:
+                # generate new cluster from separation
+                tmp_cls = Cluster.from_graph(graph, conf.time)
+                clusters[tmp_cls.id] = tmp_cls
+
+                for mol in tmp_cls:
+                    r_cluster[mol] = tmp_cls.id
 
         # merge clusters
         for i, j in merge:
-            if len(clusters[i]) >= len(clusters[j]):
+            if clusters[i].size >= clusters[j].size:
                 clusters[i].merge(clusters[j])
                 for mol in clusters[j]:
                     r_cluster[mol] = i
