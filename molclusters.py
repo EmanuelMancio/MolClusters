@@ -114,6 +114,10 @@ class Cluster:
     def graph(self) -> Type[nx.Graph]:
         return self._cluster
 
+    @property
+    def size(self) -> int:
+        return len(self)
+
     def get_dist(self, moli: int, molj: int) -> float:
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster")
