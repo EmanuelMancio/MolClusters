@@ -338,6 +338,20 @@ def connection_table(
                     conn_tab[rj] = {ri: distances[k]}
 
 
+def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
+    sizes = [cls.size for cls in clusters]
+    avg = np.average(sizes)
+    min_size = min(sizes)
+    max_size = max(sizes)
+    time = uni.coord.time
+
+    clusters_size_evo[k][0] = time
+    clusters_size_evo[k][4] = len(clusters)
+    clusters_size_evo[k][2] = min_size
+    clusters_size_evo[k][3] = avg
+    clusters_size_evo[k][4] = max_size
+
+
 def analyze_trajectory(
     universe: Type[mda.Universe],
     cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
@@ -363,6 +377,10 @@ def analyze_trajectory(
     )
 
     print_clusters_index(universe, clusters)
+
+    clusters_size_evo = np.zeros((len(uni.trajectory), 5))
+
+    get_clusters_info(clusters_size_evo, clusters.values(), uni, 0)
 
     for i, conf in enumerate(universe.trajectory[1:], start=1):
         connection_table(conn_tab, selections, cluster_args, uni.dimensions)
@@ -462,6 +480,10 @@ def analyze_trajectory(
                     r_cluster[m] = new_cluster.id
 
                 clusters[new_cluster.id] = new_cluster
+
+        get_clusters_info(clusters_size_evo, clusters.values(), uni, i)
+
+    np.savetxt(clusters_size_evo)
 
 
 def print_clusters_index(uni, clusters):
