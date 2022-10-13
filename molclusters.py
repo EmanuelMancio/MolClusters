@@ -522,6 +522,6 @@ if __name__ == "__main__":
 
     cls_args = parse_input_file(args.inp)
 
-    uni = mda.Universe(args.top, args.traj)
+    uni = mda.Universe(args.top, args.traj, in_memory_step=1000) # TODO: add in_memory_step as option on cmdline
 
     analyze_trajectory(uni, cls_args)
