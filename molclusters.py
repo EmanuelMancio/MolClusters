@@ -305,11 +305,11 @@ def correct_clusters_index(clusters: List[Type[Cluster]], r_cluster, from_pos: i
 
 
 def connection_table(
-    conn_tab,
     selections: Dict[str, Type[core.groups.AtomGroup]],
     cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
     box: Type[np.ndarray],
 ) -> None:
+    conn_tab = {}
     for resi in cluster_args:
         seli = selections[resi]
 
@@ -336,6 +336,8 @@ def connection_table(
                     conn_tab[rj][ri] = distances[k]
                 else:
                     conn_tab[rj] = {ri: distances[k]}
+
+    return conn_tab
 
 
 def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
@@ -383,7 +385,7 @@ def analyze_trajectory(
     get_clusters_info(clusters_size_evo, clusters.values(), uni, 0)
 
     for i, conf in enumerate(universe.trajectory[1:], start=1):
-        connection_table(conn_tab, selections, cluster_args, uni.dimensions)
+        conn_tab = connection_table(selections, cluster_args, uni.dimensions)
 
         # order of operations:
         # 1° Remove connections
@@ -397,10 +399,17 @@ def analyze_trajectory(
         merge = set()
         graphs_from_sep = []
 
-        for id, clst in clusters.items():
+        for id, clst in clusters.copy().items():
+            clst_will_merge = False
             for mol in clst:
                 mol_con = set(clst[mol])
-                new_con = set(conn_tab[mol])
+
+                if mol in conn_tab:
+                    new_con = set(conn_tab[mol])
+                else:
+                    clst.remove_mol(mol)
+                    r_cluster.pop(mol)
+                    continue
 
                 con_to_add = new_con.difference(mol_con)
                 con_to_rem = mol_con.difference(new_con)
@@ -409,9 +418,10 @@ def analyze_trajectory(
                 clst.remove_cons(mol, con_to_rem)  # remove connections
 
                 for con in con_to_add:
-                    try:
+                    if con in r_cluster:
                         # identify clusters to merge
                         if r_cluster[con] != id:
+                            clst_will_merge = True
                             to_merge = [id, r_cluster[con]]
                             to_merge.sort()
                             merge.add(tuple(to_merge))
@@ -419,7 +429,7 @@ def analyze_trajectory(
                         # add connections between molecules of the cluster
                         else:
                             clst.add_con(mol, con, conn_tab[mol][con])
-                    except KeyError:
+                    else:
                         # add free molecules to cluster
                         resname = uni.residues[con - 1].resname
                         clst.add_mol(mol, con, resname, conn_tab[mol][con])
@@ -429,7 +439,17 @@ def analyze_trajectory(
                 for con in con_to_edit:
                     clst.set_dist(mol, con, conn_tab[mol][con])
 
-            graphs_from_sep += clst.separate()
+            if clst.size > 1:
+                graphs_from_sep += clst.separate()
+            elif clst.size == 1:
+                if clst_will_merge:
+                    pass
+                else:
+                    for mol in clst:
+                        r_cluster.pop(mol)
+                    clusters.pop(id)
+            else:
+                clusters.pop(id)
 
         for graph in graphs_from_sep:
             # remove molecules
