@@ -348,7 +348,7 @@ def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
     time = uni.coord.time
 
     clusters_size_evo[k][0] = time
-    clusters_size_evo[k][4] = len(clusters)
+    clusters_size_evo[k][1] = len(clusters)
     clusters_size_evo[k][2] = min_size
     clusters_size_evo[k][3] = avg
     clusters_size_evo[k][4] = max_size
