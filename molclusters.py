@@ -531,7 +531,7 @@ def analyze_trajectory(
 
         get_clusters_info(clusters_size_evo, clusters.values(), uni, i)
 
-    np.savetxt(clusters_size_evo)
+    np.savetxt("evo.txt", clusters_size_evo)
 
 
 def print_clusters_index(uni, clusters):
