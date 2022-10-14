@@ -354,6 +354,35 @@ def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
     clusters_size_evo[k][4] = max_size
 
 
+def merge_clusters(clusters, i, j, r_cluster):
+    if i == j:
+        return
+    elif clusters[i].size >= clusters[j].size:
+        clusters[i].merge(clusters[j])
+        for mol in clusters[j]:
+            r_cluster[mol] = i
+
+        clusters[j] = clusters[i].id
+        return j
+    else:
+        clusters[j].merge(clusters[i])
+        for mol in clusters[i]:
+            r_cluster[mol] = j
+
+        clusters[i] = clusters[j].id
+        return i
+
+
+def get_cluster_index(clusters, start):
+    if type(clusters[start]) != int:
+        return start, []
+    else:
+        id, clst = get_cluster_index(clusters, clusters[start])
+        clusters[start] = id
+        clst.append(start)
+        return id, clst
+
+
 def analyze_trajectory(
     universe: Type[mda.Universe],
     cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
@@ -463,20 +492,19 @@ def analyze_trajectory(
                 for mol in tmp_cls:
                     r_cluster[mol] = tmp_cls.id
 
+        merged_clusters = []
+
         # merge clusters
-        for i, j in merge:
-            if clusters[i].size >= clusters[j].size:
-                clusters[i].merge(clusters[j])
-                for mol in clusters[j]:
-                    r_cluster[mol] = i
+        for m, n in merge:
+            m, cls = get_cluster_index(clusters, m)
+            n, cls = get_cluster_index(clusters, n)
 
-                clusters.pop(j)
-            else:
-                clusters[j].merge(clusters[i])
-                for mol in clusters[i]:
-                    r_cluster[mol] = j
+            merged = merge_clusters(clusters, m, n, r_cluster)
+            if merged:
+                merged_clusters.append(merged)
 
-                clusters.pop(i)
+        for cls in merged_clusters:
+            clusters.pop(cls)
 
         # Identify new clusters
         for mol in conn_tab:
