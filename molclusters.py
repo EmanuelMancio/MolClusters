@@ -3,7 +3,7 @@
 """Cluster Analyzer Script."""
 
 import argparse as arg
-from typing import Dict, Iterable, Iterator, List, Tuple, Type
+from typing import Dict, Iterable, Iterator, List, Tuple, Type, Union
 
 import MDAnalysis as mda
 import networkx as nx
@@ -96,7 +96,7 @@ class Cluster:
         return time - self._initial_time
 
     def merge(self, other: "Cluster") -> None:
-        self._cluster = nx.compose(self._cluster, other.graph)
+        self._cluster = nx.compose(self._cluster, other._graph)
 
     def separate(self) -> List[Type[nx.Graph]]:
         sub_clusters: List[Type[nx.Graph]] = [
@@ -111,7 +111,7 @@ class Cluster:
         return sub_clusters[1:]
 
     @property
-    def graph(self) -> Type[nx.Graph]:
+    def _graph(self) -> Type[nx.Graph]:
         return self._cluster
 
     @property
@@ -164,132 +164,127 @@ class Cluster:
         return self._cluster.edges.data().__str__()
 
 
-def get_pair_and_distances(
-    seli: Type[core.groups.AtomGroup],
-    selj: Type[core.groups.AtomGroup],
-    cutoff: float,
-    box: Type[np.ndarray],
-) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-    cm1: Type[np.ndarray] = seli.center_of_mass(compound="residues")
+class ConnTable:
+    def __init__(self, universe, cluster_args, selections) -> None:
+        self.__uni = universe
+        self.__clst_args = cluster_args
+        self.__sels = selections
+        self.__conntab = self.__construct_table()
 
-    pairs: Type[np.ndarray]
-    distances: Type[np.ndarray]
-    if seli != selj:
-        cm2: Type[np.ndarray] = selj.center_of_mass(compound="residues")
-        pairs, distances = mda.lib.distances.capped_distance(cm1, cm2, cutoff, box=box)
-    else:
-        pairs, distances = mda.lib.distances.self_capped_distance(cm1, cutoff, box=box)
+    def __get_pair_and_distances(
+        self,
+        resi: str,
+        resj: Type[core.groups.AtomGroup],
+        box: Type[np.ndarray],
+    ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
+        cm1: Type[np.ndarray] = self.__sels[resi].center_of_mass(compound="residues")
+        cutoff = self.__clst_args[resi][resj][0]
 
-    return pairs, distances
+        pairs: Type[np.ndarray]
+        distances: Type[np.ndarray]
+        if resi != resj:
+            cm2: Type[np.ndarray] = self.__sels[resj].center_of_mass(
+                compound="residues"
+            )
+            pairs, distances = mda.lib.distances.capped_distance(
+                cm1, cm2, cutoff, box=box
+            )
+        else:
+            pairs, distances = mda.lib.distances.self_capped_distance(
+                cm1, cutoff, box=box
+            )
+
+        return pairs, distances
+
+    def __construct_table(self) -> Type[nx.Graph]:
+        conn_tab = nx.Graph()
+        for resi in self.__clst_args:
+            for resj in self.__clst_args[resi]:
+                pairs: Type[np.ndarray]
+                distances: Type[np.ndarray]
+
+                pairs, distances = self.__get_pair_and_distances(
+                    resi, resj, self.__uni.dimensions
+                )
+
+                for k, [i, j] in enumerate(pairs):
+                    ri = self.__sels[resi].residues[i].resid
+                    rj = self.__sels[resj].residues[j].resid
+
+                    conn_tab.add_edge(ri, rj, d=distances[k])
+
+        return conn_tab
+
+    def update(self) -> None:
+        self.__conntab = self.__construct_table()
+
+    def __getitem__(self, key: Union[Tuple[int, int], int]):
+        if isinstance(key, tuple):
+            if len(key) > 2:
+                raise KeyError("ConnTable only accepts two parameter for accessing data: ConnTable[i,j]")
+
+            return self.__conntab[key[0]][key[1]]["d"]
+
+        return self.mols_connected_to(key)
+
+    def __contains__(self, item: int) -> bool:
+        return item in self.__conntab
+
+    def __graph_from_mol(self, mol):
+        desc = nx.node_connected_component(self.__conntab, mol)
+        return self.__conntab.subgraph(desc)
+
+    def __iter__(self):
+        return iter(self.__conntab)
+
+    def connections_from(self, mol):
+        return list(self.__conntab.edges(mol))
+
+    def all_connections_from(self, mol):
+        g = self.__graph_from_mol(mol)
+        return list(g.edges)
+
+    def mols_connected_to(self, mol):
+        return list(self.__conntab[mol])
+
+    def all_mols_connected_to(self, mol):
+        g = self.__graph_from_mol(mol)
+        return list(g.nodes)
+
+    def _subgraphs(self):
+        for c in nx.connected_components(self.__conntab):
+            yield self.__conntab.subgraph(c)
 
 
-def init_clusters(selections, cluster_args, box, initial_time):
-    clusters = []
-    conn_tab = {}
+def init_clusters(universe, conn_tab: Type[ConnTable]):
+    clusters = {}
     r_cluster = {}
-    for resi in cluster_args:
-        seli = selections[resi]
-        for resj in cluster_args[resi]:
-            selj = selections[resj]
+    for subgraph in conn_tab._subgraphs():
+        cons = list(subgraph.edges)
+        moli, molj = cons[0]
+        resi = universe.residues[moli - 1].resname
+        resj = universe.residues[molj - 1].resname
+        cls = Cluster(moli, molj, resi, resj, conn_tab[moli, molj], uni.coord.time)
+        id = cls.id
 
-            pairs, distances = get_pair_and_distances(
-                seli, selj, cluster_args[resi][resj][0], box
-            )
+        r_cluster[moli] = id
+        r_cluster[molj] = id
 
-            clusters_from_selection(
-                clusters,
-                conn_tab,
-                r_cluster,
-                pairs,
-                distances,
-                seli,
-                selj,
-                initial_time,
-            )
-
-    clusters = {cl.id: cl for cl in clusters}
-
-    return clusters, conn_tab, r_cluster
-
-
-def clusters_from_selection(
-    clusters: List[Type[Cluster]],
-    conn_tab,
-    r_cluster,
-    pairs: Type[np.ndarray],
-    distances: Type[np.ndarray],
-    seli: Type[core.groups.AtomGroup],
-    selj: Type[core.groups.AtomGroup],
-    time: float,
-) -> None:
-    for k, [i, j] in enumerate(pairs):
-        resi = seli.residues[i].resid
-        resj = selj.residues[j].resid
-        ni = selj.residues[i].resname
-        nj = selj.residues[j].resname
-        try:
-            ri_clusters = [resi in cls for cls in clusters]
-
-            rj_clusters = [resj in cls for cls in clusters]
-        except AttributeError:
-            clusters.append(Cluster(resi, resj, ni, nj, distances[k], time))
-            continue
-
-        ri_in_clusters = any(ri_clusters)
-        rj_in_clusters = any(rj_clusters)
-
-        if not ri_in_clusters and not rj_in_clusters:
-            clusters.append(Cluster(resi, resj, ni, nj, distances[k], time))
-            cls_id = clusters[-1].id
-        elif not ri_in_clusters and rj_in_clusters:
-            ind = rj_clusters.index(True)
-            clusters[ind].add_mol(resj, resi, ni, distances[k])
-            cls_id = clusters[ind].id
-        elif ri_in_clusters and not rj_in_clusters:
-            ind = ri_clusters.index(True)
-            clusters[ind].add_mol(resi, resj, nj, distances[k])
-            cls_id = clusters[ind].id
-        else:
-            ri_cluster = r_cluster[resi] - 1
-            rj_cluster = r_cluster[resj] - 1
-
-            # Both molecules in the same cluster: just add connection
-            if ri_cluster == rj_cluster:
-                clusters[rj_cluster].add_con(resi, resj, distances[k])
-                cls_id = ri_cluster + 1
-
-            # Molecules in different clusters: needs to consider order of cluster
-            # in the clusters list so that the id of clusters and r_cluster are correctly changed
-            elif ri_cluster < rj_cluster:
-                clusters[ri_cluster].merge(clusters[rj_cluster])
-                cls_id = ri_cluster + 1
-                for mol in clusters[rj_cluster]:
-                    r_cluster[mol] = cls_id
-
-                clusters.pop(rj_cluster)
-                clusters[ri_cluster].add_con(resi, resj, distances[k])
-                correct_clusters_index(clusters, r_cluster, rj_cluster)
+        for moli, molj in cons[1:]:
+            if moli in cls and molj not in cls:
+                resj = universe.residues[molj - 1].resname
+                cls.add_mol(moli, molj, resj, conn_tab[moli, molj])
+                r_cluster[molj] = id
+            elif moli not in cls and molj in cls:
+                resi = universe.residues[moli - 1].resname
+                cls.add_mol(molj, moli, resi, conn_tab[moli, molj])
+                r_cluster[moli] = id
             else:
-                clusters[rj_cluster].merge(clusters[ri_cluster])
-                cls_id = rj_cluster + 1
-                for mol in clusters[ri_cluster]:
-                    r_cluster[mol] = cls_id
+                cls.add_con(moli, molj, conn_tab[moli, molj])
 
-                clusters.pop(ri_cluster)
-                clusters[rj_cluster].add_con(resi, resj, distances[k])
-                correct_clusters_index(clusters, r_cluster, ri_cluster)
+        clusters[cls.id] = cls
 
-        r_cluster[resi] = cls_id
-        r_cluster[resj] = cls_id
-
-        if resi in conn_tab:
-            conn_tab[resi][resj] = distances[k]
-        else:
-            conn_tab[resi] = {resj: distances[k]}
-        if resj in conn_tab:
-            conn_tab[resj][resi] = distances[k]
-        else:
-            conn_tab[resj] = {resi: distances[k]}
+    return clusters, r_cluster
 
 
 def correct_clusters_index(clusters: List[Type[Cluster]], r_cluster, from_pos: int):
@@ -302,42 +297,6 @@ def correct_clusters_index(clusters: List[Type[Cluster]], r_cluster, from_pos: i
         i = cls.id
         for mol in cls:
             r_cluster[mol] = i
-
-
-def connection_table(
-    selections: Dict[str, Type[core.groups.AtomGroup]],
-    cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
-    box: Type[np.ndarray],
-) -> None:
-    conn_tab = {}
-    for resi in cluster_args:
-        seli = selections[resi]
-
-        for resj in cluster_args[resi]:
-            selj = selections[resj]
-
-            pairs: Type[np.ndarray]
-            distances: Type[np.ndarray]
-
-            pairs, distances = get_pair_and_distances(
-                seli, selj, cluster_args[resi][resj][0], box
-            )
-
-            for k, [i, j] in enumerate(pairs):
-                ri = seli.residues[i].resid
-                rj = selj.residues[j].resid
-
-                if ri in conn_tab:
-                    conn_tab[ri][rj] = distances[k]
-                else:
-                    conn_tab[ri] = {rj: distances[k]}
-
-                if rj in conn_tab:
-                    conn_tab[rj][ri] = distances[k]
-                else:
-                    conn_tab[rj] = {ri: distances[k]}
-
-    return conn_tab
 
 
 def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
@@ -354,13 +313,24 @@ def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
     clusters_size_evo[k][4] = max_size
 
 
-def merge_clusters(clusters, i, j, r_cluster):
+def merge_clusters(
+    clusters: Dict[int, Type[Cluster]],
+    conn_tab: Type[ConnTable],
+    i,
+    j,
+    r_cluster,
+    connections,
+):
     if i == j:
         return
-    elif clusters[i].size >= clusters[j].size:
+
+    if clusters[i].size >= clusters[j].size:
         clusters[i].merge(clusters[j])
         for mol in clusters[j]:
             r_cluster[mol] = i
+
+        for mi, mj in connections:
+            clusters[i].add_con(mi, mj, conn_tab[mi, mj])
 
         clusters[j] = clusters[i].id
         return j
@@ -369,12 +339,15 @@ def merge_clusters(clusters, i, j, r_cluster):
         for mol in clusters[i]:
             r_cluster[mol] = j
 
+        for mi, mj in connections:
+            clusters[j].add_con(mi, mj, conn_tab[mi, mj])
+
         clusters[i] = clusters[j].id
         return i
 
 
 def get_cluster_index(clusters, start):
-    if type(clusters[start]) != int:
+    if not isinstance(clusters[start], int):
         return start, []
     else:
         id, clst = get_cluster_index(clusters, clusters[start])
@@ -403,18 +376,18 @@ def analyze_trajectory(
         res: universe.select_atoms(f"resname {res}") for res in cluster_args
     }
 
-    clusters, conn_tab, r_cluster = init_clusters(
-        selections, cluster_args, uni.dimensions, uni.trajectory.time
-    )
+    conn_tab = ConnTable(universe, cluster_args, selections)
 
-    print_clusters_index(universe, clusters)
+    clusters, r_cluster = init_clusters(universe, conn_tab)
+
+    # print_clusters_index(universe, clusters)
 
     clusters_size_evo = np.zeros((len(uni.trajectory), 5))
 
     get_clusters_info(clusters_size_evo, clusters.values(), uni, 0)
 
     for i, conf in enumerate(universe.trajectory[1:], start=1):
-        conn_tab = connection_table(selections, cluster_args, uni.dimensions)
+        conn_tab.update()
 
         # order of operations:
         # 1° Remove connections
@@ -425,8 +398,7 @@ def analyze_trajectory(
         # 6° Cluster Merge
         # 7° Cluster Formation
 
-        merge = set()
-        graphs_from_sep = []
+        merge = {}
 
         for id, clst in clusters.copy().items():
             clst_will_merge = False
@@ -453,79 +425,101 @@ def analyze_trajectory(
                             clst_will_merge = True
                             to_merge = [id, r_cluster[con]]
                             to_merge.sort()
-                            merge.add(tuple(to_merge))
+                            to_merge = tuple(to_merge)
+                            if to_merge in merge:
+                                merge[to_merge].append((mol, con))
+                            else:
+                                merge[to_merge] = [(mol, con)]
 
                         # add connections between molecules of the cluster
                         else:
-                            clst.add_con(mol, con, conn_tab[mol][con])
+                            clst.add_con(mol, con, conn_tab[mol, con])
                     else:
                         # add free molecules to cluster
                         resname = uni.residues[con - 1].resname
-                        clst.add_mol(mol, con, resname, conn_tab[mol][con])
+                        clst.add_mol(mol, con, resname, conn_tab[mol, con])
                         r_cluster[con] = id
 
                 # change distances to new values
                 for con in con_to_edit:
-                    clst.set_dist(mol, con, conn_tab[mol][con])
+                    clst.set_dist(mol, con, conn_tab[mol, con])
 
-            if clst.size > 1:
-                graphs_from_sep += clst.separate()
-            elif clst.size == 1:
+            if clst.size == 1:
                 if clst_will_merge:
                     pass
                 else:
                     for mol in clst:
                         r_cluster.pop(mol)
                     clusters.pop(id)
-            else:
+            elif clst.size == 0:
                 clusters.pop(id)
-
-        for graph in graphs_from_sep:
-            # remove molecules
-            if len(graph) == 1:
-                r_cluster.pop(list(graph)[0])
-            else:
-                # generate new cluster from separation
-                tmp_cls = Cluster.from_graph(graph, conf.time)
-                clusters[tmp_cls.id] = tmp_cls
-
-                for mol in tmp_cls:
-                    r_cluster[mol] = tmp_cls.id
 
         merged_clusters = []
 
         # merge clusters
-        for m, n in merge:
+        for to_merge in merge:
+            m, n = to_merge
             m, cls = get_cluster_index(clusters, m)
             n, cls = get_cluster_index(clusters, n)
 
-            merged = merge_clusters(clusters, m, n, r_cluster)
+            merged = merge_clusters(
+                clusters, conn_tab, m, n, r_cluster, merge[to_merge]
+            )
             if merged:
                 merged_clusters.append(merged)
 
         for cls in merged_clusters:
             clusters.pop(cls)
 
+        for clst in clusters.copy():
+            for graph in clusters[clst].separate():
+                # remove molecules
+                if len(graph) == 1:
+                    r_cluster.pop(list(graph)[0])
+                else:
+                    # generate new cluster from separation
+                    tmp_cls = Cluster.from_graph(graph, conf.time)
+                    clusters[tmp_cls.id] = tmp_cls
+
+                    for mol in tmp_cls:
+                        r_cluster[mol] = tmp_cls.id
+
         # Identify new clusters
         for mol in conn_tab:
             if mol not in r_cluster:
-                mols_to_clus = list(conn_tab[mol])
+                cons = conn_tab.all_connections_from(mol)
+                mi, mj = cons[0]
                 new_cluster = Cluster(
-                    mol,
-                    mols_to_clus[0],
-                    universe.residues[mol].resname,
-                    universe.residues[mols_to_clus[0]].resname,
-                    conn_tab[mol][mols_to_clus[0]],
+                    mi,
+                    mj,
+                    universe.residues[mi - 1].resname,
+                    universe.residues[mj - 1].resname,
+                    conn_tab[mi, mj],
                     conf.time,
                 )
 
-                r_cluster[mol] = new_cluster.id
+                r_cluster[mi] = new_cluster.id
+                r_cluster[mj] = new_cluster.id
 
-                for m in mols_to_clus[1:]:
-                    new_cluster.add_mol(
-                        mol, m, universe.residues[mol].resname, conn_tab[mol][m]
-                    )
-                    r_cluster[m] = new_cluster.id
+                for mi, mj in cons[1:]:
+                    if mi in new_cluster and mj in new_cluster:
+                        new_cluster.add_con(mi, mj, conn_tab[mi, mj])
+                    elif mi in new_cluster:
+                        new_cluster.add_mol(
+                            mi,
+                            mj,
+                            universe.residues[mj - 1].resname,
+                            conn_tab[mi, mj],
+                        )
+                        r_cluster[mj] = new_cluster.id
+                    elif mj in new_cluster:
+                        new_cluster.add_mol(
+                            mj,
+                            mi,
+                            universe.residues[mi - 1].resname,
+                            conn_tab[mi, mj],
+                        )
+                        r_cluster[mi] = new_cluster.id
 
                 clusters[new_cluster.id] = new_cluster
 
@@ -588,10 +582,16 @@ if __name__ == "__main__":
         "inp", type=arg.FileType("r"), help="Input file with distances information"
     )
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
+
+    args = parser.parse_args(
+        "data//met-mal//met-traj.pdb data//met-mal//met-mal.tpr data//met-mal//cls.in".split()
+    )
 
     cls_args = parse_input_file(args.inp)
 
-    uni = mda.Universe(args.top, args.traj, in_memory_step=1000) # TODO: add in_memory_step as option on cmdline
+    uni = mda.Universe(
+        args.top, args.traj, in_memory=True
+    )  # TODO: add in_memory_step as option on cmdline
 
     analyze_trajectory(uni, cls_args)
