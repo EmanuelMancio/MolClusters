@@ -213,14 +213,14 @@ class ConnTable:
                     rj = selj.residues[j].resid
 
                     if ri in conn_tab:
-                        conn_tab[ri][rj] = {'d': distances[k]}
+                        conn_tab[ri][rj] = {"d": distances[k]}
                     else:
-                        conn_tab[ri] = {rj: {'d': distances[k]}}
+                        conn_tab[ri] = {rj: {"d": distances[k]}}
 
                     if rj in conn_tab:
-                        conn_tab[rj][ri] = {'d': distances[k]}
+                        conn_tab[rj][ri] = {"d": distances[k]}
                     else:
-                        conn_tab[rj] = {ri: {'d': distances[k]}}
+                        conn_tab[rj] = {ri: {"d": distances[k]}}
 
         return nx.from_dict_of_dicts(conn_tab)
 
@@ -246,16 +246,20 @@ class ConnTable:
     def connections_from(self, mol):
         return list(self._conntab.edges(mol))
 
-    def all_connections_from(self,mol):
+    def all_connections_from(self, mol):
         g = self.__graph_from_mol(mol)
         return list(g.edges)
 
     def mols_connected_to(self, mol):
         return list(self._conntab[mol])
 
-    def all_mols_connected_to(self,mol):
+    def all_mols_connected_to(self, mol):
         g = self.__graph_from_mol(mol)
         return list(g.nodes)
+
+    def _subgraphs(self):
+        for c in nx.connected_components(self._cluster):
+            yield self._conntab.subgraph(c)
 
 
 def init_clusters(selections, cluster_args, box, initial_time):
