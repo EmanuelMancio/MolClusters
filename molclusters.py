@@ -166,23 +166,26 @@ class Cluster:
 
 class ConnTable:
     def __init__(self, universe, cluster_args, selections) -> None:
-        self._uni = universe
-        self._clst_args = cluster_args
-        self._sels = selections
-        self._conntab = self.__construct_table()
+        self.__uni = universe
+        self.__clst_args = cluster_args
+        self.__sels = selections
+        self.__conntab = self.__construct_table()
 
     def __get_pair_and_distances(
-        seli: Type[core.groups.AtomGroup],
-        selj: Type[core.groups.AtomGroup],
-        cutoff: float,
+        self,
+        resi: str,
+        resj: Type[core.groups.AtomGroup],
         box: Type[np.ndarray],
     ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-        cm1: Type[np.ndarray] = seli.center_of_mass(compound="residues")
+        cm1: Type[np.ndarray] = self.__sels[resi].center_of_mass(compound="residues")
+        cutoff = self.__clst_args[resi][resj][0]
 
         pairs: Type[np.ndarray]
         distances: Type[np.ndarray]
-        if seli != selj:
-            cm2: Type[np.ndarray] = selj.center_of_mass(compound="residues")
+        if resi != resj:
+            cm2: Type[np.ndarray] = self.__sels[resj].center_of_mass(
+                compound="residues"
+            )
             pairs, distances = mda.lib.distances.capped_distance(
                 cm1, cm2, cutoff, box=box
             )
@@ -194,74 +197,63 @@ class ConnTable:
         return pairs, distances
 
     def __construct_table(self) -> Type[nx.Graph]:
-        conn_tab = {}
-        for resi in self._clst_args:
-            seli = self._sels[resi]
-
-            for resj in self._clst_args[resi]:
-                selj = self._sels[resj]
-
+        conn_tab = nx.Graph()
+        for resi in self.__clst_args:
+            for resj in self.__clst_args[resi]:
                 pairs: Type[np.ndarray]
                 distances: Type[np.ndarray]
 
                 pairs, distances = self.__get_pair_and_distances(
-                    seli, selj, self._clst_args[resi][resj][0], self._uni.dimensions
+                    resi, resj, self.__uni.dimensions
                 )
 
                 for k, [i, j] in enumerate(pairs):
-                    ri = seli.residues[i].resid
-                    rj = selj.residues[j].resid
+                    ri = self.__sels[resi].residues[i].resid
+                    rj = self.__sels[resj].residues[j].resid
 
-                    if ri in conn_tab:
-                        conn_tab[ri][rj] = {"d": distances[k]}
-                    else:
-                        conn_tab[ri] = {rj: {"d": distances[k]}}
+                    conn_tab.add_edge(ri, rj, d=distances[k])
 
-                    if rj in conn_tab:
-                        conn_tab[rj][ri] = {"d": distances[k]}
-                    else:
-                        conn_tab[rj] = {ri: {"d": distances[k]}}
-
-        return nx.Graph(conn_tab)
+        return conn_tab
 
     def update(self) -> None:
-        self._conntab = self.__construct_table()
+        self.__conntab = self.__construct_table()
 
     def __getitem__(self, key: Union[Tuple[int, int], int]):
         if isinstance(key, tuple):
             if len(key) > 2:
-                raise KeyError("ConnTable only accpets two parameter: ConnTable[i,j]")
+                raise KeyError("ConnTable only accepts two parameter for accessing data: ConnTable[i,j]")
 
-            return self._conntab[key[0]][key[1]]["d"]
-        elif isinstance(key, int):
-            return self.mols_connected_to(key)
+            return self.__conntab[key[0]][key[1]]["d"]
 
-        raise KeyError(f"{type(key)} not accepted as key for ConnTable")
+        return self.mols_connected_to(key)
 
     def __contains__(self, item: int) -> bool:
-        return item in self._conntab
+        return item in self.__conntab
 
     def __graph_from_mol(self, mol):
-        desc = nx.node_connected_component(self._conntab, mol)
-        return self._conntab.subgraph(desc)
+        desc = nx.node_connected_component(self.__conntab, mol)
+        return self.__conntab.subgraph(desc)
+
+    def __iter__(self):
+        return iter(self.__conntab)
 
     def connections_from(self, mol):
-        return list(self._conntab.edges(mol))
+        return list(self.__conntab.edges(mol))
 
     def all_connections_from(self, mol):
         g = self.__graph_from_mol(mol)
         return list(g.edges)
 
     def mols_connected_to(self, mol):
-        return list(self._conntab[mol])
+        return list(self.__conntab[mol])
 
     def all_mols_connected_to(self, mol):
         g = self.__graph_from_mol(mol)
         return list(g.nodes)
 
     def _subgraphs(self):
-        for c in nx.connected_components(self._cluster):
-            yield self._conntab.subgraph(c)
+        for c in nx.connected_components(self.__conntab):
+            yield self.__conntab.subgraph(c)
 
 
 def init_clusters(universe, conn_tab: Type[ConnTable]):
@@ -386,7 +378,7 @@ def analyze_trajectory(
 
     conn_tab = ConnTable(universe, cluster_args, selections)
 
-    clusters, r_cluster = init_clusters(universe, ConnTable)
+    clusters, r_cluster = init_clusters(universe, conn_tab)
 
     # print_clusters_index(universe, clusters)
 
@@ -502,7 +494,7 @@ def analyze_trajectory(
                     mj,
                     universe.residues[mi - 1].resname,
                     universe.residues[mj - 1].resname,
-                    conn_tab[mi,mj],
+                    conn_tab[mi, mj],
                     conf.time,
                 )
 
@@ -511,7 +503,7 @@ def analyze_trajectory(
 
                 for mi, mj in cons[1:]:
                     if mi in new_cluster and mj in new_cluster:
-                        new_cluster.add_con(mi, mj, conn_tab[mi,mj])
+                        new_cluster.add_con(mi, mj, conn_tab[mi, mj])
                     elif mi in new_cluster:
                         new_cluster.add_mol(
                             mi,
@@ -525,7 +517,7 @@ def analyze_trajectory(
                             mj,
                             mi,
                             universe.residues[mi - 1].resname,
-                            conn_tab[mi,mj],
+                            conn_tab[mi, mj],
                         )
                         r_cluster[mi] = new_cluster.id
 
