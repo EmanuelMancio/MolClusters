@@ -217,12 +217,23 @@ class ConnTable:
     def update(self) -> None:
         self.__conntab = self.__construct_table()
 
-    def __getitem__(self, key: Union[Tuple[int, int], int]):
+    def __getitem__(self, key: Union[Tuple[int, int], int]) -> Union[float, List[int]]:
         if isinstance(key, tuple):
             if len(key) > 2:
-                raise KeyError("ConnTable only accepts two parameter for accessing data: ConnTable[i,j]")
+                raise KeyError(
+                    "ConnTable accepts only one or two parameters to access data!"
+                )
+
+            if key[0] not in self:
+                raise IndexError(f"{key[0]} not in ConnTable")
+
+            if key[1] not in self:
+                raise IndexError(f"{key[1]} not in ConnTable")
 
             return self.__conntab[key[0]][key[1]]["d"]
+
+        if key not in self:
+            raise IndexError(f"{key} not in ConnTable")
 
         return self.mols_connected_to(key)
 
