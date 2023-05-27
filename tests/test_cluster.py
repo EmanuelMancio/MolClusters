@@ -1,13 +1,6 @@
-from pathlib import Path
-import sys
+from MolClusters import Cluster
+
 import pytest
-
-directory = Path(__file__).absolute()
-
-sys.path.append(str(directory.parent.parent))
-
-from molclusters import Cluster
-
 
 class TestCluster:
     cls = Cluster(0, 1, "A", "B", 1.0, 0.0)
