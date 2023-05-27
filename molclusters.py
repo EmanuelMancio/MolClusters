@@ -168,23 +168,28 @@ class ConnTable:
         self.__uni = universe
         self.__clst_args = cluster_args
         self.__sels = selections
-        self.__conntab = self.__construct_table()
+
+        self.__cm = {}
+        self.__get_mass_centers()
+        self.__construct_table()
+
+    def __get_mass_centers(self):
+        for res in self.__clst_args:
+            self.__cm[res] = self.__sels[res].center_of_mass(compound="residue")
 
     def __get_pair_and_distances(
         self,
         resi: str,
-        resj: Type[core.groups.AtomGroup],
+        resj: str,
         box: Type[np.ndarray],
     ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-        cm1: Type[np.ndarray] = self.__sels[resi].center_of_mass(compound="residues")
+        cm1: Type[np.ndarray] = self.__cm[resi]
         cutoff = self.__clst_args[resi][resj][0]
 
         pairs: Type[np.ndarray]
         distances: Type[np.ndarray]
         if resi != resj:
-            cm2: Type[np.ndarray] = self.__sels[resj].center_of_mass(
-                compound="residues"
-            )
+            cm2: Type[np.ndarray] = self.__cm[resj]
             pairs, distances = mda.lib.distances.capped_distance(
                 cm1, cm2, cutoff, box=box
             )
@@ -196,7 +201,7 @@ class ConnTable:
         return pairs, distances
 
     def __construct_table(self) -> Type[nx.Graph]:
-        conn_tab = nx.Graph()
+        self.__conntab = nx.Graph()
         for resi in self.__clst_args:
             for resj in self.__clst_args[resi]:
                 pairs: Type[np.ndarray]
@@ -210,12 +215,11 @@ class ConnTable:
                     ri = self.__sels[resi].residues[i].resid
                     rj = self.__sels[resj].residues[j].resid
 
-                    conn_tab.add_edge(ri, rj, d=distances[k])
-
-        return conn_tab
+                    self.__conntab.add_edge(ri, rj, d=distances[k])
 
     def update(self) -> None:
-        self.__conntab = self.__construct_table()
+        self.__get_mass_centers()
+        self.__construct_table()
 
     def __getitem__(self, key: Union[Tuple[int, int], int]) -> Union[float, List[int]]:
         if isinstance(key, tuple):
