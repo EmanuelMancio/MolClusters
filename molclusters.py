@@ -70,9 +70,9 @@ class Cluster:
             raise ValueError(f"mol {molj} not in the cluster, use add_mol instead")
 
         if dist == 0.0:
-            self._cluster.add_edge(moli, molj, distance=dist, weight=np.inf)
-        else:
-            self._cluster.add_edge(moli, molj, distance=dist, weight=np.exp(1 / dist))
+            raise ValueError("dist is zero. Check your trajectory")
+
+        self._cluster.add_edge(moli, molj, distance=dist, weight=np.exp(1 / dist))
 
     def remove_mol(self, mol: int) -> None:
         if mol not in self:
@@ -128,10 +128,9 @@ class Cluster:
 
     def set_dist(self, moli, molj, dist):
         if dist == 0.0:
-            self._cluster[moli][molj]["weight"] = np.inf
-        else:
-            self._cluster[moli][molj]["weight"] = np.exp(1 / dist)
+            raise ValueError("dist is zero")
 
+        self._cluster[moli][molj]["weight"] = np.exp(1 / dist)
         self._cluster[moli][molj]["distance"] = dist
 
     def get_weight(self, moli: int, molj: int) -> float:
