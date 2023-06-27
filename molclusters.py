@@ -3,6 +3,7 @@
 """Cluster Analyzer Script."""
 
 import argparse as arg
+from collections import Counter
 from typing import Dict, Iterable, Iterator, List, Tuple, Type, Union
 
 import MDAnalysis as mda
