@@ -344,296 +344,179 @@ class ConnTable:
         ):  # sorts to guarantee that in case of separation the biggest cluster keeps the id
             yield self.SubConnTable(s, self)
 
-def init_clusters(universe, conn_tab: Type[ConnTable]):
-    clusters = {}
-    r_cluster = {}
-    for subgraph in conn_tab._subgraphs():
-        cons = list(subgraph.edges)
-        moli, molj = cons[0]
-        resi = universe.residues[moli - 1].resname
-        resj = universe.residues[molj - 1].resname
-        cls = Cluster(moli, molj, resi, resj, conn_tab[moli, molj], uni.coord.time)
-        id = cls.id
 
-        r_cluster[moli] = id
-        r_cluster[molj] = id
+class MolClusters:
+    __slots__ = ["uni", "args", "sels", "conntab", "clusters", "mol_clt","clusters_size_evo"]
 
-        for moli, molj in cons[1:]:
-            if moli in cls and molj not in cls:
-                resj = universe.residues[molj - 1].resname
-                cls.add_mol(moli, molj, resj, conn_tab[moli, molj])
-                r_cluster[molj] = id
-            elif moli not in cls and molj in cls:
-                resi = universe.residues[moli - 1].resname
-                cls.add_mol(molj, moli, resi, conn_tab[moli, molj])
-                r_cluster[moli] = id
+    def __init__(
+        self,
+        universe: Type[mda.Universe],
+        cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
+    ) -> None:
+        self.uni = universe
+        self.args = cluster_args
+        self.sels: Dict[str, Type[core.groups.AtomGroup]] = {
+            res: self.uni.select_atoms(f"resname {res}") for res in cluster_args
+        }
+
+        self.conntab = ConnTable(self.uni, self.args, self.sels)
+        self.clusters: Dict[int, Type[Cluster]] = {}
+        self.mol_clt: Dict[int, int] = {}
+
+        self.clusters_size_evo = np.zeros((len(uni.trajectory), 5))
+
+        self.__start_clusters()
+        self.__get_clusters_info(0)
+
+    def __start_clusters(self):
+        for subconn in self.conntab.subconntables():
+            cls = Cluster(self.uni, subconn)
+            cls_id = cls.id
+            self.clusters[cls_id] = cls
+
+            for mol in subconn:
+                self.mol_clt[mol] = cls_id
+
+    def __gen_origin_cluster_counter(self, subconn):
+        mols_origin_clusters = {
+            mol: self.mol_clt.get(mol, 0) for mol in subconn
+        }
+        origin_clusters = set(mols_origin_clusters.values())
+        return Counter(mols_origin_clusters.values())
+
+    def __check_dominance(self, cls_id, n, conn_info, conn_skip):
+        if self.clusters[cls_id].size == n:
+            return True
+
+        for subconn, count in conn_info[conn_skip + 1 :]:
+            if len(subconn) == 2:
+                return False
+            if count[cls_id] > n:
+                return False
+
+        return True
+
+    def __update_clusters(self):
+        self.conntab.update()
+
+        modified_mols = set()
+        modified_clusters = set()
+        merged_clusters = set() # needs this because of dominance devolution
+
+        conn_info = [
+            (sub, self.__gen_origin_cluster_counter(sub))
+            for sub in self.conntab.subconntables()
+        ]
+
+        for i, (subconn, origin_clusters) in enumerate(conn_info):
+            if len(origin_clusters) == 1:
+                id = list(origin_clusters)[0]
+                if id == 0:  # cluster formation
+                    cluster = Cluster(self.uni, subconn)
+                    id = cluster.id
+                    self.clusters[id] = cluster
+                elif id in modified_clusters:  # cluster separation
+                    cluster = Cluster(self.uni, subconn)
+                    id = cluster.id
+                    self.clusters[id] = cluster
+                else:
+                    self.clusters[id].update_from_conntable(subconn)
+            elif len(subconn) == 2:  # dimer is always new
+                cluster = Cluster(self.uni, subconn)
+                id = cluster.id
+                self.clusters[id] = cluster
             else:
-                cls.add_con(moli, molj, conn_tab[moli, molj])
+                dominances = {True: [], False: []}
 
-        clusters[cls.id] = cls
+                for cls_id, n in origin_clusters.most_common():
+                    if not cls_id:
+                        continue
 
-    return clusters, r_cluster
+                    if n == 1:
+                        dominances[False].append(cls_id)
+                        continue
 
+                    if cls_id not in modified_clusters:
+                        dom = self.__check_dominance(cls_id, n, conn_info, i)
+                    else:
+                        dom = False
 
-def correct_clusters_index(clusters: List[Type[Cluster]], r_cluster, from_pos: int):
-    # TODO: Really bad code, should change this in the future
-    Cluster._Cluster__cls_id -= 1
-    if len(clusters) == from_pos:
-        return
-    for cls in clusters[from_pos:]:
-        cls._id -= 1
-        i = cls.id
-        for mol in cls:
-            r_cluster[mol] = i
+                    dominances[dom].append(cls_id)
 
-
-def get_clusters_info(clusters_size_evo, clusters, uni: Type[mda.Universe], k):
-    sizes = [cls.size for cls in clusters]
-    avg = np.average(sizes)
-    min_size = min(sizes)
-    max_size = max(sizes)
-    time = uni.coord.time
-
-    clusters_size_evo[k][0] = time
-    clusters_size_evo[k][1] = len(clusters)
-    clusters_size_evo[k][2] = min_size
-    clusters_size_evo[k][3] = avg
-    clusters_size_evo[k][4] = max_size
-
-
-def merge_clusters(
-    clusters: Dict[int, Type[Cluster]],
-    conn_tab: Type[ConnTable],
-    i,
-    j,
-    r_cluster,
-    connections,
-):
-    if i == j:
-        return
-
-    if clusters[i].size >= clusters[j].size:
-        clusters[i].merge(clusters[j])
-        for mol in clusters[j]:
-            r_cluster[mol] = i
-
-        for mi, mj in connections:
-            clusters[i].add_con(mi, mj, conn_tab[mi, mj])
-
-        clusters[j] = clusters[i].id
-        return j
-    else:
-        clusters[j].merge(clusters[i])
-        for mol in clusters[i]:
-            r_cluster[mol] = j
-
-        for mi, mj in connections:
-            clusters[j].add_con(mi, mj, conn_tab[mi, mj])
-
-        clusters[i] = clusters[j].id
-        return i
-
-
-def get_cluster_index(clusters, start):
-    if not isinstance(clusters[start], int):
-        return start, []
-    else:
-        id, clst = get_cluster_index(clusters, clusters[start])
-        clusters[start] = id
-        clst.append(start)
-        return id, clst
-
-
-def analyze_trajectory(
-    universe: Type[mda.Universe],
-    cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
-) -> None:
-    """Analyses the formation of clusters in the trajectory
-
-    Parameters
-    ----------
-    universe : Type[mda.Universe]
-        mdanalysis Universe object containing the simulation data
-    cluster_residues : List[str]
-        List of the residues to consider in the analysis
-    cutoff : float
-        cm-cm distance to be considered in the analyses
-    """
-
-    selections: Dict[str, Type[core.groups.AtomGroup]] = {
-        res: universe.select_atoms(f"resname {res}") for res in cluster_args
-    }
-
-    conn_tab = ConnTable(universe, cluster_args, selections)
-
-    clusters, r_cluster = init_clusters(universe, conn_tab)
-
-    # print_clusters_index(universe, clusters)
-
-    clusters_size_evo = np.zeros((len(uni.trajectory), 5))
-
-    get_clusters_info(clusters_size_evo, clusters.values(), uni, 0)
-
-    for i, conf in enumerate(universe.trajectory[1:], start=1):
-        conn_tab.update()
-
-        # order of operations:
-        # 1° Remove connections
-        # 2° Add connections
-        # 3° Add molecules
-        # 4° Cluster Separation
-        # 5° Remove molecules
-        # 6° Cluster Merge
-        # 7° Cluster Formation
-
-        merge = {}
-
-        for id, clst in clusters.copy().items():
-            clst_will_merge = False
-            for mol in clst:
-                mol_con = set(clst[mol])
-
-                if mol in conn_tab:
-                    new_con = set(conn_tab[mol])
+                if not dominances[True]:
+                    cluster = Cluster(self.uni, subconn)
+                    id = cluster.id
+                    self.clusters[id] = cluster
                 else:
-                    clst.remove_mol(mol)
-                    r_cluster.pop(mol)
-                    continue
+                    id = dominances[True][0]
 
-                con_to_add = new_con.difference(mol_con)
-                con_to_rem = mol_con.difference(new_con)
-                con_to_edit = mol_con.intersection(new_con)
-
-                clst.remove_cons(mol, con_to_rem)  # remove connections
-
-                for con in con_to_add:
-                    if con in r_cluster:
-                        # identify clusters to merge
-                        if r_cluster[con] != id:
-                            clst_will_merge = True
-                            to_merge = [id, r_cluster[con]]
-                            to_merge.sort()
-                            to_merge = tuple(to_merge)
-                            if to_merge in merge:
-                                merge[to_merge].append((mol, con))
-                            else:
-                                merge[to_merge] = [(mol, con)]
-
-                        # add connections between molecules of the cluster
+                    # this loop makes sure that in case the cluster that comes from merges of same size agglomerates take the oldest one
+                    for j in dominances[True][1:]:
+                        if origin_clusters[id] == origin_clusters[j] and j < id:
+                            id = j
                         else:
-                            clst.add_con(mol, con, conn_tab[mol, con])
-                    else:
-                        # add free molecules to cluster
-                        resname = uni.residues[con - 1].resname
-                        clst.add_mol(mol, con, resname, conn_tab[mol, con])
-                        r_cluster[con] = id
+                            break
 
-                # change distances to new values
-                for con in con_to_edit:
-                    clst.set_dist(mol, con, conn_tab[mol, con])
+                    self.clusters[id].update_from_conntable(subconn)
+                    merged_clusters.update(set(dominances[True])-{id})
 
-            if clst.size == 1:
-                if clst_will_merge:
-                    pass
-                else:
-                    for mol in clst:
-                        r_cluster.pop(mol)
-                    clusters.pop(id)
-            elif clst.size == 0:
-                clusters.pop(id)
+            for mol in subconn:
+                self.mol_clt[mol] = id
 
-        merged_clusters = []
+            modified_clusters.add(id)
+            modified_mols.update(subconn)
 
-        # merge clusters
-        for to_merge in merge:
-            m, n = to_merge
-            m, cls = get_cluster_index(clusters, m)
-            n, cls = get_cluster_index(clusters, n)
+        for mol in set(self.mol_clt.keys()).difference(modified_mols):
+            self.mol_clt.pop(mol)
 
-            merged = merge_clusters(
-                clusters, conn_tab, m, n, r_cluster, merge[to_merge]
-            )
-            if merged:
-                merged_clusters.append(merged)
+        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged
+        for cls in set(self.clusters.keys()).difference(modified_clusters):
+            self.clusters.pop(cls)
 
-        for cls in merged_clusters:
-            clusters.pop(cls)
+    def run(self):
+        for i, _ in enumerate(self.uni.trajectory[1:],start=1):
+            self.__update_clusters()
+            self.__get_clusters_info(i)
+            if i == 8:
+                self.__print_clusters_index()
 
-        for clst in clusters.copy():
-            for graph in clusters[clst].separate():
-                # remove molecules
-                if len(graph) == 1:
-                    r_cluster.pop(list(graph)[0])
-                else:
-                    # generate new cluster from separation
-                    tmp_cls = Cluster.from_graph(graph, conf.time)
-                    clusters[tmp_cls.id] = tmp_cls
+        np.savetxt("evo.txt",self.clusters_size_evo)
 
-                    for mol in tmp_cls:
-                        r_cluster[mol] = tmp_cls.id
+    def find(self, mol) -> Union[int, bool]:
+        return self.mol_clt.get(mol, False)
 
-        # Identify new clusters
-        for mol in conn_tab:
-            if mol not in r_cluster:
-                cons = conn_tab.all_connections_from(mol)
-                mi, mj = cons[0]
-                new_cluster = Cluster(
-                    mi,
-                    mj,
-                    universe.residues[mi - 1].resname,
-                    universe.residues[mj - 1].resname,
-                    conn_tab[mi, mj],
-                    conf.time,
-                )
+    def __get_clusters_info(self, k):
+        sizes = [cls.size for cls in self.clusters.values()]
+        avg = np.average(sizes)
+        min_size = min(sizes, default=0)
+        max_size = max(sizes, default=0)
+        time = self.uni.coord.time
 
-                r_cluster[mi] = new_cluster.id
-                r_cluster[mj] = new_cluster.id
-
-                for mi, mj in cons[1:]:
-                    if mi in new_cluster and mj in new_cluster:
-                        new_cluster.add_con(mi, mj, conn_tab[mi, mj])
-                    elif mi in new_cluster:
-                        new_cluster.add_mol(
-                            mi,
-                            mj,
-                            universe.residues[mj - 1].resname,
-                            conn_tab[mi, mj],
-                        )
-                        r_cluster[mj] = new_cluster.id
-                    elif mj in new_cluster:
-                        new_cluster.add_mol(
-                            mj,
-                            mi,
-                            universe.residues[mi - 1].resname,
-                            conn_tab[mi, mj],
-                        )
-                        r_cluster[mi] = new_cluster.id
-
-                clusters[new_cluster.id] = new_cluster
-
-        get_clusters_info(clusters_size_evo, clusters.values(), uni, i)
-
-    np.savetxt("evo.txt", clusters_size_evo)
+        self.clusters_size_evo[k][0] = time
+        self.clusters_size_evo[k][1] = len(self.clusters)
+        self.clusters_size_evo[k][2] = min_size
+        self.clusters_size_evo[k][3] = avg
+        self.clusters_size_evo[k][4] = max_size
 
 
-def print_clusters_index(uni, clusters):
-    cols = 15
-    i = 1
-    with open("clusters_index.ndx", "w+", encoding="utf-8") as ndx:
-        for cluster in clusters:
-            ndx.write(f"[ CLS-{cluster} ]\n")
-            for mol in sorted(clusters[cluster]):
-                for at in uni.residues[mol - 1].atoms:
-                    if i % cols != 0:
-                        ndx.write(f"{at.id + 1}\t")
-                    else:
-                        ndx.write(f"{at.id + 1}\n")
+    def __print_clusters_index(self):
+        cols = 15
+        i = 1
+        with open("clusters_index.ndx", "w+", encoding="utf-8") as ndx:
+            for id, cluster in self.clusters.items():
+                ndx.write(f"[ CLS-{id} ]\n")
+                for mol in sorted(cluster):
+                    for at in self.uni.residues[mol - 1].atoms:
+                        if i % cols != 0:
+                            ndx.write(f"{at.id + 1}\t")
+                        else:
+                            ndx.write(f"{at.id + 1}\n")
 
-                    i += 1
+                        i += 1
 
-            ndx.write("\n")
+                ndx.write("\n")
 
-            # TODO: (low priority) Make the skipped lines work
+                # TODO: (low priority) Make the skipped lines work
 
 
 def parse_input_file(
@@ -682,4 +565,5 @@ if __name__ == "__main__":
         args.top, args.traj, in_memory=True
     )  # TODO: add in_memory_step as option on cmdline
 
-    analyze_trajectory(uni, cls_args)
+    molclusters = MolClusters(uni,cls_args)
+    molclusters.run()
