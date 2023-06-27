@@ -536,6 +536,16 @@ def parse_input_file(
                 cls_args[line_elements[0]] = {
                     line_elements[1]: (float(line_elements[2]), "cm")
                 }
+
+            if line_elements[1] in cls_args:
+                cls_args[line_elements[1]][line_elements[0]] = (
+                    float(line_elements[2]),
+                    "cm",
+                )
+            else:
+                cls_args[line_elements[1]] = {
+                    line_elements[0]: (float(line_elements[2]), "cm")
+                }
         except IndexError:
             pass
 
