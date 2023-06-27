@@ -14,33 +14,50 @@ from MDAnalysis import core
 class Cluster:
     __cls_id = 1
 
+    __slots__ = ["uni", "initial_time", "cluster", "_cm", "_id"]
+
     def __init__(
         self,
-        moli: int,
-        molj: int,
-        resi: str,
-        resj: str,
-        dist: float,
-        initial_time: float,
+        universe: Type[mda.Universe],
+        subconntab: Type["ConnTable.SubConnTable"],
     ) -> None:
-        self._cluster: Type[nx.Graph] = nx.Graph()
-        self._cluster.add_node(moli, name=resi)
-        self._cluster.add_node(molj, name=resj)
-        self.add_con(moli, molj, dist)
-        self._initial_time: float = initial_time
+        self.uni = universe
+        self.initial_time: float = universe.trajectory.time
+
+        if subconntab:
+            self.cluster: Type[nx.Graph] = nx.Graph(subconntab.graph)
+            self._cm = (
+                subconntab._cm
+            )  # TODO: Change to keep the sum of center of masses of molecules
 
         self._id = Cluster.__cls_id
         Cluster.__cls_id += 1
 
     @classmethod
-    def from_graph(cls, graph: Type[nx.Graph], time: float) -> "Cluster":
-        tmp_cls = cls(0, 0, "", "", 0.0, time)
-        tmp_cls._cluster = graph
+    def _from_graph(cls, uni: Type[mda.Universe], graph: Type[nx.Graph]) -> "Cluster":
+        tmp_cls = cls(uni, None)
+        tmp_cls.cluster = graph
+        tmp_cls.__recalculate_cm()
         return tmp_cls
 
     @property
     def id(self) -> int:
         return self._id
+
+    @property
+    def cm(self) -> Type[np.ndarray]:
+        return self._cm
+
+    @cm.setter
+    def cm(self, value: Type[np.ndarray]):
+        self._cm = value
+
+    def __recalculate_cm(self):
+        self._cm = self.to_atomgroup().center_of_mass()
+
+    def to_atomgroup(self) -> Type[core.groups.ResidueGroup]:
+        # TODO: modify to have a selection as variable and to not recalculate it every time
+        return core.groups.ResidueGroup([m - 1 for m in self.cluster], self.uni)
 
     def add_mol(
         self,
@@ -55,8 +72,9 @@ class Cluster:
         if mol in self:
             raise ValueError(f"mol {mol} already in the cluster, use add_con instead")
 
-        self._cluster.add_node(mol, name=resname)
+        self.cluster.add_node(mol, name=resname)
         self.add_con(ref_mol, mol, dist)
+        self.__recalculate_cm()
 
     def add_con(
         self,
@@ -72,13 +90,14 @@ class Cluster:
         if dist == 0.0:
             raise ValueError("dist is zero. Check your trajectory")
 
-        self._cluster.add_edge(moli, molj, distance=dist, weight=np.exp(1 / dist))
+        self.cluster.add_edge(moli, molj, distance=dist, weight=np.exp(1 / dist))
 
     def remove_mol(self, mol: int) -> None:
         if mol not in self:
             raise ValueError(f"mol {mol} not in the cluster")
 
-        self._cluster.remove_node(mol)
+        self.cluster.remove_node(mol)
+        self.__recalculate_cm()
 
     def remove_con(self, moli: int, molj: int) -> None:
         if moli not in self:
@@ -86,37 +105,47 @@ class Cluster:
         if molj not in self:
             raise ValueError(f"mol {molj} not in the cluster")
 
-        self._cluster.remove_edge(moli, molj)
+        self.cluster.remove_edge(moli, molj)
 
     def remove_cons(self, ref_mol: int, cons: Iterable) -> None:
         for con in cons:
             self.remove_con(ref_mol, con)
 
-    def get_lifetime(self, time: float) -> float:
-        return time - self._initial_time
+    def get_age(self, time: float) -> float:
+        return time - self.initial_time
 
     def merge(self, other: "Cluster") -> None:
-        self._cluster = nx.compose(self._cluster, other._graph)
+        self.cluster = nx.compose(self.cluster, other._graph)
+        self.__recalculate_cm()
 
     def separate(self) -> List[Type[nx.Graph]]:
         sub_clusters: List[Type[nx.Graph]] = [
-            self._cluster.subgraph(c).copy()
+            self.cluster.subgraph(c).copy()
             for c in sorted(
-                nx.connected_components(self._cluster), key=len, reverse=True
+                nx.connected_components(self.cluster), key=len, reverse=True
             )
         ]
 
-        self._cluster = sub_clusters[0]
+        self.cluster = sub_clusters[0]
+        self.__recalculate_cm()
 
-        return sub_clusters[1:]
+        return [Cluster._from_graph(self.uni, nx.Graph(g)) for g in sub_clusters[1:]]
 
     @property
     def _graph(self) -> Type[nx.Graph]:
-        return self._cluster
+        return self.cluster
 
     @property
     def size(self) -> int:
         return len(self)
+
+    def update_from_conntable(self, conn: Type["ConnTable.SubConnTable"]):
+        # removed_mols = set(self).difference(conn)
+        # removed_cons = self.cluster.edges - conn.graph.edges
+        # new_cons = conn.graph.edges - self.cluster.edges
+
+        self.cluster = nx.Graph(conn.graph)
+        self._cm = conn.cm
 
     def get_dist(self, moli: int, molj: int) -> float:
         if moli not in self:
@@ -124,14 +153,14 @@ class Cluster:
         if molj not in self:
             raise ValueError(f"mol {molj} not in the cluster")
 
-        return self._cluster[moli][molj]["distance"]
+        return self.cluster[moli][molj]["distance"]
 
     def set_dist(self, moli, molj, dist):
         if dist == 0.0:
             raise ValueError("dist is zero")
 
-        self._cluster[moli][molj]["weight"] = np.exp(1 / dist)
-        self._cluster[moli][molj]["distance"] = dist
+        self.cluster[moli][molj]["weight"] = np.exp(1 / dist)
+        self.cluster[moli][molj]["distance"] = dist
 
     def get_weight(self, moli: int, molj: int) -> float:
         if moli not in self:
@@ -139,28 +168,28 @@ class Cluster:
         if molj not in self:
             raise ValueError(f"mol {molj} not in the cluster")
 
-        return self._cluster[moli][molj]["weight"]
+        return self.cluster[moli][molj]["weight"]
 
     def __contains__(self, item: int) -> bool:
-        return item in self._cluster
+        return item in self.cluster
 
     def __iter__(self) -> Iterator:
-        return iter(self._cluster.copy())
+        return iter(self.cluster.copy())
 
     def __getitem__(self, key: int):
-        return self._cluster[key]
+        return self.cluster[key]
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Cluster):
             return False
 
-        return nx.utils.graphs_equal(self._cluster, other._cluster)
+        return nx.utils.graphs_equal(self.cluster, other.cluster)
 
     def __len__(self) -> int:
-        return len(self._cluster)
+        return len(self.cluster)
 
     def __str__(self):
-        return self._cluster.edges.data().__str__()
+        return self.cluster.edges.data().__str__()
 
 
 class ConnTable:
