@@ -164,18 +164,58 @@ class Cluster:
 
 
 class ConnTable:
-    def __init__(self, universe, cluster_args, selections) -> None:
-        self.__uni = universe
-        self.__clst_args = cluster_args
-        self.__sels = selections
+    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms"]
 
-        self.__cm = {}
+    class SubConnTable:
+        __slots__ = ["conntab", "_graph", "_cm"]
+
+        def __init__(
+            self, subgraph: Type[nx.Graph], conntable: Type["ConnTable"]
+        ) -> None:
+            self.conntab = conntable
+            self._graph = subgraph
+
+            self._cm = self.__selection().center_of_mass()
+
+        def __selection(self) -> Type[core.groups.ResidueGroup]:
+            return core.groups.ResidueGroup(
+                [m - 1 for m in self.graph], self.conntab.uni
+            )
+
+        def __getitem__(self, key):
+            return self.conntab[key]
+
+        def __len__(self):
+            return len(self._graph)
+
+        @property
+        def cm(self) -> Type[np.ndarray]:
+            return self._cm
+
+        @property
+        def graph(self):
+            return self._graph
+
+        def __iter__(self):
+            return iter(self._graph)
+
+    def __init__(
+        self,
+        universe: Type[mda.Universe],
+        cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
+        selections: Dict[str, Type[core.groups.AtomGroup]],
+    ) -> None:
+        self.uni = universe
+        self.clst_args = cluster_args
+        self.sels = selections
+
+        self.cms = {}
         self.__get_mass_centers()
         self.__construct_table()
 
     def __get_mass_centers(self):
-        for res in self.__clst_args:
-            self.__cm[res] = self.__sels[res].center_of_mass(compound="residue")
+        for res in self.clst_args:
+            self.cms[res] = self.sels[res].center_of_mass(compound="residues")
 
     def __get_pair_and_distances(
         self,
@@ -183,13 +223,13 @@ class ConnTable:
         resj: str,
         box: Type[np.ndarray],
     ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-        cm1: Type[np.ndarray] = self.__cm[resi]
-        cutoff = self.__clst_args[resi][resj][0]
+        cm1: Type[np.ndarray] = self.cms[resi]
+        cutoff = self.clst_args[resi][resj][0]
 
         pairs: Type[np.ndarray]
         distances: Type[np.ndarray]
         if resi != resj:
-            cm2: Type[np.ndarray] = self.__cm[resj]
+            cm2: Type[np.ndarray] = self.cms[resj]
             pairs, distances = mda.lib.distances.capped_distance(
                 cm1, cm2, cutoff, box=box
             )
@@ -201,21 +241,21 @@ class ConnTable:
         return pairs, distances
 
     def __construct_table(self) -> Type[nx.Graph]:
-        self.__conntab = nx.Graph()
-        for resi in self.__clst_args:
-            for resj in self.__clst_args[resi]:
+        self.conntab = nx.Graph()
+        for resi in self.clst_args:
+            for resj in self.clst_args[resi]:
                 pairs: Type[np.ndarray]
                 distances: Type[np.ndarray]
 
                 pairs, distances = self.__get_pair_and_distances(
-                    resi, resj, self.__uni.dimensions
+                    resi, resj, self.uni.dimensions
                 )
 
-                for k, [i, j] in enumerate(pairs):
-                    ri = self.__sels[resi].residues[i].resid
-                    rj = self.__sels[resj].residues[j].resid
+                for k, (i, j) in enumerate(pairs):
+                    ri = self.sels[resi].residues[i].resid
+                    rj = self.sels[resj].residues[j].resid
 
-                    self.__conntab.add_edge(ri, rj, d=distances[k])
+                    self.conntab.add_edge(ri, rj, d=distances[k])
 
     def update(self) -> None:
         self.__get_mass_centers()
@@ -234,7 +274,7 @@ class ConnTable:
             if key[1] not in self:
                 raise IndexError(f"{key[1]} not in ConnTable")
 
-            return self.__conntab[key[0]][key[1]]["d"]
+            return self.conntab[key[0]][key[1]]["d"]
 
         if key not in self:
             raise IndexError(f"{key} not in ConnTable")
@@ -242,33 +282,38 @@ class ConnTable:
         return self.mols_connected_to(key)
 
     def __contains__(self, item: int) -> bool:
-        return item in self.__conntab
+        return item in self.conntab
 
     def __graph_from_mol(self, mol):
-        desc = nx.node_connected_component(self.__conntab, mol)
-        return self.__conntab.subgraph(desc)
+        desc = nx.node_connected_component(self.conntab, mol)
+        return self.conntab.subgraph(desc)
 
     def __iter__(self):
-        return iter(self.__conntab)
+        return iter(self.conntab)
 
     def connections_from(self, mol):
-        return list(self.__conntab.edges(mol))
+        return list(self.conntab.edges(mol))
 
-    def all_connections_from(self, mol):
+    def connection_tree_from(self, mol):
         g = self.__graph_from_mol(mol)
         return list(g.edges)
 
     def mols_connected_to(self, mol):
-        return list(self.__conntab[mol])
+        return list(self.conntab[mol])
 
-    def all_mols_connected_to(self, mol):
+    def mols_connected_tree_to(self, mol):
         g = self.__graph_from_mol(mol)
         return list(g.nodes)
 
-    def _subgraphs(self):
-        for c in nx.connected_components(self.__conntab):
-            yield self.__conntab.subgraph(c)
+    def __subgraphs(self):
+        for c in nx.connected_components(self.conntab):
+            yield self.conntab.subgraph(c)
 
+    def subconntables(self):
+        for s in sorted(
+            self.__subgraphs(), key=lambda x: len(x), reverse=True
+        ):  # sorts to guarantee that in case of separation the biggest cluster keeps the id
+            yield self.SubConnTable(s, self)
 
 def init_clusters(universe, conn_tab: Type[ConnTable]):
     clusters = {}
