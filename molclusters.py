@@ -564,12 +564,8 @@ if __name__ == "__main__":
         "inp", type=arg.FileType("r"), help="Input file with distances information"
     )
 
-    # args = parser.parse_args()
-
-    args = parser.parse_args(
-        "data//met-mal//met-traj.pdb data//met-mal//met-mal.tpr data//met-mal//cls.in".split()
-    )
-
+    args = parser.parse_args()
+    
     cls_args = parse_input_file(args.inp)
 
     uni = mda.Universe(
