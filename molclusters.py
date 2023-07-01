@@ -371,9 +371,7 @@ class MolClusters:
 
     def __start_clusters(self):
         for subconn in self.conntab.subconntables():
-            cls = Cluster(self.uni, subconn)
-            cls_id = cls.id
-            self.clusters[cls_id] = cls
+            cls_id = self.__create_new_cluster(subconn)
 
             for mol in subconn:
                 self.mol_clt[mol] = cls_id
@@ -382,7 +380,6 @@ class MolClusters:
         mols_origin_clusters = {
             mol: self.mol_clt.get(mol, 0) for mol in subconn
         }
-        origin_clusters = set(mols_origin_clusters.values())
         return Counter(mols_origin_clusters.values())
 
     def __check_dominance(self, cls_id, n, conn_info, conn_skip):
@@ -396,6 +393,45 @@ class MolClusters:
                 return False
 
         return True
+
+    def __create_new_cluster(self, subconn):
+        cluster = Cluster(self.uni, subconn)
+        id = cluster.id
+        self.clusters[id] = cluster
+
+        return id
+
+    def __construct_dominance(self,origin_clusters,modified_clusters,conn_info,i):
+        dominances = {True: [], False: []}
+
+        for cls_id, n in origin_clusters.most_common():
+            if not cls_id:
+                continue
+
+            if n == 1:
+                dominances[False].append(cls_id)
+                continue
+
+            if cls_id not in modified_clusters:
+                dom = self.__check_dominance(cls_id, n, conn_info, i)
+            else:
+                dom = False
+
+            dominances[dom].append(cls_id)
+
+        return dominances
+
+    def __get_older_cluster(self, dominances, origin_clusters):
+        id = dominances[True][0]
+
+        # this loop makes sure that in case the cluster that comes from merges of same size agglomerates take the oldest one
+        for j in dominances[True][1:]:
+            if origin_clusters[id] == origin_clusters[j] and j < id:
+                id = j
+            else:
+                break
+
+        return id
 
     def __update_clusters(self):
         self.conntab.update()
@@ -413,50 +449,20 @@ class MolClusters:
             if len(origin_clusters) == 1:
                 id = list(origin_clusters)[0]
                 if id == 0:  # cluster formation
-                    cluster = Cluster(self.uni, subconn)
-                    id = cluster.id
-                    self.clusters[id] = cluster
+                    id = self.__create_new_cluster(subconn)
                 elif id in modified_clusters:  # cluster separation
-                    cluster = Cluster(self.uni, subconn)
-                    id = cluster.id
-                    self.clusters[id] = cluster
+                    id = self.__create_new_cluster(subconn)
                 else:
                     self.clusters[id].update_from_conntable(subconn)
             elif len(subconn) == 2:  # dimer is always new
-                cluster = Cluster(self.uni, subconn)
-                id = cluster.id
-                self.clusters[id] = cluster
+                id = self.__create_new_cluster(subconn)
             else:
-                dominances = {True: [], False: []}
-
-                for cls_id, n in origin_clusters.most_common():
-                    if not cls_id:
-                        continue
-
-                    if n == 1:
-                        dominances[False].append(cls_id)
-                        continue
-
-                    if cls_id not in modified_clusters:
-                        dom = self.__check_dominance(cls_id, n, conn_info, i)
-                    else:
-                        dom = False
-
-                    dominances[dom].append(cls_id)
+                dominances = self.__construct_dominance(origin_clusters,modified_clusters,conn_info,i)
 
                 if not dominances[True]:
-                    cluster = Cluster(self.uni, subconn)
-                    id = cluster.id
-                    self.clusters[id] = cluster
+                    id = self.__create_new_cluster(subconn)
                 else:
-                    id = dominances[True][0]
-
-                    # this loop makes sure that in case the cluster that comes from merges of same size agglomerates take the oldest one
-                    for j in dominances[True][1:]:
-                        if origin_clusters[id] == origin_clusters[j] and j < id:
-                            id = j
-                        else:
-                            break
+                    id = self.__get_older_cluster(dominances,origin_clusters)
 
                     self.clusters[id].update_from_conntable(subconn)
                     merged_clusters.update(set(dominances[True])-{id})
@@ -565,7 +571,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    
+
     cls_args = parse_input_file(args.inp)
 
     uni = mda.Universe(
