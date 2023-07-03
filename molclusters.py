@@ -364,7 +364,7 @@ class MolClusters:
         self.clusters: Dict[int, Type[Cluster]] = {}
         self.mol_clt: Dict[int, int] = {}
 
-        self.clusters_size_evo = np.zeros((len(uni.trajectory), 5))
+        self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
 
         self.__start_clusters()
         self.__get_clusters_info(0)
