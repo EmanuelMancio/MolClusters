@@ -3,12 +3,14 @@
 """Cluster Analyzer Script."""
 
 import argparse as arg
+import copy
 from collections import Counter
 from typing import Dict, Iterable, Iterator, List, Tuple, Type, Union
 
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
+import yaml
 from MDAnalysis import core
 
 
@@ -347,20 +349,20 @@ class ConnTable:
 
 
 class MolClusters:
-    __slots__ = ["uni", "args", "sels", "conntab", "clusters", "mol_clt","clusters_size_evo"]
+    __slots__ = ["uni", "config", "sels", "conntab", "clusters", "mol_clt","clusters_size_evo","solutes","solvents","solute_data"]
 
     def __init__(
         self,
         universe: Type[mda.Universe],
-        cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
+        config,
     ) -> None:
         self.uni = universe
-        self.args = cluster_args
+        self.config = config
         self.sels: Dict[str, Type[core.groups.AtomGroup]] = {
-            res: self.uni.select_atoms(f"resname {res}") for res in cluster_args
+            res: self.uni.select_atoms(f"resname {res}") for res in config["rules"]
         }
 
-        self.conntab = ConnTable(self.uni, self.args, self.sels)
+        self.conntab = ConnTable(self.uni, self.config["rules"], self.sels)
         self.clusters: Dict[int, Type[Cluster]] = {}
         self.mol_clt: Dict[int, int] = {}
 
@@ -476,7 +478,7 @@ class MolClusters:
         for mol in set(self.mol_clt.keys()).difference(modified_mols):
             self.mol_clt.pop(mol)
 
-        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged
+        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)
         for cls in set(self.clusters.keys()).difference(modified_clusters):
             self.clusters.pop(cls)
 
@@ -489,7 +491,7 @@ class MolClusters:
 
         np.savetxt("evo.txt",self.clusters_size_evo)
 
-    def find(self, mol) -> Union[int, bool]:
+    def find(self, mol: int) -> Union[int, bool]:
         return self.mol_clt.get(mol, False)
 
     def __get_clusters_info(self, k):
@@ -529,36 +531,21 @@ class MolClusters:
 def parse_input_file(
     in_file: Type[arg.FileType],
 ) -> Dict[str, Dict[str, Tuple[float, str]]]:
-    cls_args: Dict[str, Dict[str, Tuple[float, str]]] = {}
+    config = yaml.safe_load(in_file)
 
-    for line in in_file:
-        line_elements = line.split()
-        try:
-            if line_elements[0] in cls_args:
-                cls_args[line_elements[0]][line_elements[1]] = (
-                    float(line_elements[2]),
-                    "cm",
-                )
+    for mi, val in copy.deepcopy(config["rules"]).items():
+        for mj, rule in val.items():
+            op = rule.split()[0]
+            dist = float(rule.split()[1])
+            if mj in config["rules"]:
+                config["rules"][mj][mi] = (dist,op)
             else:
-                cls_args[line_elements[0]] = {
-                    line_elements[1]: (float(line_elements[2]), "cm")
-                }
-
-            if line_elements[1] in cls_args:
-                cls_args[line_elements[1]][line_elements[0]] = (
-                    float(line_elements[2]),
-                    "cm",
-                )
-            else:
-                cls_args[line_elements[1]] = {
-                    line_elements[0]: (float(line_elements[2]), "cm")
-                }
-        except IndexError:
-            pass
+                config["rules"][mj] = {mi : (dist,op)}
+            config["rules"][mi][mj] = (dist,op)
 
     # TODO: Implement input correctness analysis
 
-    return cls_args
+    return config
 
 
 if __name__ == "__main__":
@@ -567,7 +554,7 @@ if __name__ == "__main__":
     parser.add_argument("traj", type=str, help="Trajectory File")
     parser.add_argument("top", type=str, help="Topology file")
     parser.add_argument(
-        "inp", type=arg.FileType("r"), help="Input file with distances information"
+        "inp", type=arg.FileType("r"), help="Input file with analysis settings"
     )
 
     args = parser.parse_args()
