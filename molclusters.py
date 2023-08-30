@@ -12,6 +12,7 @@ import networkx as nx
 import numpy as np
 import yaml
 from MDAnalysis import core
+from tqdm import tqdm
 
 
 class Cluster:
@@ -172,6 +173,10 @@ class Cluster:
             raise ValueError(f"mol {molj} not in the cluster")
 
         return self.cluster[moli][molj]["weight"]
+
+    @property
+    def resnames(self):
+        return self.to_atomgroup().resnames
 
     def __contains__(self, item: int) -> bool:
         return item in self.cluster
@@ -371,6 +376,24 @@ class MolClusters:
         self.__start_clusters()
         self.__get_clusters_info(0)
 
+    def __start_solute_solvent(self):
+        self.solutes = [id for sel in self.config["solute"] for id in self.sels[sel].residues.resids]
+        self.solvents = self.config["solvent"] # TODO: solvents should be automatically discovered but file takes precedent
+
+        self.solute_data = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+
+    def __solute_solvent_analysis(self, frame):
+        for i, solute_id in enumerate(self.solutes):
+            clst_id = self.find(solute_id)
+
+            n_solvents = 0
+            if clst_id:
+                mol_pop = Counter(self.clusters[clst_id].resnames)
+                for solvent in self.solvents:
+                    n_solvents += mol_pop.get(solvent,0)
+
+            self.solute_data[frame][i] = n_solvents
+
     def __start_clusters(self):
         for subconn in self.conntab.subconntables():
             cls_id = self.__create_new_cluster(subconn)
@@ -483,13 +506,22 @@ class MolClusters:
             self.clusters.pop(cls)
 
     def run(self):
-        for i, _ in enumerate(self.uni.trajectory[1:],start=1):
-            self.__update_clusters()
-            self.__get_clusters_info(i)
-            if i == 8:
-                self.__print_clusters_index()
+        if self.config.get("solute",False):
+            self.__start_solute_solvent()
+            self.__solute_solvent_analysis(0)
 
+        with tqdm(total=len(self.uni.trajectory[1:]),initial=1,mininterval=5,miniters=10) as pbar:
+            for i, _ in enumerate(self.uni.trajectory[1:],start=1):
+                self.__update_clusters()
+                self.__get_clusters_info(i)
+                if self.config.get("solute",False):
+                    self.__solute_solvent_analysis(i)
+
+                pbar.update()
+
+        self.__print_clusters_index()
         np.savetxt("evo.txt",self.clusters_size_evo)
+        np.savetxt("solute_solvent.txt",self.solute_data)
 
     def find(self, mol: int) -> Union[int, bool]:
         return self.mol_clt.get(mol, False)
