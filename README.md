@@ -9,6 +9,7 @@ The script is written to support python versions greater than 3.7 and depends on
 - [MDAnalysis](https://www.mdanalysis.org/)
 - [NetworkX](https://networkx.org/)
 - [Numpy](http://www.numpy.org/)
+- [PyYAML](https://pyyaml.org/)
 
 You can install the dependencies in any way you prefer. To install the libraries with [Anaconda](https://www.anaconda.com/download/), do the following:
 
