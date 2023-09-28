@@ -256,7 +256,7 @@ class ConnTable:
         box: Type[np.ndarray],
     ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
         cm1: Type[np.ndarray] = self.cms[resi]
-        cutoff = self.clst_args[resi][resj][0]
+        cutoff = self.clst_args[resi][resj][1]
 
         pairs: Type[np.ndarray]
         distances: Type[np.ndarray]
@@ -538,10 +538,10 @@ def parse_input_file(
             op = rule.split()[0]
             dist = float(rule.split()[1])
             if mj in config["rules"]:
-                config["rules"][mj][mi] = (dist,op)
+                config["rules"][mj][mi] = (op,dist)
             else:
-                config["rules"][mj] = {mi : (dist,op)}
-            config["rules"][mi][mj] = (dist,op)
+                config["rules"][mj] = {mi : (op,dist)}
+            config["rules"][mi][mj] = (op,dist)
 
     # TODO: Implement input correctness analysis
 
