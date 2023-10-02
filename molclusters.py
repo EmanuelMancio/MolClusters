@@ -562,9 +562,13 @@ class MolClusters:
 
     def __get_clusters_info(self, k):
         sizes = [cls.size for cls in self.clusters.values()]
-        avg = np.average(sizes)
-        min_size = min(sizes, default=0)
-        max_size = max(sizes, default=0)
+        if len(sizes) == 0:
+            avg, min_size, max_size = 0, 0, 0
+        else:
+            avg = np.average(sizes)
+            min_size = min(sizes)
+            max_size = max(sizes)
+
         time = self.uni.coord.time
 
         self.clusters_size_evo[k][0] = time
