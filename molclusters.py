@@ -4,6 +4,7 @@
 
 import argparse as arg
 import copy
+import warnings
 from collections import Counter
 from typing import Dict, Iterable, Iterator, List, Tuple, Type, Union
 
@@ -12,6 +13,7 @@ import networkx as nx
 import numpy as np
 import yaml
 from MDAnalysis import core
+from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 from tqdm import tqdm
 
 
@@ -201,7 +203,7 @@ class Cluster:
 
 
 class ConnTable:
-    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms"]
+    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs"]
 
     class SubConnTable:
         __slots__ = ["conntab", "_graph", "_cm"]
@@ -239,7 +241,7 @@ class ConnTable:
     def __init__(
         self,
         universe: Type[mda.Universe],
-        cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
+        cluster_args: Dict[str, Dict[str, Tuple[str, float]]],
         selections: Dict[str, Type[core.groups.AtomGroup]],
     ) -> None:
         self.uni = universe
@@ -247,12 +249,45 @@ class ConnTable:
         self.sels = selections
 
         self.cms = {}
-        self.__get_mass_centers()
-        self.__construct_table()
+        self.hbs: Dict[str, Dict[str, Type[HydrogenBondAnalysis]]] = {}
+        self.__get_hbonds()
+        self.update()
 
     def __get_mass_centers(self):
         for res in self.clst_args:
             self.cms[res] = self.sels[res].center_of_mass(compound="residues")
+
+    def __get_hbonds(self):
+        for resi in self.clst_args:
+            for resj in self.clst_args[resi]:
+                if self.clst_args[resi][resj] == "cm":
+                    continue
+
+                if (
+                    (resi not in self.hbs)
+                    or (resj not in self.hbs[resi])
+                    or (resj not in self.hbs)
+                    or (resi not in self.hbs[resj])
+                ):
+                    hb = HydrogenBondAnalysis(
+                        self.uni,
+                        between=[f"resname {resi}", f"resname {resj}"],
+                        d_a_cutoff=self.clst_args[resi][resj][1]["d"],
+                        d_h_a_angle_cutoff=self.clst_args[resi][resj][1]["a"],
+                        update_selections=False,
+                    )
+
+                    hb._prepare()
+
+                    if resi not in self.hbs:
+                        self.hbs[resi] = {resj: [hb, 0]}
+                    else:
+                        self.hbs[resi][resj] = [hb, 0]
+
+                    if resj not in self.hbs:
+                        self.hbs[resj] = {resi: [hb, 0]}
+                    else:
+                        self.hbs[resj][resi] = [hb, 0]
 
     def __get_pair_and_distances(
         self,
@@ -260,39 +295,70 @@ class ConnTable:
         resj: str,
         box: Type[np.ndarray],
     ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-        cm1: Type[np.ndarray] = self.cms[resi]
-        cutoff = self.clst_args[resi][resj][0]
-
         pairs: Type[np.ndarray]
         distances: Type[np.ndarray]
-        if resi != resj:
-            cm2: Type[np.ndarray] = self.cms[resj]
-            pairs, distances = mda.lib.distances.capped_distance(
-                cm1, cm2, cutoff, box=box
-            )
+
+        if self.clst_args[resi][resj][0] == "cm":
+            cm1: Type[np.ndarray] = self.cms[resi]
+            cutoff = self.clst_args[resi][resj][1]
+            if resi != resj:
+                cm2: Type[np.ndarray] = self.cms[resj]
+                pairs, distances = mda.lib.distances.capped_distance(
+                    cm1, cm2, cutoff, box=box
+                )
+            else:
+                pairs, distances = mda.lib.distances.self_capped_distance(
+                    cm1, cutoff, box=box
+                )
+
+            for k, (moli, molj) in enumerate(pairs):
+                pairs[k, 0] = self.sels[resi].residues[moli].resid
+                pairs[k, 1] = self.sels[resj].residues[molj].resid
         else:
-            pairs, distances = mda.lib.distances.self_capped_distance(
-                cm1, cutoff, box=box
-            )
+            hb = self.hbs[resi][resj][0]
+            hb._ts = self.uni.trajectory.ts
+
+            # suppress warnings when there are no HBonds
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                hb._single_frame()
+
+            frame_id = self.hbs[resi][resj][1]
+            res = (np.asarray(hb.results.hbonds).T)[frame_id:, -4:-1]
+            distances = res[:, -2]
+            pairs = np.empty((0, 2), int)
+            for h_ati, a_ati, _ in res:
+                h_ati, a_ati = int(h_ati), int(a_ati)
+                moli = self.uni.atoms[h_ati].resid
+                molj = self.uni.atoms[a_ati].resid
+                pairs = np.append(pairs, [[moli, molj]], axis=0)
+
+            self.hbs[resi][resj][1] += len(res)
 
         return pairs, distances
 
     def __construct_table(self) -> Type[nx.Graph]:
         self.conntab = nx.Graph()
+
+        analyzed = dict.fromkeys(self.clst_args.keys())
+        for k in analyzed:
+            analyzed[k] = []
+
         for resi in self.clst_args:
             for resj in self.clst_args[resi]:
-                pairs: Type[np.ndarray]
-                distances: Type[np.ndarray]
+                if resj not in analyzed[resi]:
+                    pairs: Type[np.ndarray]
+                    distances: Type[np.ndarray]
 
-                pairs, distances = self.__get_pair_and_distances(
-                    resi, resj, self.uni.dimensions
-                )
+                    pairs, distances = self.__get_pair_and_distances(
+                        resi, resj, self.uni.dimensions
+                    )
 
-                for k, (i, j) in enumerate(pairs):
-                    ri = self.sels[resi].residues[i].resid
-                    rj = self.sels[resj].residues[j].resid
+                    for k, (ri, rj) in enumerate(pairs):
+                        self.conntab.add_edge(ri, rj, d=distances[k])
 
-                    self.conntab.add_edge(ri, rj, d=distances[k])
+                    analyzed[resi].append(resj)
+                    analyzed[resj].append(resi)
 
     def update(self) -> None:
         self.__get_mass_centers()
@@ -349,12 +415,24 @@ class ConnTable:
     def subconntables(self):
         for s in sorted(
             self.__subgraphs(), key=lambda x: len(x), reverse=True
-        ):  # sorts to guarantee that in case of separation the biggest cluster keeps the id
+        ):  # sorts to guarantee that in case of separation the biggest cluster keeps
+            # the id
             yield self.SubConnTable(s, self)
 
 
 class MolClusters:
-    __slots__ = ["uni", "config", "sels", "conntab", "clusters", "mol_clt","clusters_size_evo","solutes","solvents","solute_data"]
+    __slots__ = [
+        "uni",
+        "config",
+        "sels",
+        "conntab",
+        "clusters",
+        "mol_clt",
+        "clusters_size_evo",
+        "solutes",
+        "solvents",
+        "solute_data",
+    ]
 
     def __init__(
         self,
@@ -402,9 +480,7 @@ class MolClusters:
                 self.mol_clt[mol] = cls_id
 
     def __gen_origin_cluster_counter(self, subconn):
-        mols_origin_clusters = {
-            mol: self.mol_clt.get(mol, 0) for mol in subconn
-        }
+        mols_origin_clusters = {mol: self.mol_clt.get(mol, 0) for mol in subconn}
         return Counter(mols_origin_clusters.values())
 
     def __check_dominance(self, cls_id, n, conn_info, conn_skip):
@@ -426,7 +502,7 @@ class MolClusters:
 
         return id
 
-    def __construct_dominance(self,origin_clusters,modified_clusters,conn_info,i):
+    def __construct_dominance(self, origin_clusters, modified_clusters, conn_info, i):
         dominances = {True: [], False: []}
 
         for cls_id, n in origin_clusters.most_common():
@@ -449,7 +525,8 @@ class MolClusters:
     def __get_older_cluster(self, dominances, origin_clusters):
         id = dominances[True][0]
 
-        # this loop makes sure that in case the cluster that comes from merges of same size agglomerates take the oldest one
+        # this loop makes sure that in case the cluster that comes from merges of same
+        # size agglomerates take the oldest one
         for j in dominances[True][1:]:
             if origin_clusters[id] == origin_clusters[j] and j < id:
                 id = j
@@ -463,7 +540,7 @@ class MolClusters:
 
         modified_mols = set()
         modified_clusters = set()
-        merged_clusters = set() # needs this because of dominance devolution
+        merged_clusters = set()  # needs this because of dominance devolution
 
         conn_info = [
             (sub, self.__gen_origin_cluster_counter(sub))
@@ -482,15 +559,17 @@ class MolClusters:
             elif len(subconn) == 2:  # dimer is always new
                 id = self.__create_new_cluster(subconn)
             else:
-                dominances = self.__construct_dominance(origin_clusters,modified_clusters,conn_info,i)
+                dominances = self.__construct_dominance(
+                    origin_clusters, modified_clusters, conn_info, i
+                )
 
                 if not dominances[True]:
                     id = self.__create_new_cluster(subconn)
                 else:
-                    id = self.__get_older_cluster(dominances,origin_clusters)
+                    id = self.__get_older_cluster(dominances, origin_clusters)
 
                     self.clusters[id].update_from_conntable(subconn)
-                    merged_clusters.update(set(dominances[True])-{id})
+                    merged_clusters.update(set(dominances[True]) - {id})
 
             for mol in subconn:
                 self.mol_clt[mol] = id
@@ -501,7 +580,7 @@ class MolClusters:
         for mol in set(self.mol_clt.keys()).difference(modified_mols):
             self.mol_clt.pop(mol)
 
-        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)
+        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)  # noqa: E501
         for cls in set(self.clusters.keys()).difference(modified_clusters):
             self.clusters.pop(cls)
 
@@ -528,9 +607,13 @@ class MolClusters:
 
     def __get_clusters_info(self, k):
         sizes = [cls.size for cls in self.clusters.values()]
-        avg = np.average(sizes)
-        min_size = min(sizes, default=0)
-        max_size = max(sizes, default=0)
+        if len(sizes) == 0:
+            avg, min_size, max_size = 0, 0, 0
+        else:
+            avg = np.average(sizes)
+            min_size = min(sizes)
+            max_size = max(sizes)
+
         time = self.uni.coord.time
 
         self.clusters_size_evo[k][0] = time
@@ -538,7 +621,6 @@ class MolClusters:
         self.clusters_size_evo[k][2] = min_size
         self.clusters_size_evo[k][3] = avg
         self.clusters_size_evo[k][4] = max_size
-
 
     def __print_clusters_index(self):
         cols = 15
@@ -567,13 +649,24 @@ def parse_input_file(
 
     for mi, val in copy.deepcopy(config["rules"]).items():
         for mj, rule in val.items():
-            op = rule.split()[0]
-            dist = float(rule.split()[1])
-            if mj in config["rules"]:
-                config["rules"][mj][mi] = (dist,op)
+            rule = rule.split()
+            op = rule[0].lower()
+            if op == "cm":
+                dist = float(rule[1])
+                if mj in config["rules"]:
+                    config["rules"][mj][mi] = (op, dist)
+                else:
+                    config["rules"][mj] = {mi: (op, dist)}
+                config["rules"][mi][mj] = (op, dist)
             else:
-                config["rules"][mj] = {mi : (dist,op)}
-            config["rules"][mi][mj] = (dist,op)
+                dist = float(rule[rule.index("d") + 1]) if "d" in rule else 3.5
+                ang = float(rule[rule.index("a") + 1]) if "a" in rule else 150.
+
+                if mj in config["rules"]:
+                    config["rules"][mj][mi] = (op, {"d": dist, "a": ang})
+                else:
+                    config["rules"][mj] = {mi: (op, {"d": dist, "a": ang})}
+                config["rules"][mi][mj] = (op, {"d": dist, "a": ang})
 
     # TODO: Implement input correctness analysis
 
@@ -597,5 +690,5 @@ if __name__ == "__main__":
         args.top, args.traj, in_memory=True
     )  # TODO: add in_memory_step as option on cmdline
 
-    molclusters = MolClusters(uni,cls_args)
+    molclusters = MolClusters(uni, cls_args)
     molclusters.run()
