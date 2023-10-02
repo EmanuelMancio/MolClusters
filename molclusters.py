@@ -4,6 +4,7 @@
 
 import argparse as arg
 import copy
+import warnings
 from collections import Counter
 from typing import Dict, Iterable, Iterator, List, Tuple, Type, Union
 
@@ -12,6 +13,7 @@ import networkx as nx
 import numpy as np
 import yaml
 from MDAnalysis import core
+from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
 
 class Cluster:
@@ -196,7 +198,7 @@ class Cluster:
 
 
 class ConnTable:
-    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms"]
+    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs"]
 
     class SubConnTable:
         __slots__ = ["conntab", "_graph", "_cm"]
@@ -234,7 +236,7 @@ class ConnTable:
     def __init__(
         self,
         universe: Type[mda.Universe],
-        cluster_args: Dict[str, Dict[str, Tuple[float, str]]],
+        cluster_args: Dict[str, Dict[str, Tuple[str, float]]],
         selections: Dict[str, Type[core.groups.AtomGroup]],
     ) -> None:
         self.uni = universe
@@ -242,12 +244,45 @@ class ConnTable:
         self.sels = selections
 
         self.cms = {}
-        self.__get_mass_centers()
-        self.__construct_table()
+        self.hbs: Dict[str, Dict[str, Type[HydrogenBondAnalysis]]] = {}
+        self.__get_hbonds()
+        self.update()
 
     def __get_mass_centers(self):
         for res in self.clst_args:
             self.cms[res] = self.sels[res].center_of_mass(compound="residues")
+
+    def __get_hbonds(self):
+        for resi in self.clst_args:
+            for resj in self.clst_args[resi]:
+                if self.clst_args[resi][resj] == "cm":
+                    continue
+
+                if (
+                    (resi not in self.hbs)
+                    or (resj not in self.hbs[resi])
+                    or (resj not in self.hbs)
+                    or (resi not in self.hbs[resj])
+                ):
+                    hb = HydrogenBondAnalysis(
+                        self.uni,
+                        between=[f"resname {resi}", f"resname {resj}"],
+                        d_a_cutoff=self.clst_args[resi][resj][1]["d"],
+                        d_h_a_angle_cutoff=self.clst_args[resi][resj][1]["a"],
+                        update_selections=False,
+                    )
+
+                    hb._prepare()
+                    
+                    if resi not in self.hbs:
+                        self.hbs[resi] = {resj: [hb, 0]}
+                    else:
+                        self.hbs[resi][resj] = [hb, 0]
+
+                    if resj not in self.hbs:
+                        self.hbs[resj] = {resi: [hb, 0]}
+                    else:
+                        self.hbs[resj][resi] = [hb, 0]
 
     def __get_pair_and_distances(
         self,
@@ -255,39 +290,70 @@ class ConnTable:
         resj: str,
         box: Type[np.ndarray],
     ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-        cm1: Type[np.ndarray] = self.cms[resi]
-        cutoff = self.clst_args[resi][resj][1]
-
         pairs: Type[np.ndarray]
         distances: Type[np.ndarray]
-        if resi != resj:
-            cm2: Type[np.ndarray] = self.cms[resj]
-            pairs, distances = mda.lib.distances.capped_distance(
-                cm1, cm2, cutoff, box=box
-            )
+
+        if self.clst_args[resi][resj][0] == "cm":
+            cm1: Type[np.ndarray] = self.cms[resi]
+            cutoff = self.clst_args[resi][resj][1]
+            if resi != resj:
+                cm2: Type[np.ndarray] = self.cms[resj]
+                pairs, distances = mda.lib.distances.capped_distance(
+                    cm1, cm2, cutoff, box=box
+                )
+            else:
+                pairs, distances = mda.lib.distances.self_capped_distance(
+                    cm1, cutoff, box=box
+                )
+
+            for k, (moli, molj) in enumerate(pairs):
+                pairs[k, 0] = self.sels[resi].residues[moli].resid
+                pairs[k, 1] = self.sels[resj].residues[molj].resid
         else:
-            pairs, distances = mda.lib.distances.self_capped_distance(
-                cm1, cutoff, box=box
-            )
+            hb = self.hbs[resi][resj][0]
+            hb._ts = self.uni.trajectory.ts
+
+            # suppress warnings when there are no HBonds
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                hb._single_frame()
+
+            frame_id = self.hbs[resi][resj][1]
+            res = (np.asarray(hb.results.hbonds).T)[frame_id:, -4:-1]
+            distances = res[:, -2]
+            pairs = np.empty((0, 2), int)
+            for h_ati, a_ati, _ in res:
+                h_ati, a_ati = int(h_ati), int(a_ati)
+                moli = self.uni.atoms[h_ati].resid
+                molj = self.uni.atoms[a_ati].resid
+                pairs = np.append(pairs, [[moli, molj]], axis=0)
+
+            self.hbs[resi][resj][1] += len(res)
 
         return pairs, distances
 
     def __construct_table(self) -> Type[nx.Graph]:
         self.conntab = nx.Graph()
+
+        analyzed = dict.fromkeys(self.clst_args.keys())
+        for k in analyzed:
+            analyzed[k] = []
+
         for resi in self.clst_args:
             for resj in self.clst_args[resi]:
-                pairs: Type[np.ndarray]
-                distances: Type[np.ndarray]
+                if resj not in analyzed[resi]:
+                    pairs: Type[np.ndarray]
+                    distances: Type[np.ndarray]
 
-                pairs, distances = self.__get_pair_and_distances(
-                    resi, resj, self.uni.dimensions
-                )
+                    pairs, distances = self.__get_pair_and_distances(
+                        resi, resj, self.uni.dimensions
+                    )
 
-                for k, (i, j) in enumerate(pairs):
-                    ri = self.sels[resi].residues[i].resid
-                    rj = self.sels[resj].residues[j].resid
+                    for k, (ri, rj) in enumerate(pairs):
+                        self.conntab.add_edge(ri, rj, d=distances[k])
 
-                    self.conntab.add_edge(ri, rj, d=distances[k])
+                    analyzed[resi].append(resj)
+                    analyzed[resj].append(resi)
 
     def update(self) -> None:
         self.__get_mass_centers()
@@ -535,13 +601,24 @@ def parse_input_file(
 
     for mi, val in copy.deepcopy(config["rules"]).items():
         for mj, rule in val.items():
-            op = rule.split()[0]
-            dist = float(rule.split()[1])
-            if mj in config["rules"]:
-                config["rules"][mj][mi] = (op,dist)
+            rule = rule.split()
+            op = rule[0].lower()
+            if op == "cm":
+                dist = float(rule[1])
+                if mj in config["rules"]:
+                    config["rules"][mj][mi] = (op, dist)
+                else:
+                    config["rules"][mj] = {mi: (op, dist)}
+                config["rules"][mi][mj] = (op, dist)
             else:
-                config["rules"][mj] = {mi : (op,dist)}
-            config["rules"][mi][mj] = (op,dist)
+                dist = float(rule[rule.index("d") + 1]) if "d" in rule else 3.5
+                ang = float(rule[rule.index("a") + 1]) if "a" in rule else 150.
+
+                if mj in config["rules"]:
+                    config["rules"][mj][mi] = (op, {"d": dist, "a": ang})
+                else:
+                    config["rules"][mj] = {mi: (op, {"d": dist, "a": ang})}
+                config["rules"][mi][mj] = (op, {"d": dist, "a": ang})
 
     # TODO: Implement input correctness analysis
 
