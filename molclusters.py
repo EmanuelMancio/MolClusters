@@ -273,7 +273,7 @@ class ConnTable:
                     )
 
                     hb._prepare()
-                    
+
                     if resi not in self.hbs:
                         self.hbs[resi] = {resj: [hb, 0]}
                     else:
@@ -410,12 +410,24 @@ class ConnTable:
     def subconntables(self):
         for s in sorted(
             self.__subgraphs(), key=lambda x: len(x), reverse=True
-        ):  # sorts to guarantee that in case of separation the biggest cluster keeps the id
+        ):  # sorts to guarantee that in case of separation the biggest cluster keeps
+            # the id
             yield self.SubConnTable(s, self)
 
 
 class MolClusters:
-    __slots__ = ["uni", "config", "sels", "conntab", "clusters", "mol_clt","clusters_size_evo","solutes","solvents","solute_data"]
+    __slots__ = [
+        "uni",
+        "config",
+        "sels",
+        "conntab",
+        "clusters",
+        "mol_clt",
+        "clusters_size_evo",
+        "solutes",
+        "solvents",
+        "solute_data",
+    ]
 
     def __init__(
         self,
@@ -445,9 +457,7 @@ class MolClusters:
                 self.mol_clt[mol] = cls_id
 
     def __gen_origin_cluster_counter(self, subconn):
-        mols_origin_clusters = {
-            mol: self.mol_clt.get(mol, 0) for mol in subconn
-        }
+        mols_origin_clusters = {mol: self.mol_clt.get(mol, 0) for mol in subconn}
         return Counter(mols_origin_clusters.values())
 
     def __check_dominance(self, cls_id, n, conn_info, conn_skip):
@@ -469,7 +479,7 @@ class MolClusters:
 
         return id
 
-    def __construct_dominance(self,origin_clusters,modified_clusters,conn_info,i):
+    def __construct_dominance(self, origin_clusters, modified_clusters, conn_info, i):
         dominances = {True: [], False: []}
 
         for cls_id, n in origin_clusters.most_common():
@@ -492,7 +502,8 @@ class MolClusters:
     def __get_older_cluster(self, dominances, origin_clusters):
         id = dominances[True][0]
 
-        # this loop makes sure that in case the cluster that comes from merges of same size agglomerates take the oldest one
+        # this loop makes sure that in case the cluster that comes from merges of same
+        # size agglomerates take the oldest one
         for j in dominances[True][1:]:
             if origin_clusters[id] == origin_clusters[j] and j < id:
                 id = j
@@ -506,7 +517,7 @@ class MolClusters:
 
         modified_mols = set()
         modified_clusters = set()
-        merged_clusters = set() # needs this because of dominance devolution
+        merged_clusters = set()  # needs this because of dominance devolution
 
         conn_info = [
             (sub, self.__gen_origin_cluster_counter(sub))
@@ -525,15 +536,17 @@ class MolClusters:
             elif len(subconn) == 2:  # dimer is always new
                 id = self.__create_new_cluster(subconn)
             else:
-                dominances = self.__construct_dominance(origin_clusters,modified_clusters,conn_info,i)
+                dominances = self.__construct_dominance(
+                    origin_clusters, modified_clusters, conn_info, i
+                )
 
                 if not dominances[True]:
                     id = self.__create_new_cluster(subconn)
                 else:
-                    id = self.__get_older_cluster(dominances,origin_clusters)
+                    id = self.__get_older_cluster(dominances, origin_clusters)
 
                     self.clusters[id].update_from_conntable(subconn)
-                    merged_clusters.update(set(dominances[True])-{id})
+                    merged_clusters.update(set(dominances[True]) - {id})
 
             for mol in subconn:
                 self.mol_clt[mol] = id
@@ -544,18 +557,18 @@ class MolClusters:
         for mol in set(self.mol_clt.keys()).difference(modified_mols):
             self.mol_clt.pop(mol)
 
-        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)
+        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)  # noqa: E501
         for cls in set(self.clusters.keys()).difference(modified_clusters):
             self.clusters.pop(cls)
 
     def run(self):
-        for i, _ in enumerate(self.uni.trajectory[1:],start=1):
+        for i, _ in enumerate(self.uni.trajectory[1:], start=1):
             self.__update_clusters()
             self.__get_clusters_info(i)
             if i == 8:
                 self.__print_clusters_index()
 
-        np.savetxt("evo.txt",self.clusters_size_evo)
+        np.savetxt("evo.txt", self.clusters_size_evo)
 
     def find(self, mol: int) -> Union[int, bool]:
         return self.mol_clt.get(mol, False)
@@ -576,7 +589,6 @@ class MolClusters:
         self.clusters_size_evo[k][2] = min_size
         self.clusters_size_evo[k][3] = avg
         self.clusters_size_evo[k][4] = max_size
-
 
     def __print_clusters_index(self):
         cols = 15
@@ -646,5 +658,5 @@ if __name__ == "__main__":
         args.top, args.traj, in_memory=True
     )  # TODO: add in_memory_step as option on cmdline
 
-    molclusters = MolClusters(uni,cls_args)
+    molclusters = MolClusters(uni, cls_args)
     molclusters.run()
