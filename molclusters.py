@@ -6,38 +6,48 @@ import argparse as arg
 import copy
 import warnings
 from collections import Counter
-from typing import Dict, Iterable, Iterator, List, Tuple, Type, Union
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Type, Union
 
+# with warnings.catch_warnings(record=False,module='MDAnalysis',action="ignore"):
 import MDAnalysis as mda
+
 import networkx as nx
 import numpy as np
 import yaml
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
+# from MDAnalysis.transformations import center_in_box
 from tqdm import tqdm
 
 
 class Cluster:
     __cls_id = 1
 
-    __slots__ = ["uni", "initial_time", "cluster", "_cm", "_id"]
+    __slots__ = ["uni", "initial_time", "cluster", "_cm", "_id", "_ag","__centered_time"]
 
     def __init__(
         self,
         universe: Type[mda.Universe],
-        subconntab: Type["ConnTable.SubConnTable"],
+        subconntab: Optional[Type["ConnTable.SubConnTable"]] = None,
     ) -> None:
         self.uni = universe
         self.initial_time: float = universe.trajectory.time
+        self.cluster = None
 
         if subconntab:
             self.cluster: Type[nx.Graph] = nx.Graph(subconntab.graph)
             self._cm = (
                 subconntab._cm
             )  # TODO: Change to keep the sum of center of masses of molecules
+        else:
+            self.cluster = nx.Graph()
+            self._cm = np.empty(3)
+
+        self._ag = core.groups.ResidueGroup(np.array(self.cluster) - 1, self.uni)
 
         self._id = Cluster.__cls_id
         Cluster.__cls_id += 1
+        self.__centered_time = -np.inf
 
     @classmethod
     def _from_graph(cls, uni: Type[mda.Universe], graph: Type[nx.Graph]) -> "Cluster":
@@ -45,6 +55,10 @@ class Cluster:
         tmp_cls.cluster = graph
         tmp_cls.__recalculate_cm()
         return tmp_cls
+
+    @property
+    def ag(self):
+        return self._ag
 
     @property
     def id(self) -> int:
@@ -59,11 +73,10 @@ class Cluster:
         self._cm = value
 
     def __recalculate_cm(self):
-        self._cm = self.to_atomgroup().center_of_mass()
+        self._cm = self._ag.center_of_mass()
 
-    def to_atomgroup(self) -> Type[core.groups.ResidueGroup]:
-        # TODO: modify to have a selection as variable and to not recalculate it every time
-        return core.groups.ResidueGroup([m - 1 for m in self.cluster], self.uni)
+    def __update_ag(self) -> None:
+        self._ag = core.groups.ResidueGroup(np.array(self.cluster) - 1, self.uni)
 
     def add_mol(
         self,
@@ -80,6 +93,7 @@ class Cluster:
 
         self.cluster.add_node(mol, name=resname)
         self.add_con(ref_mol, mol, dist)
+        self._ag += core.groups.ResidueGroup([mol - 1], self.uni)
         self.__recalculate_cm()
 
     def add_con(
@@ -103,6 +117,7 @@ class Cluster:
             raise ValueError(f"mol {mol} not in the cluster")
 
         self.cluster.remove_node(mol)
+        self._ag -= core.groups.ResidueGroup([mol - 1], self.uni)
         self.__recalculate_cm()
 
     def remove_con(self, moli: int, molj: int) -> None:
@@ -133,6 +148,7 @@ class Cluster:
         ]
 
         self.cluster = sub_clusters[0]
+        self.__update_ag()
         self.__recalculate_cm()
 
         return [Cluster._from_graph(self.uni, nx.Graph(g)) for g in sub_clusters[1:]]
@@ -152,6 +168,7 @@ class Cluster:
 
         self.cluster = nx.Graph(conn.graph)
         self._cm = conn.cm
+        self.__update_ag()
 
     def get_dist(self, moli: int, molj: int) -> float:
         if moli not in self:
@@ -176,10 +193,70 @@ class Cluster:
 
         return self.cluster[moli][molj]["weight"]
 
+    def __make_whole(self):
+        #! This should NOT be used before printing
+        if self.__centered_time != self.uni.trajectory.time:
+            boxcenter = np.sum(self.uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
+            # self._ag.atoms.unwrap(compound="residues",reference="cog",inplace=True)
+
+            ref_mol_cm = self._ag[:1].center_of_mass(unwrap=True)
+            vector = boxcenter - ref_mol_cm
+            self._ag.atoms.positions += vector
+            self._ag.atoms.unwrap(compound="residues",reference="cog",inplace=True)
+            # center_in_box(self._ag,point=ref_mol_cm)(self.uni.trajectory.ts)
+            # center_in_box(self._ag)(self.uni.trajectory.ts)
+            self.__centered_time = self.uni.trajectory.time
+
     @property
     def resnames(self):
-        return self.to_atomgroup().resnames
+        return self._ag.resnames
 
+    @property
+    def mass(self):
+        return self._ag.total_mass()
+
+    @property
+    def sphericity(self):
+        self.__make_whole()
+        return 1 - self._ag.asphericity()
+
+    @property
+    def dipole_moment(self):
+        self.__make_whole()
+        return self._ag.atoms.dipole_moment()
+
+    @property
+    def dipole(self):
+        self.__make_whole()
+        return self._ag.atoms.dipole_vector()
+
+    @property
+    def shape_parameter(self):
+        self.__make_whole()
+        return self._ag.shape_parameter()
+
+    @property
+    def bsphere(self):
+        self.__make_whole()
+        return self._ag.bsphere()
+
+    @property
+    def radius_of_gyration(self):
+        self.__make_whole()
+        return self._ag.radius_of_gyration()
+
+    @property
+    def volume(self):
+        r = self.radius_of_gyration
+        return 4 * np.pi * r**3 / 3  # angstrom^3
+
+    @property
+    def density(self):
+        return (self.mass / self.volume) * 0.602214076  # g/cm^3
+
+    @property
+    def charge(self):
+        return self._ag.total_charge()
     def __contains__(self, item: int) -> bool:
         return item in self.cluster
 
@@ -432,6 +509,7 @@ class MolClusters:
         "solutes",
         "solvents",
         "solute_data",
+        "__dict__",
     ]
 
     def __init__(
@@ -450,27 +528,117 @@ class MolClusters:
         self.mol_clt: Dict[int, int] = {}
 
         self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
+        self.radius_evolution = {}
+        self.solute_radius = None
+        self.solute_dipole = None
 
         self.__start_clusters()
         self.__get_clusters_info(0)
 
     def __start_solute_solvent(self):
-        self.solutes = [id for sel in self.config["solute"] for id in self.sels[sel].residues.resids]
-        self.solvents = self.config["solvent"] # TODO: solvents should be automatically discovered but file takes precedent
+        self.solutes = [
+            id for sel in self.config["solute"] for id in self.sels[sel].residues.resids
+        ]
+        self.solvents = self.config[
+            "solvent"
+        ]  # TODO: solvents should be automatically discovered but file takes precedent
 
         self.solute_data = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_radius = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_dipole = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_density = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_sphericity = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_shape = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_charge = np.zeros((len(self.uni.trajectory), len(self.solutes)))
+        self.solute_n_cluster = np.zeros(len(self.uni.trajectory))
+        # self.solute_hb = {}
+        # self.solvent_hb = {}
 
     def __solute_solvent_analysis(self, frame):
+        all_solute_clusters = []
         for i, solute_id in enumerate(self.solutes):
             clst_id = self.find(solute_id)
 
             n_solvents = 0
+            radius = 0
+            dipole = np.nan
+            density = 0
+            sphericity = np.nan
+            shape = np.nan
+            charge = np.nan
             if clst_id:
                 mol_pop = Counter(self.clusters[clst_id].resnames)
                 for solvent in self.solvents:
-                    n_solvents += mol_pop.get(solvent,0)
+                    n_solvents += mol_pop.get(solvent, 0)
+
+                radius = self.clusters[clst_id].radius_of_gyration
+                dipole = self.clusters[clst_id].dipole_moment
+                density = self.clusters[clst_id].density
+                sphericity = self.clusters[clst_id].sphericity
+                shape = self.clusters[clst_id].shape_parameter
+                charge = self.clusters[clst_id].charge
+
+                all_solute_clusters.append(clst_id)
+
+                # solvent_ids = set(self.clusters[clst_id])
+                # solvent_ids.remove(solute_id)
+                # solvent_selection = ""
+                # for id in solvent_ids:
+                #     solvent_selection += f"resid {id} or"
+
+                # solvent_selection = solvent_selection[:-2]
+
+                # # self.solute_hb[frame] = {}
+                # # self.solvent_hb[frame] = {}
+
+                # # TODO: fix for when the aggregate has more than one solute molecules
+                # hb_solute = HydrogenBondAnalysis(
+                #     self.uni,
+                #     between=[f"resid {solute_id}", solvent_selection],
+                #     d_a_cutoff=3.5,
+                #     update_selections=False,
+                # )
+                # hb_solvent = HydrogenBondAnalysis(
+                #     self.uni,
+                #     between=[solvent_selection, solvent_selection],
+                #     d_a_cutoff=3.5,
+                #     update_selections=False,
+                # )
+
+                # hb_solute._prepare()
+                # hb_solvent._prepare()
+
+                # hb_solute._ts = self.uni.trajectory.ts
+                # hb_solvent._ts = self.uni.trajectory.ts
+
+                # with warnings.catch_warnings():
+                #     warnings.simplefilter("ignore")
+                #     hb_solute._single_frame()
+                #     hb_solvent._single_frame()
+
+                # hb_solute._conclude()
+                # hb_solvent._conclude()
+
+                # # self.solute_hb[frame][clst_id] = hb_solute.results
+                # # self.solvent_hb[frame][clst_id] = hb_solvent.results
+
+                # if len(hb_solute.results.hbonds) > 0:
+                #     with open(f"{solute_id}_solute_hb.txt","a") as f:
+                #         np.savetxt(f,hb_solute.results.hbonds)
+
+                # if len(hb_solvent.results.hbonds) > 0:
+                #     with open(f"{solute_id}_solvent_hb.txt","a") as f:
+                #         np.savetxt(f,hb_solvent.results.hbonds)
 
             self.solute_data[frame][i] = n_solvents
+            self.solute_radius[frame][i] = radius
+            self.solute_dipole[frame][i] = dipole
+            self.solute_density[frame][i] = density
+            self.solute_sphericity[frame][i] = sphericity
+            self.solute_shape[frame][i] = shape
+            self.solute_charge[frame][i] = charge
+
+        self.solute_n_cluster[frame] = len(set(all_solute_clusters))
 
     def __start_clusters(self):
         for subconn in self.conntab.subconntables():
@@ -584,23 +752,51 @@ class MolClusters:
         for cls in set(self.clusters.keys()).difference(modified_clusters):
             self.clusters.pop(cls)
 
+    def __write_coordinates(self):
+        for cls in self.clusters.values():
+            if not set(self.config["solute"]).intersection(set(cls.resnames)):
+                continue
+
+            with mda.Writer("tmp.gro",multiframe=False) as w:
+                w.write(cls.ag.atoms.sort())
+
+            with open(f"cls-n{cls.size}.gro","a+") as out:
+                with open("tmp.gro",'r') as tmp:
+                    dt = tmp.readlines()
+
+                dt[0] = f"Cluster-{cls.id} - Time = {self.uni.trajectory.time}\n"
+
+                out.write("".join(dt))
+
+
+
     def run(self):
-        if self.config.get("solute",False):
+        if self.config.get("solute", False):
             self.__start_solute_solvent()
             self.__solute_solvent_analysis(0)
 
-        with tqdm(total=len(self.uni.trajectory[1:]),initial=1,mininterval=5,miniters=10) as pbar:
-            for i, _ in enumerate(self.uni.trajectory[1:],start=1):
+        with tqdm(
+            total=len(self.uni.trajectory[1:]), initial=1, mininterval=5, miniters=10
+        ) as pbar:
+            for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                 self.__update_clusters()
                 self.__get_clusters_info(i)
-                if self.config.get("solute",False):
+                if self.config.get("solute", False):
                     self.__solute_solvent_analysis(i)
+                    self.__write_coordinates()
 
                 pbar.update()
 
         self.__print_clusters_index()
-        np.savetxt("evo.txt",self.clusters_size_evo)
-        np.savetxt("solute_solvent.txt",self.solute_data)
+        np.savetxt("evo.txt", self.clusters_size_evo)
+        np.savetxt("solute_solvent.txt", self.solute_data)
+        np.savetxt("solute_radius.txt", self.solute_radius)
+        np.savetxt("solute_dipole.txt", self.solute_dipole)
+        np.savetxt("solute_density.txt", self.solute_density)
+        np.savetxt("solute_sphericity.txt", self.solute_sphericity)
+        np.savetxt("solute_shape.txt", self.solute_shape)
+        np.savetxt("solute_charge.txt", self.solute_charge)
+        np.savetxt("solute_n_clusters.txt", self.solute_n_cluster)
 
     def find(self, mol: int) -> Union[int, bool]:
         return self.mol_clt.get(mol, False)
@@ -621,6 +817,12 @@ class MolClusters:
         self.clusters_size_evo[k][2] = min_size
         self.clusters_size_evo[k][3] = avg
         self.clusters_size_evo[k][4] = max_size
+
+        for cls in self.clusters.values():
+            if cls.id in self.radius_evolution:
+                self.radius_evolution[cls.id].append((time, cls.radius_of_gyration))
+            else:
+                self.radius_evolution[cls.id] = [(time, cls.radius_of_gyration)]
 
     def __print_clusters_index(self):
         cols = 15
@@ -660,7 +862,7 @@ def parse_input_file(
                 config["rules"][mi][mj] = (op, dist)
             else:
                 dist = float(rule[rule.index("d") + 1]) if "d" in rule else 3.5
-                ang = float(rule[rule.index("a") + 1]) if "a" in rule else 150.
+                ang = float(rule[rule.index("a") + 1]) if "a" in rule else 150.0
 
                 if mj in config["rules"]:
                     config["rules"][mj][mi] = (op, {"d": dist, "a": ang})
