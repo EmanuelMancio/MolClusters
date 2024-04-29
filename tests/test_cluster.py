@@ -1,17 +1,17 @@
-from MolClusters import Cluster
+from molclusters.cluster import Cluster
 from MDAnalysis import Universe
 
 import pytest
 import numpy as np
 
-
 class TestCluster:
     cls = Cluster(
         Universe(
-            "../data/met-mal/met-mal.tpr",
-            "../data/met-mal/start.pdb",
+            "tests/data/met-mal/met-mal.tpr",
+            "tests/data/met-mal/start.pdb",
         )
     )
+
 
     def test_cluster_creation(self):
         assert self.cls is not None
