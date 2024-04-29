@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "MolClusters"
+version = "0.1.0"
+description = ""
+authors = ["Emanuel Mancio <emanuelmancio@usp.br>"]
+license = "GPL-3.0-only"
+readme = "README.md"
+repository = "https://github.com/EmanuelMancio/MolClusters"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+MDAnalysis = {extras = ["analysis"], version = "^2.5"}
+networkx = "^3.3"
+numpy = "^1.26.4"
+PyYAML = "^6.0.1"
+tqdm = "^4.66.2"
+pandas = "^2.2.2"
+
+[tool.poetry.scripts]
+molclusters = "molclusters.main:main"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
+ruff = "^0.4.1"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib"
+]
+
+[tool.ruff]
+line-length = 100
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
