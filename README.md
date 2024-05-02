@@ -1,5 +1,7 @@
 # Molecular Clusters
 
+<!-- TODO: modify to package version -->
+
 Script to analyze formation and life-time of molecular clusters from a molecular dynamics simulation
 
 ## Dependencies
