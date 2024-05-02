@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "MolClusters"
-version = "0.1.0"
+version = "0.1.0-dev"
 description = ""
 authors = ["Emanuel Mancio <emanuelmancio@usp.br>"]
 license = "GPL-3.0-only"
