@@ -48,8 +48,6 @@ class MolClusters:
 
         self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
         self.radius_evolution = {}
-        self.solute_radius = None
-        self.solute_dipole = None
 
         # TODO: move start to run function
         self.__start_clusters()
@@ -314,12 +312,6 @@ class MolClusters:
         self.clusters_size_evo[k][2] = min_size
         self.clusters_size_evo[k][3] = avg
         self.clusters_size_evo[k][4] = max_size
-
-        for cls in self.clusters.values():
-            if cls.id in self.radius_evolution:
-                self.radius_evolution[cls.id].append((time, cls.radius_of_gyration))
-            else:
-                self.radius_evolution[cls.id] = [(time, cls.radius_of_gyration)]
 
     def __print_clusters_index(self):
         cols = 15
