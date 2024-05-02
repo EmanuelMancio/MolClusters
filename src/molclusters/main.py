@@ -6,6 +6,7 @@ import yaml
 from typing import Type, Dict, Tuple
 
 from .molclusters import MolClusters
+from . import __version__
 
 
 def parse_input_file(
@@ -47,6 +48,7 @@ def main():
     parser.add_argument(
         "inp", type=arg.FileType("r"), help="Input file with analysis settings"
     )
+    parser.add_argument("--version",action="version",version=__version__)
 
     args = parser.parse_args()
 
