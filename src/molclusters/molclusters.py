@@ -5,6 +5,7 @@
 from collections import Counter
 from typing import Dict, Type, Union
 
+import json
 import MDAnalysis as mda
 import numpy as np
 import pandas as pd
@@ -50,8 +51,12 @@ class MolClusters:
         self.solute_radius = None
         self.solute_dipole = None
 
+        # TODO: move start to run function
         self.__start_clusters()
         self.__get_clusters_info(0)
+
+        self.data_holder = MolClustersData(self)
+        self.data_holder.parse_frame()
 
     def __start_solute_solvent(self):
         self.solutes = [
@@ -67,16 +72,7 @@ class MolClusters:
         self.solute_data = np.zeros(
             (len(self.uni.trajectory), 10)
         )  # Value 8 accounts for time column and 7 property columns
-        # self.solute_radius = np.zeros((len(self.uni.trajectory), len(self.solutes)))
-        # self.solute_dipole = np.zeros((len(self.uni.trajectory), len(self.solutes)))
-        # self.solute_density = np.zeros((len(self.uni.trajectory), len(self.solutes)))
-        # self.solute_sphericity = np.zeros((len(self.uni.trajectory), len(self.solutes)))
-        # self.solute_shape = np.zeros((len(self.uni.trajectory), len(self.solutes)))
-        # self.solute_charge = np.zeros((len(self.uni.trajectory), len(self.solutes)))
-        # self.solute_n_cluster = np.zeros(len(self.uni.trajectory))
-        # self.solute_hb = {}
-        # self.solvent_hb = {}
-
+        
     def __solute_solvent_clusters(self):
         for cls in self.clusters.values():
             res = set(cls.resnames)
@@ -273,6 +269,7 @@ class MolClusters:
                     self.__solute_solvent_analysis(i)
                     self.__write_coordinates()
 
+                self.data_holder.parse_frame()
                 pbar.update()
 
         # self.__print_clusters_index()
@@ -293,6 +290,10 @@ class MolClusters:
             ],
         )
         self.solute_data.to_csv("solute_solvent.csv", index=False)
+        with open("molclusters.json", "w+") as json_out:
+            json.dump(
+                self.data_holder.data, json_out, indent=4
+            )
 
     def find(self, mol: int) -> Union[int, bool]:
         return self.mol_clt.get(mol, False)
@@ -338,3 +339,43 @@ class MolClusters:
                 ndx.write("\n")
 
                 # TODO: (low priority) Make the skipped lines work
+
+class MolClustersData:
+    def __init__(self, molclusters):
+        self.molcls = molclusters
+        self.data = {
+            "Trajectory": self.molcls.uni.trajectory.filename,
+            "Topology": self.molcls.uni.filename,
+            "Config": self.molcls.config,
+            "MolClusters": [],
+        }
+
+    def parse_frame(self):
+        data = {}
+
+        data["Time"] = self.molcls.uni.coord.time
+        data["Frame"] = self.molcls.uni.coord.frame
+        data["NClusters"] = len(self.molcls.clusters)
+
+        cls_data = {}
+        for id_cls, cls in self.molcls.clusters.items():
+            cls_data[f"CLS_{id_cls}"] = self.encode_cluster(cls)
+
+        data["Clusters"] = cls_data
+        self.data["MolClusters"].append(data)
+
+    @staticmethod
+    def encode_cluster(cls):
+        data = {}
+        data["ID"] = cls.id
+        data["Size"] = cls.size
+        data["Pop"] = dict(Counter(cls.resnames))
+        data["ResIDs"] = sorted([int(x) for x in cls.cluster])
+        data["Mass"] = cls.mass
+        data["Volume"] = cls.volume
+        data["Density"] = cls.density
+        data["Charge"] = cls.charge
+        data["Dipole Moment"] = cls.dipole_moment
+        data["Sphericity"] = cls.sphericity
+        data["Shape"] = cls.shape_parameter
+        return data
