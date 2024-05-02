@@ -7,6 +7,8 @@ from MDAnalysis import core
 
 from .conntable import ConnTable
 
+EA2D = 1/0.3934303
+
 class Cluster:
     __cls_id = 1
 
@@ -218,12 +220,12 @@ class Cluster:
     @property
     def dipole_moment(self):
         self.__make_whole()
-        return self._ag.atoms.dipole_moment()
+        return self._ag.atoms.dipole_moment() * EA2D
 
     @property
     def dipole(self):
         self.__make_whole()
-        return self._ag.atoms.dipole_vector()
+        return self._ag.atoms.dipole_vector() * EA2D
 
     @property
     def shape_parameter(self):
