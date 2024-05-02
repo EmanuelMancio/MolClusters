@@ -250,7 +250,7 @@ class MolClusters:
                 with open("tmp.gro", "r") as tmp:
                     dt = tmp.readlines()
 
-                dt[0] = f"Cluster-{cls.id} - Time = {self.uni.trajectory.time}\n"
+                dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
 
                 out.write("".join(dt))
 
