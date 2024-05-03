@@ -9,11 +9,14 @@ import json
 import MDAnalysis as mda
 import numpy as np
 import pandas as pd
+import pathlib as path
+
 from MDAnalysis import core
 from tqdm import tqdm
 
 from .cluster import Cluster
 from .conntable import ConnTable
+from . import __version__
 
 
 class MolClusters:
@@ -70,7 +73,7 @@ class MolClusters:
         self.solute_data = np.zeros(
             (len(self.uni.trajectory), 10)
         )  # Value 8 accounts for time column and 7 property columns
-        
+
     def __solute_solvent_clusters(self):
         for cls in self.clusters.values():
             res = set(cls.resnames)
@@ -289,9 +292,7 @@ class MolClusters:
         )
         self.solute_data.to_csv("solute_solvent.csv", index=False)
         with open("molclusters.json", "w+") as json_out:
-            json.dump(
-                self.data_holder.data, json_out, indent=4
-            )
+            json.dump(self.data_holder.data, json_out, indent=4)
 
     def find(self, mol: int) -> Union[int, bool]:
         return self.mol_clt.get(mol, False)
@@ -332,12 +333,16 @@ class MolClusters:
 
                 # TODO: (low priority) Make the skipped lines work
 
+
 class MolClustersData:
     def __init__(self, molclusters):
         self.molcls = molclusters
         self.data = {
-            "Trajectory": self.molcls.uni.trajectory.filename,
-            "Topology": self.molcls.uni.filename,
+            "Software": f"MolClusters {__version__}",
+            "Trajectory": str(
+                path.Path(self.molcls.uni.trajectory.filename).absolute()
+            ),
+            "Topology": str(path.Path(self.molcls.uni.filename).absolute()),
             "Config": self.molcls.config,
             "MolClusters": [],
         }
