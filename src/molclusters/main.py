@@ -1,6 +1,7 @@
 import argparse as arg
 import copy
 import MDAnalysis as mda
+import pathlib as path
 import yaml
 
 from typing import Type, Dict, Tuple
@@ -13,6 +14,7 @@ def parse_input_file(
     in_file: Type[arg.FileType],
 ) -> Dict[str, Dict[str, Tuple[float, str]]]:
     config = yaml.safe_load(in_file)
+    config["filename"] = str(path.Path(in_file.name).absolute())
 
     for mi, val in copy.deepcopy(config["rules"]).items():
         for mj, rule in val.items():
