@@ -209,6 +209,10 @@ class Cluster:
         return self._ag.resnames
 
     @property
+    def resids(self):
+        return self._ag.resids
+
+    @property
     def mass(self):
         return self._ag.total_mass()
 
