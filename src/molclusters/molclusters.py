@@ -354,9 +354,9 @@ class MolClustersData:
         data["Frame"] = self.molcls.uni.coord.frame
         data["NClusters"] = len(self.molcls.clusters)
 
-        cls_data = {}
-        for id_cls, cls in self.molcls.clusters.items():
-            cls_data[f"CLS_{id_cls}"] = self.encode_cluster(cls)
+        cls_data = []
+        for cls in self.molcls.clusters.values():
+            cls_data.append(self.encode_cluster(cls))
 
         data["Clusters"] = cls_data
         self.data["MolClusters"].append(data)
@@ -366,7 +366,7 @@ class MolClustersData:
         data = {}
         data["ID"] = cls.id
         data["Size"] = cls.size
-        data["Pop"] = dict(Counter(cls.resnames))
+        data["Composition"] = MolClustersData.encode_cluster_composition(cls)
         data["ResIDs"] = sorted([int(x) for x in cls.cluster])
         data["Mass"] = cls.mass
         data["Volume"] = cls.volume
@@ -376,3 +376,15 @@ class MolClustersData:
         data["Sphericity"] = cls.sphericity
         data["Shape"] = cls.shape_parameter
         return data
+
+    @staticmethod
+    def encode_cluster_composition(cls: Cluster):
+        comp = {}
+        for rnm, rid in zip(cls.resnames, map(int,cls.resids)):
+            if rnm in comp:
+                comp[rnm]["n"] += 1
+                comp[rnm]["resids"].append(rid)
+            else:
+                comp[rnm] = {"resname": rnm, "n": 1, "resids": [rid]}
+
+        return list(comp.values())
