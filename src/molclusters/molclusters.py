@@ -335,7 +335,7 @@ class MolClusters:
 
 
 class MolClustersData:
-    def __init__(self, molclusters):
+    def __init__(self, molclusters: MolClusters):
         self.molcls = molclusters
         self.data = {
             "Software": f"MolClusters {__version__}",
@@ -362,7 +362,7 @@ class MolClustersData:
         self.data["MolClusters"].append(data)
 
     @staticmethod
-    def encode_cluster(cls):
+    def encode_cluster(cls: Cluster):
         data = {}
         data["ID"] = cls.id
         data["Size"] = cls.size
