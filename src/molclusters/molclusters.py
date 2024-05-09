@@ -18,6 +18,7 @@ from .cluster import Cluster
 from .conntable import ConnTable
 from . import __version__
 
+# TODO: Create analysis class to declutter MolClusters
 
 class MolClusters:
     __slots__ = [
