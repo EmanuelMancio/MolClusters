@@ -38,6 +38,10 @@ class MDAAtomGroupAnalyzer:
         return self._ag
 
     @property
+    def size(self):
+        return len(self)
+
+    @property
     def resnames(self):
         return self._ag.resnames
 
@@ -91,6 +95,9 @@ class MDAAtomGroupAnalyzer:
     @property
     def charge(self):
         return self._ag.total_charge()
+
+    def __len__(self):
+        return len(self._ag)
 
 
 class Cluster(MDAAtomGroupAnalyzer):

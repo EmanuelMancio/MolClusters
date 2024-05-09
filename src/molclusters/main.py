@@ -9,6 +9,7 @@ from typing import Type, Dict, Tuple
 from .molclusters import MolClusters
 from . import __version__
 
+
 # TODO: add Config class for better config capability
 def parse_input_file(
     in_file: Type[arg.FileType],
@@ -39,6 +40,15 @@ def parse_input_file(
 
     # TODO: Implement input correctness analysis
 
+    if "nucleus" in config:
+        if "solute" in config["nucleus"]:
+            if "solute" in config:
+                config["nucleus"].extend(config["solute"])
+            else:
+                print("'solute' in nucleus being desconsidered because solute was not defined!")
+
+            config["nucleus"].remove("solute")
+
     return config
 
 
@@ -47,10 +57,8 @@ def main():
 
     parser.add_argument("traj", type=str, help="Trajectory File")
     parser.add_argument("top", type=str, help="Topology file")
-    parser.add_argument(
-        "inp", type=arg.FileType("r"), help="Input file with analysis settings"
-    )
-    parser.add_argument("--version",action="version",version=__version__)
+    parser.add_argument("inp", type=arg.FileType("r"), help="Input file with analysis settings")
+    parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
 
