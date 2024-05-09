@@ -9,7 +9,7 @@ from typing import Type, Dict, Tuple
 from .molclusters import MolClusters
 from . import __version__
 
-
+# TODO: add Config class for better config capability
 def parse_input_file(
     in_file: Type[arg.FileType],
 ) -> Dict[str, Dict[str, Tuple[float, str]]]:
