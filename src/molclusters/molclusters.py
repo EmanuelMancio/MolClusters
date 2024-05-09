@@ -7,6 +7,7 @@ from typing import Dict, Type, Union
 
 import json
 import MDAnalysis as mda
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pathlib as path
@@ -14,11 +15,12 @@ import pathlib as path
 from MDAnalysis import core
 from tqdm import tqdm
 
-from .cluster import Cluster
+from .cluster import Cluster, MDAAtomGroupAnalyzer
 from .conntable import ConnTable
 from . import __version__
 
 # TODO: Create analysis class to declutter MolClusters
+
 
 class MolClusters:
     __slots__ = [
@@ -56,9 +58,25 @@ class MolClusters:
         # TODO: move start to run function
         self.__start_clusters()
         self.__get_clusters_info(0)
+        if self.config.get("solute", False):
+            self.__nucleus_analysis()
 
         self.data_holder = MolClustersData(self)
         self.data_holder.parse_frame()
+
+    def __nucleus_analysis(self):
+        possible_nucleus = []
+        self.nucleus_data = {}
+        for cid, cls in self.clusters.items():
+            for rnm, rid in zip(cls.resnames, cls.resids):
+                if rnm in self.config["nucleus"]:
+                    possible_nucleus.append(rid)
+
+            self.nucleus_data[cid] = []
+            subcomps = nx.induced_subgraph(cls.cluster, possible_nucleus)
+            for sg in nx.connected_components(subcomps):
+                tp = MDAAtomGroupAnalyzer(self.uni, list(sg))
+                self.nucleus_data[cid].append(tp)
 
     def __start_solute_solvent(self):
         self.solutes = [
@@ -199,8 +217,7 @@ class MolClusters:
         merged_clusters = set()  # needs this because of dominance devolution
 
         conn_info = [
-            (sub, self.__gen_origin_cluster_counter(sub))
-            for sub in self.conntab.subconntables()
+            (sub, self.__gen_origin_cluster_counter(sub)) for sub in self.conntab.subconntables()
         ]
 
         for i, (subconn, origin_clusters) in enumerate(conn_info):
@@ -271,6 +288,9 @@ class MolClusters:
                     self.__solute_solvent_analysis(i)
                     self.__write_coordinates()
 
+                if self.config.get("solute", False):
+                    self.__nucleus_analysis()
+
                 self.data_holder.parse_frame()
                 pbar.update()
 
@@ -340,9 +360,7 @@ class MolClustersData:
         self.molcls = molclusters
         self.data = {
             "Software": f"MolClusters {__version__}",
-            "Trajectory": str(
-                path.Path(self.molcls.uni.trajectory.filename).absolute()
-            ),
+            "Trajectory": str(path.Path(self.molcls.uni.trajectory.filename).absolute()),
             "Topology": str(path.Path(self.molcls.uni.filename).absolute()),
             "Config": self.molcls.config,
             "MolClusters": [],
@@ -355,33 +373,50 @@ class MolClustersData:
         data["Frame"] = self.molcls.uni.coord.frame
         data["NClusters"] = len(self.molcls.clusters)
 
-        cls_data = []
-        for cls in self.molcls.clusters.values():
-            cls_data.append(self.encode_cluster(cls))
+        molclusters_data = []
+        for cid, cls in self.molcls.clusters.items():
+            cls_data = self.encode_cluster(cls)
+            if self.molcls.config.get("nucleus", False):
+                cls_data["Nucleus"] = []
+                if self.molcls.nucleus_data.get(cid, False):
+                    for nuc in self.molcls.nucleus_data[cid]:
+                        cls_data["Nucleus"].append(MolClustersData.encode_nucleus(nuc))
 
-        data["Clusters"] = cls_data
+            molclusters_data.append(cls_data)
+
+        data["Clusters"] = molclusters_data
         self.data["MolClusters"].append(data)
 
     @staticmethod
     def encode_cluster(cls: Cluster):
         data = {}
         data["ID"] = cls.id
-        data["Size"] = cls.size
-        data["Composition"] = MolClustersData.encode_cluster_composition(cls)
-        data["ResIDs"] = sorted([int(x) for x in cls.cluster])
-        data["Mass"] = cls.mass
-        data["Volume"] = cls.volume
-        data["Density"] = cls.density
-        data["Charge"] = cls.charge
-        data["Dipole Moment"] = cls.dipole_moment
-        data["Sphericity"] = cls.sphericity
-        data["Shape"] = cls.shape_parameter
+        MolClustersData.encode_properties(cls, data)
         return data
 
     @staticmethod
-    def encode_cluster_composition(cls: Cluster):
+    def encode_nucleus(nuc: MDAAtomGroupAnalyzer):
+        data = {}
+        MolClustersData.encode_properties(nuc, data)
+        return data
+
+    @staticmethod
+    def encode_properties(obj: Union[Cluster, MDAAtomGroupAnalyzer], data: dict):
+        data["Size"] = obj.size
+        data["Composition"] = MolClustersData.encode_composition(obj)
+        data["ResIDs"] = sorted([int(x) for x in obj.resids])
+        data["Mass"] = obj.mass
+        data["Volume"] = obj.volume
+        data["Density"] = obj.density
+        data["Charge"] = obj.charge
+        data["Dipole Moment"] = obj.dipole_moment
+        data["Sphericity"] = obj.sphericity
+        data["Shape"] = obj.shape_parameter
+
+    @staticmethod
+    def encode_composition(obj: Union[Cluster, MDAAtomGroupAnalyzer]):
         comp = {}
-        for rnm, rid in zip(cls.resnames, map(int,cls.resids)):
+        for rnm, rid in zip(obj.resnames, map(int, obj.resids)):
             if rnm in comp:
                 comp[rnm]["n"] += 1
                 comp[rnm]["resids"].append(rid)
