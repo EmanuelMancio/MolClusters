@@ -7,19 +7,100 @@ from MDAnalysis import core
 
 from .conntable import ConnTable
 
-EA2D = 1/0.3934303
+EA2D = 1 / 0.3934303
+NOT_CENTERED = -np.inf
 
-class Cluster:
+
+class MDAAtomGroupAnalyzer:
+    __slots__ = ["uni", "_ag", "__centered_time"]
+
+    def __init__(self, universe: Type[mda.Universe], cluster):
+        self.uni = universe
+        self._ag = core.groups.ResidueGroup(np.array(cluster) - 1, self.uni)
+        self.__centered_time = NOT_CENTERED
+
+    def __make_whole(self):
+        #! This should NOT be used before printing
+        if self.__centered_time != self.uni.trajectory.time:
+            boxcenter = np.sum(self.uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
+            # self._ag.atoms.unwrap(compound="residues",reference="cog",inplace=True)
+
+            ref_mol_cm = self._ag[:1].center_of_mass(unwrap=True)
+            vector = boxcenter - ref_mol_cm
+            self._ag.atoms.positions += vector
+            self._ag.atoms.unwrap(compound="residues", reference="cog", inplace=True)
+            # center_in_box(self._ag,point=ref_mol_cm)(self.uni.trajectory.ts)
+            # center_in_box(self._ag)(self.uni.trajectory.ts)
+            self.__centered_time = self.uni.trajectory.time
+
+    @property
+    def ag(self):
+        return self._ag
+
+    @property
+    def resnames(self):
+        return self._ag.resnames
+
+    @property
+    def resids(self):
+        return self._ag.resids
+
+    @property
+    def mass(self):
+        return self._ag.total_mass()
+
+    @property
+    def sphericity(self):
+        self.__make_whole()
+        return 1 - self._ag.asphericity()
+
+    @property
+    def dipole_moment(self):
+        self.__make_whole()
+        return self._ag.atoms.dipole_moment() * EA2D
+
+    @property
+    def dipole(self):
+        self.__make_whole()
+        return self._ag.atoms.dipole_vector() * EA2D
+
+    @property
+    def shape_parameter(self):
+        self.__make_whole()
+        return self._ag.shape_parameter()
+
+    @property
+    def bsphere(self):
+        self.__make_whole()
+        return self._ag.bsphere()
+
+    @property
+    def radius_of_gyration(self):
+        self.__make_whole()
+        return self._ag.radius_of_gyration()
+
+    @property
+    def volume(self):
+        r = self.radius_of_gyration
+        return 4 * np.pi * r**3 / 3  # angstrom^3
+
+    @property
+    def density(self):
+        return (self.mass / self.volume) * 0.602214076  # g/cm^3
+
+    @property
+    def charge(self):
+        return self._ag.total_charge()
+
+
+class Cluster(MDAAtomGroupAnalyzer):
     __cls_id = 1
 
     __slots__ = [
-        "uni",
         "initial_time",
         "cluster",
         "_cm",
         "_id",
-        "_ag",
-        "__centered_time",
     ]
 
     def __init__(
@@ -27,8 +108,7 @@ class Cluster:
         universe: Type[mda.Universe],
         subconntab: Optional[Type["ConnTable.SubConnTable"]] = None,
     ) -> None:
-        self.uni = universe
-        self.initial_time: float = universe.trajectory.time
+        self.initial_time: float = universe.coord.time
         self.cluster = None
 
         if subconntab:
@@ -40,11 +120,10 @@ class Cluster:
             self.cluster = nx.Graph()
             self._cm = np.empty(3)
 
-        self._ag = core.groups.ResidueGroup(np.array(self.cluster) - 1, self.uni)
+        super().__init__(universe, self.cluster)
 
         self._id = Cluster.__cls_id
         Cluster.__cls_id += 1
-        self.__centered_time = -np.inf
 
     @classmethod
     def _from_graph(cls, uni: Type[mda.Universe], graph: Type[nx.Graph]) -> "Cluster":
@@ -52,10 +131,6 @@ class Cluster:
         tmp_cls.cluster = graph
         tmp_cls.__recalculate_cm()
         return tmp_cls
-
-    @property
-    def ag(self):
-        return self._ag
 
     @property
     def id(self) -> int:
@@ -139,9 +214,7 @@ class Cluster:
     def separate(self) -> List[Type[nx.Graph]]:
         sub_clusters: List[Type[nx.Graph]] = [
             self.cluster.subgraph(c).copy()
-            for c in sorted(
-                nx.connected_components(self.cluster), key=len, reverse=True
-            )
+            for c in sorted(nx.connected_components(self.cluster), key=len, reverse=True)
         ]
 
         self.cluster = sub_clusters[0]
@@ -189,75 +262,6 @@ class Cluster:
             raise ValueError(f"mol {molj} not in the cluster")
 
         return self.cluster[moli][molj]["weight"]
-
-    def __make_whole(self):
-        #! This should NOT be used before printing
-        if self.__centered_time != self.uni.trajectory.time:
-            boxcenter = np.sum(self.uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
-            # self._ag.atoms.unwrap(compound="residues",reference="cog",inplace=True)
-
-            ref_mol_cm = self._ag[:1].center_of_mass(unwrap=True)
-            vector = boxcenter - ref_mol_cm
-            self._ag.atoms.positions += vector
-            self._ag.atoms.unwrap(compound="residues", reference="cog", inplace=True)
-            # center_in_box(self._ag,point=ref_mol_cm)(self.uni.trajectory.ts)
-            # center_in_box(self._ag)(self.uni.trajectory.ts)
-            self.__centered_time = self.uni.trajectory.time
-
-    @property
-    def resnames(self):
-        return self._ag.resnames
-
-    @property
-    def resids(self):
-        return self._ag.resids
-
-    @property
-    def mass(self):
-        return self._ag.total_mass()
-
-    @property
-    def sphericity(self):
-        self.__make_whole()
-        return 1 - self._ag.asphericity()
-
-    @property
-    def dipole_moment(self):
-        self.__make_whole()
-        return self._ag.atoms.dipole_moment() * EA2D
-
-    @property
-    def dipole(self):
-        self.__make_whole()
-        return self._ag.atoms.dipole_vector() * EA2D
-
-    @property
-    def shape_parameter(self):
-        self.__make_whole()
-        return self._ag.shape_parameter()
-
-    @property
-    def bsphere(self):
-        self.__make_whole()
-        return self._ag.bsphere()
-
-    @property
-    def radius_of_gyration(self):
-        self.__make_whole()
-        return self._ag.radius_of_gyration()
-
-    @property
-    def volume(self):
-        r = self.radius_of_gyration
-        return 4 * np.pi * r**3 / 3  # angstrom^3
-
-    @property
-    def density(self):
-        return (self.mass / self.volume) * 0.602214076  # g/cm^3
-
-    @property
-    def charge(self):
-        return self._ag.total_charge()
 
     def __contains__(self, item: int) -> bool:
         return item in self.cluster
