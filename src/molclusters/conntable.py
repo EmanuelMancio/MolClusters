@@ -15,18 +15,14 @@ class ConnTable:
     class SubConnTable:
         __slots__ = ["conntab", "_graph", "_cm"]
 
-        def __init__(
-            self, subgraph: Type[nx.Graph], conntable: Type["ConnTable"]
-        ) -> None:
+        def __init__(self, subgraph: Type[nx.Graph], conntable: Type["ConnTable"]) -> None:
             self.conntab = conntable
             self._graph = subgraph
 
             self._cm = self.__selection().center_of_mass()
 
         def __selection(self) -> Type[core.groups.ResidueGroup]:
-            return core.groups.ResidueGroup(
-                [m - 1 for m in self.graph], self.conntab.uni
-            )
+            return core.groups.ResidueGroup([m - 1 for m in self.graph], self.conntab.uni)
 
         def __getitem__(self, key):
             return self.conntab[key]
@@ -110,13 +106,9 @@ class ConnTable:
             cutoff = self.clst_args[resi][resj][1]
             if resi != resj:
                 cm2: Type[np.ndarray] = self.cms[resj]
-                pairs, distances = mda.lib.distances.capped_distance(
-                    cm1, cm2, cutoff, box=box
-                )
+                pairs, distances = mda.lib.distances.capped_distance(cm1, cm2, cutoff, box=box)
             else:
-                pairs, distances = mda.lib.distances.self_capped_distance(
-                    cm1, cutoff, box=box
-                )
+                pairs, distances = mda.lib.distances.self_capped_distance(cm1, cutoff, box=box)
 
             for k, (moli, molj) in enumerate(pairs):
                 pairs[k, 0] = self.sels[resi].residues[moli].resid
@@ -174,9 +166,7 @@ class ConnTable:
     def __getitem__(self, key: Union[Tuple[int, int], int]) -> Union[float, List[int]]:
         if isinstance(key, tuple):
             if len(key) > 2:
-                raise KeyError(
-                    "ConnTable accepts only one or two parameters to access data!"
-                )
+                raise KeyError("ConnTable accepts only one or two parameters to access data!")
 
             if key[0] not in self:
                 raise IndexError(f"{key[0]} not in ConnTable")
@@ -224,4 +214,7 @@ class ConnTable:
             self.__subgraphs(), key=lambda x: len(x), reverse=True
         ):  # sorts to guarantee that in case of separation the biggest cluster keeps
             # the id
+            if len(s) == 1:
+                # TODO: find a way to not change how HB calculations are done to avoid this check
+                continue
             yield self.SubConnTable(s, self)
