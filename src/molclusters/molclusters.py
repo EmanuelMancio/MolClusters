@@ -65,9 +65,9 @@ class MolClusters:
         self.data_holder.parse_frame()
 
     def __nucleus_analysis(self):
-        possible_nucleus = []
         self.nucleus_data = {}
         for cid, cls in self.clusters.items():
+            possible_nucleus = []
             for rnm, rid in zip(cls.resnames, cls.resids):
                 if rnm in self.config["nucleus"]:
                     possible_nucleus.append(rid)
