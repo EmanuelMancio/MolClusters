@@ -143,6 +143,7 @@ class ConnTable:
         for k in analyzed:
             analyzed[k] = []
 
+        # TODO: add multiprocessing in conntab construction
         for resi in self.clst_args:
             for resj in self.clst_args[resi]:
                 if resj not in analyzed[resi]:
