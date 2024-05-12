@@ -296,22 +296,24 @@ class MolClusters:
 
         # self.__print_clusters_index()
         np.savetxt("evo.txt", self.clusters_size_evo)
-        self.solute_data = pd.DataFrame(
-            self.solute_data,
-            columns=[
-                "Time",
-                "NCls",
-                "NSolt",
-                "NSolv",
-                "Radius",
-                "Density",
-                "Charge",
-                "Dipole",
-                "Spher",
-                "Shape",
-            ],
-        )
-        self.solute_data.to_csv("solute_solvent.csv", index=False)
+        if self.config.get("solute", False):
+            self.solute_data = pd.DataFrame(
+                self.solute_data,
+                columns=[
+                    "Time",
+                    "NCls",
+                    "NSolt",
+                    "NSolv",
+                    "Radius",
+                    "Density",
+                    "Charge",
+                    "Dipole",
+                    "Spher",
+                    "Shape",
+                ],
+            )
+            self.solute_data.to_csv("solute_solvent.csv", index=False)
+
         with open("molclusters.json", "w+") as json_out:
             json.dump(self.data_holder.data, json_out, indent=4)
 
