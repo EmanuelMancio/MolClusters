@@ -59,24 +59,60 @@ class MolClusters:
         self.__start_clusters()
         self.__get_clusters_info(0)
         if self.config.get("solute", False):
-            self.__nucleus_analysis()
+            self.nucleus_data = np.empty(
+                (len(self.uni.trajectory), 9)
+            )  # Value 8 accounts for time column and 7 property columns
+            self.nucleus_data.fill(np.nan)
+            self.__nucleus_analysis(0)
 
         self.data_holder = MolClustersData(self)
         self.data_holder.parse_frame()
 
-    def __nucleus_analysis(self):
-        self.nucleus_data = {}
+    def __nucleus_analysis(self, frame):
+        self.nucleus_holder = {}
+        n_nucleus = []
+        sizes = []
+        radius = []
+        dipole = []
+        density = []
+        sphericity = []
+        shape = []
+        charge = []
         for cid, cls in self.clusters.items():
             possible_nucleus = []
             for rnm, rid in zip(cls.resnames, cls.resids):
                 if rnm in self.config["nucleus"]:
                     possible_nucleus.append(rid)
 
-            self.nucleus_data[cid] = []
+            self.nucleus_holder[cid] = []
             subcomps = nx.induced_subgraph(cls.cluster, possible_nucleus)
+            n_nuc = 0
             for sg in nx.connected_components(subcomps):
                 tp = MDAAtomGroupAnalyzer(self.uni, list(sg))
-                self.nucleus_data[cid].append(tp)
+
+                n_nuc += 1
+                sizes.append(tp.size)
+                radius.append(tp.radius_of_gyration)
+                dipole.append(tp.dipole_moment)
+                density.append(tp.density)
+                sphericity.append(tp.sphericity)
+                shape.append(tp.shape_parameter)
+                charge.append(tp.charge)
+
+                self.nucleus_holder[cid].append(tp)
+
+            if n_nuc != 0:
+                n_nucleus.append(n_nuc)
+
+        self.nucleus_data[frame][0] = self.uni.coord.time
+        self.nucleus_data[frame][1] = np.average(n_nucleus)
+        self.nucleus_data[frame][2] = np.average(sizes)
+        self.nucleus_data[frame][3] = np.average(radius)
+        self.nucleus_data[frame][4] = np.average(density)
+        self.nucleus_data[frame][5] = np.average(charge)
+        self.nucleus_data[frame][6] = np.average(dipole)
+        self.nucleus_data[frame][7] = np.average(sphericity)
+        self.nucleus_data[frame][8] = np.average(shape)
 
     def __start_solute_solvent(self):
         self.solutes = [
@@ -289,7 +325,7 @@ class MolClusters:
                     self.__write_coordinates()
 
                 if self.config.get("solute", False):
-                    self.__nucleus_analysis()
+                    self.__nucleus_analysis(i)
 
                 self.data_holder.parse_frame()
                 pbar.update()
@@ -313,6 +349,23 @@ class MolClusters:
                 ],
             )
             self.solute_data.to_csv("solute_solvent.csv", index=False)
+
+        if self.config.get("nucleus", False):
+            self.nucleus_data = pd.DataFrame(
+                self.nucleus_data,
+                columns=[
+                    "Time",
+                    "NNuc",
+                    "Size",
+                    "Radius",
+                    "Density",
+                    "Charge",
+                    "Dipole",
+                    "Spher",
+                    "Shape",
+                ],
+            )
+            self.nucleus_data.to_csv("nucleus_data.csv", index=False)
 
         with open("molclusters.json", "w+") as json_out:
             json.dump(self.data_holder.data, json_out, indent=4)
@@ -380,8 +433,8 @@ class MolClustersData:
             cls_data = self.encode_cluster(cls)
             if self.molcls.config.get("nucleus", False):
                 cls_data["Nucleus"] = []
-                if self.molcls.nucleus_data.get(cid, False):
-                    for nuc in self.molcls.nucleus_data[cid]:
+                if self.molcls.nucleus_holder.get(cid, False):
+                    for nuc in self.molcls.nucleus_holder[cid]:
                         cls_data["Nucleus"].append(MolClustersData.encode_nucleus(nuc))
 
             molclusters_data.append(cls_data)
