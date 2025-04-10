@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 [project]
 name = "MolClusters"
 version = "0.1.0-dev"
@@ -38,6 +42,7 @@ ruff = "^0.11.4"
 pytest-cov = "^5.0.0"
 pre-commit = "^4.2.0"
 commitizen = "^4.5.1"
+reuse = "^5.0.2"
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --cov=src --cov-report html"

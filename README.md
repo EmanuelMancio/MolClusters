@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+
+SPDX-License-Identifier: GPL-3.0-only
+-->
+
 # Molecular Clusters
 
 Module to analyze formation and life-time of molecular clusters from a molecular dynamics simulation
