@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
