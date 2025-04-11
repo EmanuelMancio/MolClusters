@@ -163,14 +163,30 @@ class MolClusters:
                 n_nucleus.append(n_nuc)
 
         self.nucleus_data[frame][0] = self.uni.coord.time
-        self.nucleus_data[frame][1] = np.average(n_nucleus)
-        self.nucleus_data[frame][2] = np.average(sizes)
-        self.nucleus_data[frame][3] = np.average(radius)
-        self.nucleus_data[frame][4] = np.average(density)
-        self.nucleus_data[frame][5] = np.average(charge)
-        self.nucleus_data[frame][6] = np.average(dipole)
-        self.nucleus_data[frame][7] = np.average(sphericity)
-        self.nucleus_data[frame][8] = np.average(shape)
+        self.nucleus_data[frame][1] = (
+            0 if len(n_nucleus) == 0 else np.average(n_nucleus)
+        )
+        self.nucleus_data[frame][2] = (
+            np.nan if len(n_nucleus) == 0 else np.average(sizes)
+        )
+        self.nucleus_data[frame][3] = (
+            np.nan if len(n_nucleus) == 0 else np.average(radius)
+        )
+        self.nucleus_data[frame][4] = (
+            np.nan if len(n_nucleus) == 0 else np.average(density)
+        )
+        self.nucleus_data[frame][5] = (
+            np.nan if len(n_nucleus) == 0 else np.average(charge)
+        )
+        self.nucleus_data[frame][6] = (
+            np.nan if len(n_nucleus) == 0 else np.average(dipole)
+        )
+        self.nucleus_data[frame][7] = (
+            np.nan if len(n_nucleus) == 0 else np.average(sphericity)
+        )
+        self.nucleus_data[frame][8] = (
+            np.nan if len(n_nucleus) == 0 else np.average(shape)
+        )
 
     def __start_solute_solvent(self) -> None:
         """Initialize solute-solvent analysis."""
