@@ -6,6 +6,16 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.1.1 (2025-04-11)
+
+### Fix
+
+- resolve numpy RuntimeWarning
+- correctly encodes connection information
+- correctly open temporary file in MolClusters
+- update import path for vdwradii
+- resolve type hints errors
+
 ## 0.1.0 (2025-04-11)
 
 ### Feat
