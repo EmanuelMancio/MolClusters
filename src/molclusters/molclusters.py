@@ -761,3 +761,21 @@ class MolClustersData:
                 comp[rnm] = {"resname": rnm, "n": 1, "resids": [rid]}
 
         return list(comp.values())
+
+    @staticmethod
+    def encode_connections(obj: Cluster | MDAResidueGroupAnalyzer) -> List[dict]:
+        """Encode the connections of a cluster or nucleus.
+
+        TO BE IMPLEMENTED
+
+        Parameter
+        ----------
+        obj : Cluster | MDAResidueGroupAnalyzer
+            The object to encode.
+
+        Returns
+        -------
+        List[dict]
+            A list of dictionaries representing the connections.
+        """
+        pass
