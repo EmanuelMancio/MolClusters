@@ -6,6 +6,16 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.1.2 (2025-04-11)
+
+### Fix
+
+- **ConnectionTable**: show correct values in attributes
+
+### Refactor
+
+- **ConnectionTable**: stop holding HB info after usage
+
 ## 0.1.1 (2025-04-11)
 
 ### Fix
