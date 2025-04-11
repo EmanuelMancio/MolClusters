@@ -1,28 +1,74 @@
-#!python
+# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: GPL-3.0-only
 
-"""Cluster Analyzer Script."""
+"""Provides the `MolClusters` class for analyzing molecular clusters in molecular dynamics simulations.
 
-from collections import Counter
-from typing import Dict, Type, Union
+Classes:
+--------
+- MolClusters: A class for managing and analyzing molecular clusters, including solute-solvent interactions,
+  cluster evolution, and nucleus analysis.
+- MolClustersData: A helper class for encoding and storing cluster data for output.
+
+Dependencies:
+-------------
+- MDAnalysis: For molecular dynamics trajectory and structure analysis.
+- NetworkX: For graph-based operations on molecular clusters.
+- NumPy: For numerical computations.
+- Pandas: For data manipulation and exporting results.
+- tqdm: For progress tracking during analysis.
+"""
 
 import json
+import pathlib as path
+from collections import Counter
+from functools import reduce
+from typing import Dict, Generator, List, Set, Tuple
+
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
 import pandas as pd
-import pathlib as path
-
 from MDAnalysis import core
 from tqdm import tqdm
 
-from .cluster import Cluster, MDAAtomGroupAnalyzer
-from .conntable import ConnTable
 from . import __version__
+from .cluster import Cluster, MDAResidueGroupAnalyzer
+from .conntable import ConnectionTable
 
-# TODO: Create analysis class to declutter MolClusters
+# TODO: create analysis class to declutter MolClusters
 
 
 class MolClusters:
+    """A class for analyzing molecular clusters in molecular dynamics simulations.
+
+    This class manages molecular clusters, performs solute-solvent analysis, tracks cluster evolution,
+    and performs nucleus analysis.
+
+    Attributes
+    ----------
+    uni : mda.Universe
+        The MDAnalysis Universe object associated with the simulation.
+    config : dict
+        The configuration dictionary containing analysis settings.
+    sels : Dict[str, core.groups.AtomGroup]
+        Atom groups for each residue type.
+    conntab : ConnectionTable
+        The connectivity table for molecular clusters.
+    clusters : Dict[int, Cluster]
+        A dictionary of detected clusters, keyed by cluster ID.
+    mol_clt : Dict[int, int]
+        A mapping of molecule IDs to their respective cluster IDs.
+    clusters_size_evo : np.ndarray
+        An array tracking the evolution of cluster sizes over time.
+    solutes : List[int]
+        A list of solute molecule IDs.
+    solvents : List[str]
+        A list of solvent residue names.
+    solute_data : np.ndarray
+        An array storing solute-solvent analysis results.
+    """
+
     __slots__ = [
         "uni",
         "config",
@@ -37,38 +83,50 @@ class MolClusters:
         "__dict__",
     ]
 
-    def __init__(
-        self,
-        universe: Type[mda.Universe],
-        config,
-    ) -> None:
+    def __init__(self, universe: mda.Universe, config: dict) -> None:
+        """Initialize the MolClusters object.
+
+        Parameter
+        ----------
+        universe : mda.Universe
+            The MDAnalysis Universe object associated with the simulation.
+        config : dict
+            The configuration dictionary containing analysis settings.
+        """
         self.uni = universe
         self.config = config
-        self.sels: Dict[str, Type[core.groups.AtomGroup]] = {
+        self.sels: Dict[str, core.groups.AtomGroup] = {
             res: self.uni.select_atoms(f"resname {res}") for res in config["rules"]
         }
 
-        self.conntab = ConnTable(self.uni, self.config["rules"], self.sels)
-        self.clusters: Dict[int, Type[Cluster]] = {}
+        self.conntab = ConnectionTable(self.uni, self.config["rules"], self.sels)
+        self.clusters: Dict[int, Cluster] = {}
         self.mol_clt: Dict[int, int] = {}
 
         self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
         self.radius_evolution = {}
 
-        # TODO: move start to run function
+        # TODO: move start to run
         self.__start_clusters()
         self.__get_clusters_info(0)
         if self.config.get("solute", False):
             self.nucleus_data = np.empty(
                 (len(self.uni.trajectory), 9)
-            )  # Value 8 accounts for time column and 7 property columns
+            )  # Value 9 accounts for time column and 8 property columns
             self.nucleus_data.fill(np.nan)
             self.__nucleus_analysis(0)
 
         self.data_holder = MolClustersData(self)
         self.data_holder.parse_frame()
 
-    def __nucleus_analysis(self, frame):
+    def __nucleus_analysis(self, frame: int) -> None:
+        """Perform nucleus analysis for a given frame.
+
+        Parameters
+        ----------
+        frame : int
+            index of the current frame in the trajectory.
+        """
         self.nucleus_holder = {}
         n_nucleus = []
         sizes = []
@@ -80,7 +138,7 @@ class MolClusters:
         charge = []
         for cid, cls in self.clusters.items():
             possible_nucleus = []
-            for rnm, rid in zip(cls.resnames, cls.resids):
+            for rnm, rid in zip(cls.resnames, cls.resids, strict=True):
                 if rnm in self.config["nucleus"]:
                     possible_nucleus.append(rid)
 
@@ -88,7 +146,7 @@ class MolClusters:
             subcomps = nx.induced_subgraph(cls.cluster, possible_nucleus)
             n_nuc = 0
             for sg in nx.connected_components(subcomps):
-                tp = MDAAtomGroupAnalyzer(self.uni, list(sg))
+                tp = MDAResidueGroupAnalyzer(self.uni, list(sg))
 
                 n_nuc += 1
                 sizes.append(tp.size)
@@ -114,8 +172,9 @@ class MolClusters:
         self.nucleus_data[frame][7] = np.average(sphericity)
         self.nucleus_data[frame][8] = np.average(shape)
 
-    def __start_solute_solvent(self):
-        self.solutes = [
+    def __start_solute_solvent(self) -> None:
+        """Initialize solute-solvent analysis."""
+        self.solutes: List[int] = [
             id for sel in self.config["solute"] for id in self.sels[sel].residues.resids
         ]
         self.solvents = self.config[
@@ -129,7 +188,14 @@ class MolClusters:
             (len(self.uni.trajectory), 10)
         )  # Value 8 accounts for time column and 7 property columns
 
-    def __solute_solvent_clusters(self):
+    def __solute_solvent_clusters(self) -> Generator[Cluster]:
+        """Generate clusters that contain both solute and solvent residues.
+
+        Yields
+        ------
+        Generator[Cluster]
+            A generator that yields clusters containing both solute and solvent residues.
+        """
         for cls in self.clusters.values():
             res = set(cls.resnames)
             if (
@@ -138,7 +204,14 @@ class MolClusters:
             ):
                 yield cls
 
-    def __solute_solvent_analysis(self, frame):
+    def __solute_solvent_analysis(self, frame: int) -> None:
+        """Perform solute-solvent analysis for a given frame.
+
+        Parameters
+        ----------
+        frame : int
+            index of the current frame in the trajectory.
+        """
         n_cls = 0
         n_solvents = []
         n_solutes = []
@@ -182,18 +255,59 @@ class MolClusters:
         self.solute_data[frame][8] = np.nan if n_cls == 0 else np.average(sphericity)
         self.solute_data[frame][9] = np.nan if n_cls == 0 else np.average(shape)
 
-    def __start_clusters(self):
+    def __start_clusters(self) -> None:
+        """Initialize clusters at the beginning of the analysis."""
         for subconn in self.conntab.subconntables():
             cls_id = self.__create_new_cluster(subconn)
 
             for mol in subconn:
                 self.mol_clt[mol] = cls_id
 
-    def __gen_origin_cluster_counter(self, subconn):
+    # TODO: make a better name for this function and better documentation
+    def __gen_origin_cluster_counter(
+        self, subconn: ConnectionTable._SubConnTable
+    ) -> Counter:
+        """Generate a counter for the origin clusters of a given subconnection table.
+
+        Parameters
+        ----------
+        subconn : ConnectionTable._SubConnTable
+            The subconnection table for which to generate the counter.
+
+        Returns
+        -------
+        Counter
+            A counter object containing the counts of each cluster ID in the subconnection table.
+        """
         mols_origin_clusters = {mol: self.mol_clt.get(mol, 0) for mol in subconn}
         return Counter(mols_origin_clusters.values())
 
-    def __check_dominance(self, cls_id, n, conn_info, conn_skip):
+    # TODO: better document dominance algorithm
+    def __check_dominance(
+        self,
+        cls_id: int,
+        n: int,
+        conn_info: List[Tuple[ConnectionTable._SubConnTable, Counter]],
+        conn_skip: int,
+    ) -> bool:
+        """Check if a cluster is dominant over another based on size.
+
+        Parameters
+        ----------
+        cls_id : int
+            The ID of the cluster to check for dominance.
+        n : int
+            The size of the cluster to check for dominance.
+        conn_info : List[Tuple[ConnectionTable._SubConnTable, Counter]]
+            A list of tuples containing subconnection tables and their corresponding counters.
+        conn_skip : int
+            The index to skip in the connection information.
+
+        Returns
+        -------
+        bool
+            True if the cluster is dominant, False otherwise.
+        """
         if self.clusters[cls_id].size == n:
             return True
 
@@ -205,14 +319,52 @@ class MolClusters:
 
         return True
 
-    def __create_new_cluster(self, subconn):
+    def __create_new_cluster(self, subconn: ConnectionTable._SubConnTable) -> int:
+        """Create a new cluster from a subconnection table.
+
+        Parameters
+        ----------
+        subconn : ConnectionTable._SubConnTable
+            The subconnection table from which to create the new cluster.
+
+        Returns
+        -------
+        int
+            The ID of the newly created cluster.
+        """
         cluster = Cluster(self.uni, subconn)
         id = cluster.id
         self.clusters[id] = cluster
 
         return id
 
-    def __construct_dominance(self, origin_clusters, modified_clusters, conn_info, i):
+    # TODO: better document dominance algorithm and docstrings
+    def __construct_dominance(
+        self,
+        origin_clusters: Counter,
+        modified_clusters: Set[int],
+        conn_info: List[Tuple[ConnectionTable._SubConnTable, Counter]],
+        i: int,  # TODO: better name for i
+    ) -> Dict[bool, List[int]]:
+        """Construct a dictionary of dominances based on cluster sizes.
+
+        Parameters
+        ----------
+        origin_clusters : Counter
+            A counter object containing the counts of each cluster ID in the subconnection table.
+        modified_clusters : Set[int]
+            A set of modified cluster IDs.
+        conn_info : List[Tuple[ConnectionTable._SubConnTable, Counter]]
+            A list of tuples containing subconnection tables and their corresponding counters.
+        i : int
+            The index to skip in the connection information.
+
+        Returns
+        -------
+        Dict[bool, List[int]]
+            A dictionary with two keys (True and False) containing lists of cluster IDs
+            that are dominant or not dominant, respectively.
+        """
         dominances = {True: [], False: []}
 
         for cls_id, n in origin_clusters.most_common():
@@ -232,7 +384,24 @@ class MolClusters:
 
         return dominances
 
-    def __get_older_cluster(self, dominances, origin_clusters):
+    def __get_older_cluster(
+        self, dominances: Dict[bool, List[int]], origin_clusters: Counter
+    ) -> int:
+        """Get the ID of the oldest cluster from a list of dominances.
+
+        Parameters
+        ----------
+        dominances : Dict[bool, List[int]]
+            A dictionary with two keys (True and False) containing lists of cluster IDs
+            that are dominant or not dominant, respectively.
+        origin_clusters : Counter
+            A counter object containing the counts of each cluster ID in the subconnection table.
+
+        Returns
+        -------
+        int
+            The ID of the oldest cluster.
+        """
         id = dominances[True][0]
 
         # this loop makes sure that in case the cluster that comes from merges of same
@@ -245,7 +414,8 @@ class MolClusters:
 
         return id
 
-    def __update_clusters(self):
+    def __update_clusters(self) -> None:
+        """Update clusters based on dominance and connectivity information."""
         self.conntab.update()
 
         modified_mols = set()
@@ -253,7 +423,8 @@ class MolClusters:
         merged_clusters = set()  # needs this because of dominance devolution
 
         conn_info = [
-            (sub, self.__gen_origin_cluster_counter(sub)) for sub in self.conntab.subconntables()
+            (sub, self.__gen_origin_cluster_counter(sub))
+            for sub in self.conntab.subconntables()
         ]
 
         for i, (subconn, origin_clusters) in enumerate(conn_info):
@@ -293,7 +464,8 @@ class MolClusters:
         for cls in set(self.clusters.keys()).difference(modified_clusters):
             self.clusters.pop(cls)
 
-    def __write_coordinates(self):
+    def __write_coordinates(self) -> None:
+        """Write the coordinates of clusters to files."""
         for cls in self.clusters.values():
             if not set(self.config["solute"]).intersection(set(cls.resnames)):
                 continue
@@ -301,15 +473,36 @@ class MolClusters:
             with mda.Writer("tmp.gro", multiframe=False) as w:
                 w.write(cls.ag.atoms.sort())
 
-            with open(f"cls-n{cls.size}.gro", "a+") as out:
-                with open("tmp.gro", "r") as tmp:
-                    dt = tmp.readlines()
-
+            with path.Path("tmp.gro", "r").open() as tmp:
+                dt = tmp.readlines()
                 dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
 
+            with path.Path(f"cls-n{cls.size}.gro").open("a+") as out:
                 out.write("".join(dt))
 
-    def run(self):
+            # TODO: change to support merges
+            if "follow" in self.config:
+                if "solute" in self.config["follow"]:
+                    sol_id: Set[int] = set(cls.resids).intersection(set(self.solutes))
+                    if len(sol_id) == 0:
+                        print("ERROR: should have a solute here")
+                        continue
+                    elif len(sol_id) > 1:
+                        # TODO: make more feature-rich follow procedure
+                        print("WARNING: MORE THAN ONE SOLUTE, WILL NOT FOLLOW!")
+                        continue
+
+                    sol_id = sol_id.pop()
+
+                    with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
+                        out.write("".join(dt))
+
+    def run(self) -> None:
+        """Run the molecular cluster analysis.
+
+        This method performs cluster detection, solute-solvent analysis, nucleus analysis,
+        and exports the results to files.
+        """
         if self.config.get("solute", False):
             self.__start_solute_solvent()
             self.__solute_solvent_analysis(0)
@@ -330,7 +523,6 @@ class MolClusters:
                 self.data_holder.parse_frame()
                 pbar.update()
 
-        # self.__print_clusters_index()
         np.savetxt("evo.txt", self.clusters_size_evo)
         if self.config.get("solute", False):
             self.solute_data = pd.DataFrame(
@@ -367,13 +559,32 @@ class MolClusters:
             )
             self.nucleus_data.to_csv("nucleus_data.csv", index=False)
 
-        with open("molclusters.json", "w+") as json_out:
+        with path.Path("molclusters.json").open("w+") as json_out:
             json.dump(self.data_holder.data, json_out, indent=4)
 
-    def find(self, mol: int) -> Union[int, bool]:
+    def find(self, mol: int) -> int | bool:
+        """Find the cluster ID for a given molecule.
+
+        Parameter
+        ----------
+        mol : int
+            The molecule ID to search for.
+
+        Returns
+        -------
+        int | bool
+            The cluster ID if the molecule is found, or False if not found.
+        """
         return self.mol_clt.get(mol, False)
 
-    def __get_clusters_info(self, k):
+    def __get_clusters_info(self, k: int) -> None:
+        """Update cluster size evolution information for a given frame.
+
+        Parameter
+        ----------
+        k : int
+            The frame index.
+        """
         sizes = [cls.size for cls in self.clusters.values()]
         if len(sizes) == 0:
             avg, min_size, max_size = 0, 0, 0
@@ -390,10 +601,11 @@ class MolClusters:
         self.clusters_size_evo[k][3] = avg
         self.clusters_size_evo[k][4] = max_size
 
-    def __print_clusters_index(self):
+    def __print_clusters_index(self) -> None:
+        """Write ndx file with cluster index."""
         cols = 15
         i = 1
-        with open("clusters_index.ndx", "w+", encoding="utf-8") as ndx:
+        with path.Path("clusters_index.ndx").open("w+", encoding="utf-8") as ndx:
             for id, cluster in self.clusters.items():
                 ndx.write(f"[ CLS-{id} ]\n")
                 for mol in sorted(cluster):
@@ -411,17 +623,37 @@ class MolClusters:
 
 
 class MolClustersData:
-    def __init__(self, molclusters: MolClusters):
+    """A helper class for encoding and storing molecular cluster data.
+
+    Attributes
+    ----------
+    molcls : MolClusters
+        The parent MolClusters object.
+    data : dict
+        A dictionary for storing encoded cluster data.
+    """
+
+    def __init__(self, molclusters: MolClusters) -> None:
+        """Initialize the MolClustersData object.
+
+        Parameter
+        ----------
+        molclusters : MolClusters
+            The parent MolClusters object.
+        """
         self.molcls = molclusters
         self.data = {
             "Software": f"MolClusters {__version__}",
-            "Trajectory": str(path.Path(self.molcls.uni.trajectory.filename).absolute()),
+            "Trajectory": str(
+                path.Path(self.molcls.uni.trajectory.filename).absolute()
+            ),
             "Topology": str(path.Path(self.molcls.uni.filename).absolute()),
             "Config": self.molcls.config,
             "MolClusters": [],
         }
 
-    def parse_frame(self):
+    def parse_frame(self) -> None:
+        """Parse the current frame and encode cluster data."""
         data = {}
 
         data["Time"] = self.molcls.uni.coord.time
@@ -434,6 +666,8 @@ class MolClustersData:
             if self.molcls.config.get("nucleus", False):
                 cls_data["Nucleus"] = []
                 if self.molcls.nucleus_holder.get(cid, False):
+                    nuclei = reduce(lambda a, b: a + b, self.molcls.nucleus_holder[cid])
+                    cls_data["NucleiDipole"] = nuclei.dipole_moment
                     for nuc in self.molcls.nucleus_holder[cid]:
                         cls_data["Nucleus"].append(MolClustersData.encode_nucleus(nuc))
 
@@ -443,25 +677,61 @@ class MolClustersData:
         self.data["MolClusters"].append(data)
 
     @staticmethod
-    def encode_cluster(cls: Cluster):
+    def encode_cluster(cls: Cluster) -> dict:
+        """Encode a cluster into a dictionary.
+
+        Parameter
+        ----------
+        cls : Cluster
+            The cluster to encode.
+
+        Returns
+        -------
+        dict
+            The encoded cluster data.
+        """
         data = {}
         data["ID"] = cls.id
         MolClustersData.encode_properties(cls, data)
         return data
 
     @staticmethod
-    def encode_nucleus(nuc: MDAAtomGroupAnalyzer):
+    def encode_nucleus(nuc: MDAResidueGroupAnalyzer) -> dict:
+        """Encode a nucleus into a dictionary.
+
+        Parameter
+        ----------
+        nuc : MDAResidueGroupAnalyzer
+            The nucleus to encode.
+
+        Returns
+        -------
+        dict
+            The encoded nucleus data.
+        """
         data = {}
         MolClustersData.encode_properties(nuc, data)
         return data
 
     @staticmethod
-    def encode_properties(obj: Union[Cluster, MDAAtomGroupAnalyzer], data: dict):
+    def encode_properties(obj: Cluster | MDAResidueGroupAnalyzer, data: dict) -> None:
+        """Encode the properties of a cluster or nucleus.
+
+        Parameter
+        ----------
+        obj : Cluster | MDAResidueGroupAnalyzer
+            The object to encode.
+        data : dict
+            The dictionary to store the encoded properties.
+        """
         data["Size"] = obj.size
         data["Composition"] = MolClustersData.encode_composition(obj)
+        data["Connections"] = MolClustersData.encode_connections(obj)
         data["ResIDs"] = sorted([int(x) for x in obj.resids])
         data["Mass"] = obj.mass
         data["Volume"] = obj.volume
+        data["Radius"] = obj.radius
+        data["Diameter"] = obj.diameter
         data["Density"] = obj.density
         data["Charge"] = obj.charge
         data["Dipole Moment"] = obj.dipole_moment
@@ -469,9 +739,21 @@ class MolClustersData:
         data["Shape"] = obj.shape_parameter
 
     @staticmethod
-    def encode_composition(obj: Union[Cluster, MDAAtomGroupAnalyzer]):
+    def encode_composition(obj: Cluster | MDAResidueGroupAnalyzer) -> List[dict]:
+        """Encode the composition of a cluster or nucleus.
+
+        Parameter
+        ----------
+        obj : Cluster | MDAResidueGroupAnalyzer
+            The object to encode.
+
+        Returns
+        -------
+        List[dict]
+            A list of dictionaries representing the composition.
+        """
         comp = {}
-        for rnm, rid in zip(obj.resnames, map(int, obj.resids)):
+        for rnm, rid in zip(obj.resnames, map(int, obj.resids), strict=True):
             if rnm in comp:
                 comp[rnm]["n"] += 1
                 comp[rnm]["resids"].append(rid)

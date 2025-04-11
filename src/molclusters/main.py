@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""This script serves as the main entry point for analyzing molecular clusters using the MolClusters library.
+"""Serves as the main entry point for analyzing molecular clusters using the MolClusters library.
 
 Functions:
 ----------
@@ -66,12 +66,12 @@ def parse_input_file(
     This function reads the input YAML file, processes the rules for molecular cluster analysis,
     and returns a structured configuration dictionary.
 
-    Parameters:
+    Parameter
     ----------
     in_file : arg.FileType
         The input YAML file containing analysis settings.
 
-    Returns:
+    Returns
     -------
     Dict[str, Dict[str, Tuple[str, Dict[str, float]]] | List[str]]:
         A dictionary containing the parsed configuration, including rules and other settings.
@@ -134,11 +134,11 @@ def main() -> None:
     - inp: The input YAML file containing analysis settings.
     - --version: Displays the version of the MolClusters library.
 
-    Raises:
-    -------
+    Raises
+    ------
     KeyError:
         If an atom in the topology does not have an associated element.
-    """
+    """  # noqa: D401
     parser = arg.ArgumentParser()
 
     parser.add_argument("traj", type=str, help="Trajectory File")

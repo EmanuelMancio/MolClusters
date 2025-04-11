@@ -77,7 +77,7 @@ extend-select = ["I"]
 
 [lint.pydocstyle]
 # Use Google-style docstrings.
-convention = "google"
+convention = "numpy"
 
 [format]
 # Like Black, use double quotes for strings.

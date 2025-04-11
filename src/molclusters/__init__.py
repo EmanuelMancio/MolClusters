@@ -8,17 +8,21 @@ This module provides functionality to study and analyze the formation of molecul
 from simulation data. It includes tools for processing and analyzing cluster
 dynamics, enabling researchers to gain insights into molecular behavior of clusters.
 
-Attributes:
+Attributes
+----------
     __version__ (str): The version of the MolClusters package.
 
-Modules:
+Modules
+-------
     cluster: Submodule containing utilities for cluster analysis.
     molclusters: Core module defining the main `MolClusters` class.
 
-Exports:
+Exports
+-------
     MolClusters: The primary class for performing cluster analysis.
 
-Example:
+Example
+-------
     >>> from molclusters import MolClusters
     >>> analyzer = MolClusters(simulation_data)
     >>> analyzer.run()
