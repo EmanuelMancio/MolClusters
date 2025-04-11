@@ -64,7 +64,7 @@ class ConnectionTable:
             The center of mass of the subgraph.
         """
 
-        __slots__ = ["conntab", "_graph", "_cm"]
+        __slots__ = ["conntab", "_graph", "_cm", "_rg"]
 
         def __init__(self, subgraph: nx.Graph, conntable: "ConnectionTable") -> None:
             """Initialize a subgraph of the connectivity table.
@@ -78,19 +78,10 @@ class ConnectionTable:
             """
             self.conntab = conntable
             self._graph = subgraph
-            self._cm = self.__selection().center_of_mass()
-
-        def __selection(self) -> core.groups.ResidueGroup:
-            """Get the ResidueGroup corresponding to the subgraph.
-
-            Returns
-            -------
-            core.groups.ResidueGroup
-                The ResidueGroup representing the subgraph.
-            """
-            return core.groups.ResidueGroup(
+            self._rg = core.groups.ResidueGroup(
                 [m - 1 for m in self.graph], self.conntab.uni
             )
+            self._cm = self._rg.center_of_mass()
 
         def __getitem__(self, key: int) -> float | List[int]:
             """Get the attributes of a connection or molecule in the subgraph.
@@ -138,6 +129,17 @@ class ConnectionTable:
                 The graph representation of the subgraph.
             """
             return self._graph
+
+        @property
+        def resnames(self) -> List[str]:
+            """Get the residue names in the subgraph.
+
+            Returns
+            -------
+            List[str]
+                The residue names in the subgraph.
+            """
+            return self._rg.resnames
 
         def __iter__(self) -> Iterator[int]:
             """Iterate over the molecules in the subgraph.
