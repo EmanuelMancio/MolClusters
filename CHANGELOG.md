@@ -6,6 +6,16 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.3.0 (2025-04-11)
+
+### Feat
+
+- **main**: add trajectory loading options for memory management
+
+### Fix
+
+- **main**: correct element extraction from atom name
+
 ## 0.2.0 (2025-04-11)
 
 ### Feat
