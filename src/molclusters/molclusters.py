@@ -19,6 +19,7 @@ Dependencies:
 - tqdm: For progress tracking during analysis.
 """
 
+import copy
 import json
 import pathlib as path
 from collections import Counter
@@ -274,6 +275,12 @@ class MolClusters:
     def __start_clusters(self) -> None:
         """Initialize clusters at the beginning of the analysis."""
         for subconn in self.conntab.subconntables():
+            if "ignore_composition" in self.config:
+                if self.config["ignore_composition"].get(
+                    tuple(sorted(set(subconn.resnames))), False
+                ):
+                    continue
+
             cls_id = self.__create_new_cluster(subconn)
 
             for mol in subconn:
@@ -438,10 +445,19 @@ class MolClusters:
         modified_clusters = set()
         merged_clusters = set()  # needs this because of dominance devolution
 
-        conn_info = [
-            (sub, self.__gen_origin_cluster_counter(sub))
-            for sub in self.conntab.subconntables()
-        ]
+        if "ignore_composition" in self.config:
+            conn_info = [
+                (sub, self.__gen_origin_cluster_counter(sub))
+                for sub in self.conntab.subconntables()
+                if not self.config["ignore_composition"].get(
+                    tuple(sorted(set(sub.resnames))), False
+                )
+            ]
+        else:
+            conn_info = [
+                (sub, self.__gen_origin_cluster_counter(sub))
+                for sub in self.conntab.subconntables()
+            ]
 
         for i, (subconn, origin_clusters) in enumerate(conn_info):
             if len(origin_clusters) == 1:
@@ -658,13 +674,19 @@ class MolClustersData:
             The parent MolClusters object.
         """
         self.molcls = molclusters
+
+        conf = copy.deepcopy(self.molcls.config)
+
+        if "ignore_composition" in self.molcls.config:
+            conf["ignore_composition"] = [list(i) for i in conf["ignore_composition"]]
+
         self.data = {
             "Software": f"MolClusters {__version__}",
             "Trajectory": str(
                 path.Path(self.molcls.uni.trajectory.filename).absolute()
             ),
             "Topology": str(path.Path(self.molcls.uni.filename).absolute()),
-            "Config": self.molcls.config,
+            "Config": conf,
             "MolClusters": [],
         }
 
