@@ -50,7 +50,7 @@ from typing import Dict, List, Tuple
 
 import MDAnalysis as mda
 import yaml
-from MDAnalysis.topology.tables import vdwradii
+from MDAnalysis.guesser.tables import vdwradii
 
 from . import __version__
 from .molclusters import MolClusters
@@ -159,7 +159,9 @@ def main() -> None:
         radiis = []
         for at in uni.atoms:
             if at.element == "":
-                at.element = at.name[0]
+                at.element = at.name[
+                    0
+                ]  # FIXME: will stop working for atoms with names longer than 1 char
             radiis.append(vdwradii[at.element])
     except KeyError as err:
         raise KeyError(f"Atom: {str(at)} does not have a element.") from err
