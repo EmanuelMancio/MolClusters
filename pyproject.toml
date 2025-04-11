@@ -4,7 +4,7 @@
 
 [project]
 name = "MolClusters"
-version = "0.1.1"
+version = "0.1.2"
 description = "Tool to analyze cluster formation in molecular dynamics simulations"
 authors = [{ name = "Emanuel Mancio", email = "emanuelmancio@usp.br" }]
 license = { text = "GPL-3.0-only" }
