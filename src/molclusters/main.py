@@ -1,19 +1,85 @@
+# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""This script serves as the main entry point for analyzing molecular clusters using the MolClusters library.
+
+Functions:
+----------
+- parse_input_file(in_file: Type[arg.FileType]) -> Dict[str, Dict[str, Tuple[float, str]]]:
+    Parses the input YAML configuration file and processes the rules for molecular cluster analysis.
+
+- main():
+    The main function that sets up the command-line interface, parses arguments, initializes the MDAnalysis Universe,
+    and runs the molecular cluster analysis.
+
+Dependencies:
+-------------
+- argparse: For parsing command-line arguments.
+- copy: For deep copying configuration data.
+- pathlib: For handling file paths.
+- typing: For type annotations.
+- MDAnalysis: For molecular dynamics trajectory and structure analysis.
+- yaml: For parsing YAML configuration files.
+- MolClusters: The core library for molecular cluster analysis.
+
+Usage:
+------
+Run this script from the command line with the required arguments:
+    python main.py <trajectory_file> <topology_file> <input_file>
+
+Arguments:
+----------
+- traj: The trajectory file for the molecular dynamics simulation.
+- top: The topology file for the molecular dynamics simulation.
+- inp: The input YAML file containing analysis settings.
+
+Optional Arguments:
+-------------------
+- --version: Displays the version of the MolClusters library.
+
+Example:
+--------
+    python main.py trajectory.dcd topology.pdb input.yaml
+"""
+
 import argparse as arg
 import copy
-import MDAnalysis as mda
 import pathlib as path
+from ast import List
+from typing import Dict, Tuple
+
+import MDAnalysis as mda
 import yaml
 
-from typing import Type, Dict, Tuple
-
-from .molclusters import MolClusters
 from . import __version__
+from .molclusters import MolClusters
 
 
 # TODO: add Config class for better config capability
 def parse_input_file(
-    in_file: Type[arg.FileType],
-) -> Dict[str, Dict[str, Tuple[float, str]]]:
+    in_file: arg.FileType,
+) -> Dict[str, Dict[str, Tuple[str, Dict[str, float]]] | List[str]]:
+    """Parse the input YAML configuration file for molecular cluster analysis.
+
+    This function reads the input YAML file, processes the rules for molecular cluster analysis,
+    and returns a structured configuration dictionary.
+
+    Parameters:
+    ----------
+    in_file : arg.FileType
+        The input YAML file containing analysis settings.
+
+    Returns:
+    -------
+    Dict[str, Dict[str, Tuple[str, Dict[str, float]]] | List[str]]:
+        A dictionary containing the parsed configuration, including rules and other settings.
+
+    Raises:
+    -------
+    KeyError:
+        If the input file contains invalid or missing keys.
+    """
     config = yaml.safe_load(in_file)
     config["filename"] = str(path.Path(in_file.name).absolute())
 
@@ -45,19 +111,40 @@ def parse_input_file(
             if "solute" in config:
                 config["nucleus"].extend(config["solute"])
             else:
-                print("'solute' in nucleus being desconsidered because solute was not defined!")
+                print(
+                    "'solute' in nucleus being desconsidered because solute was not defined!"
+                )
 
             config["nucleus"].remove("solute")
 
     return config
 
 
-def main():
+def main() -> None:
+    """Main entry point for the MolClusters analysis script.
+
+    This function sets up the command-line interface, parses arguments, initializes the MDAnalysis Universe,
+    and runs the molecular cluster analysis using the MolClusters library.
+
+    Command-line Arguments:
+    -----------------------
+    - traj: The trajectory file for the molecular dynamics simulation.
+    - top: The topology file for the molecular dynamics simulation.
+    - inp: The input YAML file containing analysis settings.
+    - --version: Displays the version of the MolClusters library.
+
+    Raises:
+    -------
+    KeyError:
+        If an atom in the topology does not have an associated element.
+    """
     parser = arg.ArgumentParser()
 
     parser.add_argument("traj", type=str, help="Trajectory File")
     parser.add_argument("top", type=str, help="Topology file")
-    parser.add_argument("inp", type=arg.FileType("r"), help="Input file with analysis settings")
+    parser.add_argument(
+        "inp", type=arg.FileType("r"), help="Input file with analysis settings"
+    )
     parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
