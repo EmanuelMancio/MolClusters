@@ -6,6 +6,13 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.2.0 (2025-04-11)
+
+### Feat
+
+- **MolClusters**: add support for ignore_composition in cluster analysis
+- **SubConnTable**: add resnames property
+
 ## 0.1.2 (2025-04-11)
 
 ### Fix
