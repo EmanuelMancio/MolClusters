@@ -203,6 +203,7 @@ class ConnectionTable:
 
                     hb._prepare()
 
+                    # TODO: implement symmetric dictionary to avoid setting both ways
                     if resi not in self.hbs:
                         self.hbs[resi] = {resj: [hb, 0]}
                     else:
@@ -277,7 +278,7 @@ class ConnectionTable:
                 hb._single_frame()
 
             frame_id = self.hbs[resi][resj][1]
-            res = (np.asarray(hb.results.hbonds).T)[frame_id:, -4:-1]
+            res = (np.asarray(hb.results.hbonds))[frame_id:, -4:]
             distances = res[:, -2]
             angles = res[:, -1]
 
