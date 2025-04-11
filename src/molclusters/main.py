@@ -145,20 +145,37 @@ def main() -> None:
     """  # noqa: D401
     parser = arg.ArgumentParser()
 
-    parser.add_argument("traj", type=str, help="Trajectory File")
-    parser.add_argument("top", type=str, help="Topology file")
+    parser.add_argument("traj", type=str, help="Trajectory File.")
+    parser.add_argument("top", type=str, help="Topology file.")
     parser.add_argument(
-        "inp", type=arg.FileType("r"), help="Input file with analysis settings"
+        "inp", type=arg.FileType("r"), help="Input file with analysis settings."
+    )
+    parser.add_argument(
+        "--traj-memory",
+        action="store_true",
+        help="Load trajectory in memory. Use with caution.",
+    )
+    parser.add_argument(
+        "--in-memory-step",
+        type=int,
+        default=1,
+        help="Step for in-memory trajectory loading. Default is 1.",
     )
     parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
 
+    if not args.traj_memory and args.in_memory_step != 1:
+        parser.error("--in-memory-step can only be used when --traj-memory is enabled.")
+
     cls_args = parse_input_file(args.inp)
 
     uni = mda.Universe(
-        args.top, args.traj, in_memory=True
-    )  # TODO: add in_memory_step as option on cmdline
+        args.top,
+        args.traj,
+        in_memory=args.traj_memory,
+        in_memory_step=args.in_memory_step,
+    )
 
     try:
         radiis = []
