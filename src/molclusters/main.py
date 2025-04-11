@@ -59,7 +59,7 @@ from .molclusters import MolClusters
 # TODO: add Config class for better config capability
 def parse_input_file(
     in_file: arg.FileType,
-) -> Dict[str, Dict[str, Tuple[str, Dict[str, float]]] | List[str]]:
+) -> Dict[str, Dict[str | Tuple[str], Tuple[str, Dict[str, float]]] | List[str]]:
     """Parse the input YAML configuration file for molecular cluster analysis.
 
     This function reads the input YAML file, processes the rules for molecular cluster analysis,
@@ -72,7 +72,7 @@ def parse_input_file(
 
     Returns
     -------
-    Dict[str, Dict[str, Tuple[str, Dict[str, float]]] | List[str]]:
+    Dict[str, Dict[str | Tuple[str], Tuple[str, Dict[str, float]]] | List[str]]:
         A dictionary containing the parsed configuration, including rules and other settings.
 
     Raises
@@ -116,6 +116,11 @@ def parse_input_file(
                 )
 
             config["nucleus"].remove("solute")
+
+    if "ignore_composition" in config:
+        config["ignore_composition"] = {
+            tuple(sorted(i)): True for i in config["ignore_composition"]
+        }
 
     return config
 
