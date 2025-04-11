@@ -51,6 +51,7 @@ from typing import Dict, Tuple
 
 import MDAnalysis as mda
 import yaml
+from MDAnalysis.topology.tables import vdwradii
 
 from . import __version__
 from .molclusters import MolClusters
@@ -154,6 +155,17 @@ def main() -> None:
     uni = mda.Universe(
         args.top, args.traj, in_memory=True
     )  # TODO: add in_memory_step as option on cmdline
+
+    try:
+        radiis = []
+        for at in uni.atoms:
+            if at.element == "":
+                at.element = at.name[0]
+            radiis.append(vdwradii[at.element])
+    except KeyError as err:
+        raise KeyError(f"Atom: {str(at)} does not have a element.") from err
+
+    uni.add_TopologyAttr("radii", values=radiis)
 
     molclusters = MolClusters(uni, cls_args)
     molclusters.run()
