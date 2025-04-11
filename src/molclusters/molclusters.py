@@ -23,7 +23,7 @@ import json
 import pathlib as path
 from collections import Counter
 from functools import reduce
-from typing import Dict, Generator, List, Set, Tuple
+from typing import Any, Dict, Generator, List, Set, Tuple
 
 import MDAnalysis as mda
 import networkx as nx
@@ -763,10 +763,10 @@ class MolClustersData:
         return list(comp.values())
 
     @staticmethod
-    def encode_connections(obj: Cluster | MDAResidueGroupAnalyzer) -> List[dict]:
+    def encode_connections(
+        obj: Cluster | MDAResidueGroupAnalyzer,
+    ) -> List[Tuple[int, int, Dict[str, Any]]]:
         """Encode the connections of a cluster or nucleus.
-
-        TO BE IMPLEMENTED
 
         Parameter
         ----------
@@ -775,7 +775,7 @@ class MolClustersData:
 
         Returns
         -------
-        List[dict]
-            A list of dictionaries representing the connections.
+        List[Tuple[int, int, Dict[str, Any]]]
+            A list of tuples representing the connections and their properties.
         """
-        pass
+        return [(edge[0], edge[1], edge[2]) for edge in obj.cluster.edges.data()]

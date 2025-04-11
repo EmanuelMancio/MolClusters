@@ -213,27 +213,60 @@ class ConnectionTable:
                     else:
                         self.hbs[resj][resi] = [hb, 0]
 
-    def __get_pair_and_distances(
+    def __get_connections_and_attributes(
         self,
         resi: str,
         resj: str,
-        box: Type[np.ndarray],
-    ) -> Tuple[Type[np.ndarray], Type[np.ndarray]]:
-        pairs: Type[np.ndarray]
-        distances: Type[np.ndarray]
+        box: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Private method to compute connections and their attributes between two residues.
 
+        This method calculates the connections and associated attributes (e.g., distances, angles)
+        between two residues (`resi` and `resj`) based on the provided cutoff criteria or hydrogen
+        bonding information. The method supports both center-of-mass (CM) distance calculations
+        and hydrogen bond (HB) analysis.
+
+        Parameter
+        ---------
+            resi (str): The identifier for the first residue.
+            resj (str): The identifier for the second residue.
+            box (np.ndarray): The simulation box dimensions, used for periodic boundary conditions.
+
+        Returns
+        -------
+            Tuple[np.ndarray, np.ndarray]:
+                - A 2D numpy array of connections, where each row represents a pair of residue IDs.
+                - A list of dictionaries containing attributes for each connection, such as distance
+                  and angle (if applicable).
+
+        Notes
+        -----
+            - If the connection type is "cm" (center-of-mass), the method computes distances between
+              the centers of mass of the residues.
+            - If the connection type is "hb" (hydrogen bond), the method computes hydrogen bond
+              distances and angles using precomputed hydrogen bond data.
+            - The method updates internal state variables (e.g., `self.hbs`) to track progress
+              through the hydrogen bond data.
+            - Warnings are suppressed when no hydrogen bonds are found during the computation.
+        """
         if self.clst_args[resi][resj][0] == "cm":
             cm1: Type[np.ndarray] = self.cms[resi]
             cutoff = self.clst_args[resi][resj][1]
             if resi != resj:
                 cm2: Type[np.ndarray] = self.cms[resj]
-                pairs, distances = mda.lib.distances.capped_distance(cm1, cm2, cutoff, box=box)
+                connections, distances = mda.lib.distances.capped_distance(
+                    cm1, cm2, cutoff, box=box
+                )
             else:
-                pairs, distances = mda.lib.distances.self_capped_distance(cm1, cutoff, box=box)
+                connections, distances = mda.lib.distances.self_capped_distance(
+                    cm1, cutoff, box=box
+                )
 
-            for k, (moli, molj) in enumerate(pairs):
-                pairs[k, 0] = self.sels[resi].residues[moli].resid
-                pairs[k, 1] = self.sels[resj].residues[molj].resid
+            for k, (moli, molj) in enumerate(connections):
+                connections[k, 0] = self.sels[resi].residues[moli].resid
+                connections[k, 1] = self.sels[resj].residues[molj].resid
+
+            attributes = [{"distance": dist} for dist in distances]
         else:
             hb = self.hbs[resi][resj][0]
             hb._ts = self.uni.trajectory.ts
@@ -246,16 +279,23 @@ class ConnectionTable:
             frame_id = self.hbs[resi][resj][1]
             res = (np.asarray(hb.results.hbonds).T)[frame_id:, -4:-1]
             distances = res[:, -2]
-            pairs = np.empty((0, 2), int)
+            angles = res[:, -1]
+
+            attributes = [
+                {"distance": dist, "angle": ang}
+                for dist, ang in zip(distances, angles, strict=True)
+            ]
+
+            connections = np.empty((0, 2), int)
             for h_ati, a_ati, _ in res:
                 h_ati, a_ati = int(h_ati), int(a_ati)
                 moli = self.uni.atoms[h_ati].resid
                 molj = self.uni.atoms[a_ati].resid
-                pairs = np.append(pairs, [[moli, molj]], axis=0)
+                connections = np.append(connections, [[moli, molj]], axis=0)
 
             self.hbs[resi][resj][1] += len(res)
 
-        return pairs, distances
+        return connections, attributes
 
     def __construct_table(self) -> None:
         """Construct the connectivity table as a graph."""
@@ -269,15 +309,12 @@ class ConnectionTable:
         for resi in self.clst_args:
             for resj in self.clst_args[resi]:
                 if resj not in analyzed[resi]:
-                    pairs: Type[np.ndarray]
-                    distances: Type[np.ndarray]
-
-                    pairs, distances = self.__get_pair_and_distances(
+                    pairs, attribs = self.__get_connections_and_attributes(
                         resi, resj, self.uni.dimensions
                     )
 
                     for k, (ri, rj) in enumerate(pairs):
-                        self.conntab.add_edge(ri, rj, d=distances[k])
+                        self.conntab.add_edge(ri, rj, **attribs[k])
 
                     analyzed[resi].append(resj)
                     analyzed[resj].append(resi)
