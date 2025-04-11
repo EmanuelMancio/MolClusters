@@ -205,14 +205,14 @@ class ConnectionTable:
 
                     # TODO: implement symmetric dictionary to avoid setting both ways
                     if resi not in self.hbs:
-                        self.hbs[resi] = {resj: [hb, 0]}
+                        self.hbs[resi] = {resj: hb}
                     else:
-                        self.hbs[resi][resj] = [hb, 0]
+                        self.hbs[resi][resj] = hb
 
                     if resj not in self.hbs:
-                        self.hbs[resj] = {resi: [hb, 0]}
+                        self.hbs[resj] = {resi: hb}
                     else:
-                        self.hbs[resj][resi] = [hb, 0]
+                        self.hbs[resj][resi] = hb
 
     def __get_connections_and_attributes(
         self,
@@ -269,7 +269,7 @@ class ConnectionTable:
 
             attributes = [{"distance": dist} for dist in distances]
         else:
-            hb = self.hbs[resi][resj][0]
+            hb = self.hbs[resi][resj]
             hb._ts = self.uni.trajectory.ts
 
             # suppress warnings when there are no HBonds
@@ -277,10 +277,8 @@ class ConnectionTable:
                 warnings.simplefilter("ignore")
                 hb._single_frame()
 
-            frame_id = self.hbs[resi][resj][1]
-            res = (np.asarray(hb.results.hbonds))[frame_id:, -4:]
-            distances = res[:, -2]
-            angles = res[:, -1]
+            distances = hb.results.hbonds[-2]
+            angles = hb.results.hbonds[-1]
 
             attributes = [
                 {"distance": dist, "angle": ang}
@@ -288,13 +286,15 @@ class ConnectionTable:
             ]
 
             connections = np.empty((0, 2), int)
-            for h_ati, a_ati, _ in res:
+            for h_ati, a_ati in zip(
+                hb.results.hbonds[2], hb.results.hbonds[3], strict=True
+            ):
                 h_ati, a_ati = int(h_ati), int(a_ati)
                 moli = self.uni.atoms[h_ati].resid
                 molj = self.uni.atoms[a_ati].resid
                 connections = np.append(connections, [[moli, molj]], axis=0)
 
-            self.hbs[resi][resj][1] += len(res)
+            self.hbs[resi][resj]._prepare()
 
         return connections, attributes
 
