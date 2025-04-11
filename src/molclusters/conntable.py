@@ -1,3 +1,25 @@
+# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Defines the `ConnectionTable` class, which manages molecular connectivity tables for analyzing molecular clusters. It uses NetworkX for graph-based operations and MDAnalysis for molecular dynamics trajectory analysis.
+
+Classes:
+--------
+    - ConnectionTable: Represents a connectivity table for molecular clusters, allowing operations
+      such as retrieving connections, subgraphs, and constructing connectivity graphs.
+
+Dependencies:
+-------------
+    - MDAnalysis: For molecular dynamics trajectory and structure analysis.
+    - NetworkX: For graph-based operations on molecular connectivity.
+    - NumPy: For numerical computations.
+    - HydrogenBondAnalysis: For analyzing hydrogen bonds between molecules.
+"""
+
+import warnings
+from typing import Dict, Generator, Iterator, List, Tuple, Type
+
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
@@ -5,62 +27,161 @@ from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
 
-import warnings
-from typing import Dict, List, Tuple, Type, Union
+class ConnectionTable:
+    """Represents a connectivity table for molecular clusters.
 
+    This class manages molecular connectivity data using NetworkX graphs and provides methods
+    for retrieving connections, constructing subgraphs, and updating connectivity tables.
 
-class ConnTable:
+    Attributes
+    ----------
+    uni : MDAnalysis.Universe
+        The MDAnalysis Universe object associated with the molecular system.
+    clst_args : Dict[str, Dict[str, Tuple[str, float]]]
+        The clustering arguments specifying connectivity rules.
+    sels : Dict[str, core.groups.AtomGroup]
+        The atom groups for each residue type.
+    conntab : nx.Graph
+        The connectivity graph representing molecular connections.
+    cms : Dict[str, np.ndarray]
+        The center of mass for each residue type.
+    hbs : Dict[str, Dict[str, HydrogenBondAnalysis]]
+        The hydrogen bond analysis objects for residue pairs.
+    """
+
     __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs"]
 
-    class SubConnTable:
+    class _SubConnTable:
+        """Represents a subgraph of the main connectivity table.
+
+        Attributes
+        ----------
+        conntab : ConnectionTable
+            The parent connectivity table.
+        _graph : nx.Graph
+            The subgraph representing a subset of the connectivity table.
+        _cm : np.ndarray
+            The center of mass of the subgraph.
+        """
+
         __slots__ = ["conntab", "_graph", "_cm"]
 
-        def __init__(self, subgraph: Type[nx.Graph], conntable: Type["ConnTable"]) -> None:
+        def __init__(self, subgraph: nx.Graph, conntable: "ConnectionTable") -> None:
+            """Initialize a subgraph of the connectivity table.
+
+            Parameter
+            ----------
+            subgraph : nx.Graph
+                The subgraph representing a subset of the connectivity table.
+            conntable : ConnectionTable
+                The parent connectivity table.
+            """
             self.conntab = conntable
             self._graph = subgraph
-
             self._cm = self.__selection().center_of_mass()
 
-        def __selection(self) -> Type[core.groups.ResidueGroup]:
-            return core.groups.ResidueGroup([m - 1 for m in self.graph], self.conntab.uni)
+        def __selection(self) -> core.groups.ResidueGroup:
+            """Get the ResidueGroup corresponding to the subgraph.
 
-        def __getitem__(self, key):
+            Returns
+            -------
+            core.groups.ResidueGroup
+                The ResidueGroup representing the subgraph.
+            """
+            return core.groups.ResidueGroup(
+                [m - 1 for m in self.graph], self.conntab.uni
+            )
+
+        def __getitem__(self, key: int) -> float | List[int]:
+            """Get the attributes of a connection or molecule in the subgraph.
+
+            Parameter
+            ----------
+            key : int
+                The molecule or connection to retrieve.
+
+            Returns
+            -------
+            float | List[int]
+                The attributes of the connection or molecule.
+            """
             return self.conntab[key]
 
-        def __len__(self):
+        def __len__(self) -> int:
+            """Get the number of molecules in the subgraph.
+
+            Returns
+            -------
+            int
+                The number of molecules in the subgraph.
+            """
             return len(self._graph)
 
         @property
-        def cm(self) -> Type[np.ndarray]:
+        def cm(self) -> np.ndarray:
+            """Get the center of mass of the subgraph.
+
+            Returns
+            -------
+            np.ndarray
+                The center of mass of the subgraph.
+            """
             return self._cm
 
         @property
-        def graph(self):
+        def graph(self) -> nx.Graph:
+            """Get the graph representation of the subgraph.
+
+            Returns
+            -------
+            nx.Graph
+                The graph representation of the subgraph.
+            """
             return self._graph
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
+            """Iterate over the molecules in the subgraph.
+
+            Returns
+            -------
+            Iterator[int]
+                An iterator over the molecules in the subgraph.
+            """
             return iter(self._graph)
 
     def __init__(
         self,
-        universe: Type[mda.Universe],
+        universe: mda.Universe,
         cluster_args: Dict[str, Dict[str, Tuple[str, float]]],
-        selections: Dict[str, Type[core.groups.AtomGroup]],
+        selections: Dict[str, core.groups.AtomGroup],
     ) -> None:
+        """Initialize the ConnectionTable.
+
+        Parameter
+        ----------
+        universe : mda.Universe
+            The MDAnalysis Universe object associated with the molecular system.
+        cluster_args : Dict[str, Dict[str, Tuple[str, float]]]
+            The clustering arguments specifying connectivity rules.
+        selections : Dict[str, core.groups.AtomGroup]
+            The atom groups for each residue type.
+        """
         self.uni = universe
         self.clst_args = cluster_args
         self.sels = selections
 
-        self.cms = {}
-        self.hbs: Dict[str, Dict[str, Type[HydrogenBondAnalysis]]] = {}
-        self.__get_hbonds()
+        self.cms: Dict[str, np.ndarray] = {}
+        self.hbs: Dict[str, Dict[str, HydrogenBondAnalysis]] = {}
+        self.__start_hbonds()
         self.update()
 
-    def __get_mass_centers(self):
+    def __get_mass_centers(self) -> None:
+        """Calculate the center of mass for each residue type."""
         for res in self.clst_args:
             self.cms[res] = self.sels[res].center_of_mass(compound="residues")
 
-    def __get_hbonds(self):
+    def __start_hbonds(self) -> None:
+        """Initialize hydrogen bond analysis for residue pairs."""
         for resi in self.clst_args:
             for resj in self.clst_args[resi]:
                 if self.clst_args[resi][resj] == "cm":
@@ -136,7 +257,8 @@ class ConnTable:
 
         return pairs, distances
 
-    def __construct_table(self) -> Type[nx.Graph]:
+    def __construct_table(self) -> None:
+        """Construct the connectivity table as a graph."""
         self.conntab = nx.Graph()
 
         analyzed = dict.fromkeys(self.clst_args.keys())
@@ -161,13 +283,28 @@ class ConnTable:
                     analyzed[resj].append(resi)
 
     def update(self) -> None:
+        """Update the connectivity table."""
         self.__get_mass_centers()
         self.__construct_table()
 
-    def __getitem__(self, key: Union[Tuple[int, int], int]) -> Union[float, List[int]]:
+    def __getitem__(self, key: Tuple[int, int] | int) -> float | List[int]:
+        """Get the attributes of a connection or molecule in the connectivity table.
+
+        Parameter
+        ---------
+        key : Union[Tuple[int, int], int]
+            The molecule or connection to retrieve.
+
+        Returns
+        -------
+        Union[float, List[int]]
+            The attributes of the connection or molecule.
+        """
         if isinstance(key, tuple):
             if len(key) > 2:
-                raise KeyError("ConnTable accepts only one or two parameters to access data!")
+                raise KeyError(
+                    "ConnTable accepts only one or two parameters to access data!"
+                )
 
             if key[0] not in self:
                 raise IndexError(f"{key[0]} not in ConnTable")
@@ -183,39 +320,118 @@ class ConnTable:
         return self.mols_connected_to(key)
 
     def __contains__(self, item: int) -> bool:
+        """Check if a molecule is in the connectivity table.
+
+        Parameter
+        ----------
+        item : int
+            The molecule to check.
+
+        Returns
+        -------
+        bool
+            True if the molecule is in the connectivity table, False otherwise.
+        """
         return item in self.conntab
 
-    def __graph_from_mol(self, mol):
+    def __graph_from_mol(self, mol: int) -> nx.Graph:
         desc = nx.node_connected_component(self.conntab, mol)
         return self.conntab.subgraph(desc)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[int]:
+        """Iterate over the molecules in the connectivity table.
+
+        Returns
+        -------
+        Iterator[int]
+            An iterator over the molecules in the connectivity table.
+        """
         return iter(self.conntab)
 
-    def connections_from(self, mol):
+    def connections_from(self, mol: int) -> List[Tuple[int, int]]:
+        """Get the connections from a molecule.
+
+        Parameter
+        ----------
+        mol : int
+            The molecule to retrieve connections from.
+
+        Returns
+        -------
+        List[Tuple[int, int]]
+            A list of connections from the molecule.
+        """
         return list(self.conntab.edges(mol))
 
-    def connection_tree_from(self, mol):
+    def connection_tree_from(self, mol: int) -> List[Tuple[int, int]]:
+        """Get the connection tree from a molecule.
+
+        Parameter
+        ----------
+        mol : int
+            The molecule to retrieve the connection tree from.
+
+        Returns
+        -------
+        List[Tuple[int, int]]
+            A list of connections in the tree.
+        """
         g = self.__graph_from_mol(mol)
         return list(g.edges)
 
-    def mols_connected_to(self, mol):
+    def mols_connected_to(self, mol: int) -> List[int]:
+        """Get the molecules connected to a given molecule.
+
+        Parameter
+        ----------
+        mol : int
+            The molecule to retrieve connected molecules for.
+
+        Returns
+        -------
+        List[int]
+            A list of connected molecules.
+        """
         return list(self.conntab[mol])
 
-    def mols_connected_tree_to(self, mol):
+    def mols_connected_tree_to(self, mol: int) -> List[int]:
+        """Get the molecules in the connection tree of a given molecule.
+
+        Parameter
+        ----------
+        mol : int
+            The molecule to retrieve the connection tree for.
+
+        Returns
+        -------
+        List[int]
+            A list of molecules in the connection tree.
+        """
         g = self.__graph_from_mol(mol)
         return list(g.nodes)
 
-    def __subgraphs(self):
+    def __subgraphs(self) -> Generator[nx.Graph]:
+        """Generate subgraphs of the connectivity table.
+
+        Yields
+        ------
+        nx.Graph
+            A subgraph of the connectivity table.
+        """
         for c in nx.connected_components(self.conntab):
             yield self.conntab.subgraph(c)
 
-    def subconntables(self):
-        for s in sorted(
-            self.__subgraphs(), key=lambda x: len(x), reverse=True
-        ):  # sorts to guarantee that in case of separation the biggest cluster keeps
-            # the id
+    def subconntables(self) -> Generator["_SubConnTable"]:
+        """Generate sub-connectivity tables from the connectivity table.
+
+        Yields
+        ------
+        _SubConnTable
+            A sub-connectivity table.
+        """
+        # sorts to guarantee that in case of separation the biggest cluster keeps the id
+        for s in sorted(self.__subgraphs(), key=lambda x: len(x), reverse=True):
             if len(s) == 1:
                 # TODO: find a way to not change how HB calculations are done to avoid this check
                 continue
-            yield self.SubConnTable(s, self)
+            yield self._SubConnTable(s, self)
