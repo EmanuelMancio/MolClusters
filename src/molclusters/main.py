@@ -164,9 +164,9 @@ def main() -> None:
         radiis = []
         for at in uni.atoms:
             if at.element == "":
-                at.element = at.name[
-                    0
-                ]  # FIXME: will stop working for atoms with names longer than 1 char
+                at.element = "".join(
+                    filter(str.isalpha, at.name)
+                )  # Extract only the alphabetic part of the name
             radiis.append(vdwradii[at.element])
     except KeyError as err:
         raise KeyError(f"Atom: {str(at)} does not have a element.") from err
