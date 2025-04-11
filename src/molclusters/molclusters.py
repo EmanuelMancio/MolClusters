@@ -473,7 +473,7 @@ class MolClusters:
             with mda.Writer("tmp.gro", multiframe=False) as w:
                 w.write(cls.ag.atoms.sort())
 
-            with path.Path("tmp.gro", "r").open() as tmp:
+            with path.Path("tmp.gro").open() as tmp:
                 dt = tmp.readlines()
                 dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
 
