@@ -27,7 +27,7 @@ Dependencies:
     - NumPy: For numerical computations.
 """
 
-from typing import Iterable, Iterator, List, Tuple
+from typing import Iterable, Iterator, List, Self, Tuple
 
 import MDAnalysis as mda
 import networkx as nx
@@ -101,9 +101,7 @@ class MDAResidueGroupAnalyzer:
             # center_in_box(self._ag)(self.uni.trajectory.ts)
             self.__centered_time: float = self.uni.trajectory.time
 
-    def __add__(
-        self, other: core.groups.ResidueGroup | "MDAResidueGroupAnalyzer"
-    ) -> "MDAResidueGroupAnalyzer":
+    def __add__(self, other: core.groups.ResidueGroup | Self) -> Self:
         """Combine this ResidueGroupAnalyzer with another ResidueGroup or ResidueGroupAnalyzer.
 
         Parameter

@@ -447,7 +447,7 @@ class ConnectionTable:
         g = self.__graph_from_mol(mol)
         return list(g.nodes)
 
-    def __subgraphs(self) -> Generator[nx.Graph]:
+    def __subgraphs(self) -> Generator[nx.Graph, None, None]:
         """Generate subgraphs of the connectivity table.
 
         Yields
@@ -458,7 +458,7 @@ class ConnectionTable:
         for c in nx.connected_components(self.conntab):
             yield self.conntab.subgraph(c)
 
-    def subconntables(self) -> Generator["_SubConnTable"]:
+    def subconntables(self) -> Generator["_SubConnTable", None, None]:
         """Generate sub-connectivity tables from the connectivity table.
 
         Yields

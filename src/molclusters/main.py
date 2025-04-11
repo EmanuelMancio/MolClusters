@@ -46,8 +46,7 @@ Example:
 import argparse as arg
 import copy
 import pathlib as path
-from ast import List
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import MDAnalysis as mda
 import yaml
@@ -76,8 +75,8 @@ def parse_input_file(
     Dict[str, Dict[str, Tuple[str, Dict[str, float]]] | List[str]]:
         A dictionary containing the parsed configuration, including rules and other settings.
 
-    Raises:
-    -------
+    Raises
+    ------
     KeyError:
         If the input file contains invalid or missing keys.
     """

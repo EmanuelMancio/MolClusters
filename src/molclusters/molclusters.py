@@ -188,7 +188,7 @@ class MolClusters:
             (len(self.uni.trajectory), 10)
         )  # Value 8 accounts for time column and 7 property columns
 
-    def __solute_solvent_clusters(self) -> Generator[Cluster]:
+    def __solute_solvent_clusters(self) -> Generator[Cluster, None, None]:
         """Generate clusters that contain both solute and solvent residues.
 
         Yields
