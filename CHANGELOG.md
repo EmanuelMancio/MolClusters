@@ -6,6 +6,12 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.1.0 (2025-04-11)
+
+### Feat
+
+- add attributes to connections
+
 ## 0.1.0-dev.0 (2025-04-11)
 
 ### Feat
