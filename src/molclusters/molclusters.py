@@ -726,7 +726,10 @@ class MolClustersData:
         """
         data["Size"] = obj.size
         data["Composition"] = MolClustersData.encode_composition(obj)
-        data["Connections"] = MolClustersData.encode_connections(obj)
+
+        if isinstance(obj, Cluster):
+            data["Connections"] = MolClustersData.encode_connections(obj)
+
         data["ResIDs"] = sorted([int(x) for x in obj.resids])
         data["Mass"] = obj.mass
         data["Volume"] = obj.volume
@@ -764,13 +767,13 @@ class MolClustersData:
 
     @staticmethod
     def encode_connections(
-        obj: Cluster | MDAResidueGroupAnalyzer,
+        obj: Cluster,
     ) -> List[Tuple[int, int, Dict[str, Any]]]:
-        """Encode the connections of a cluster or nucleus.
+        """Encode the connections of a cluster.
 
         Parameter
         ----------
-        obj : Cluster | MDAResidueGroupAnalyzer
+        obj : Cluster
             The object to encode.
 
         Returns
@@ -778,4 +781,7 @@ class MolClustersData:
         List[Tuple[int, int, Dict[str, Any]]]
             A list of tuples representing the connections and their properties.
         """
-        return [(edge[0], edge[1], edge[2]) for edge in obj.cluster.edges.data()]
+        return [
+            (int(edge[0]), int(edge[1]), {k: float(v) for k, v in edge[2].items()})
+            for edge in obj.cluster.edges.data()
+        ]
