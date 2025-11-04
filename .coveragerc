@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: © 2025 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+[run]
+# The source you want coverage for
+source = src/mdrhconstant
+
+# Files to omit from coverage
+omit =
+    src/mdrhconstant/utils/log.py
+    src/mdrhconstant/**/generated_*.py  # example for auto-generated files
+
+# Automatically measure coverage
+branch = True
+
+[report]
+# Show missing lines in terminal report
+show_missing = True
+# Ignore missing lines in excluded files
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+
+[html]
+# HTML report output directory
+directory = htmlcov
+
+[xml]
+# XML report for CI tools
+output = coverage.xml

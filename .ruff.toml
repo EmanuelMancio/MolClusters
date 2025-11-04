@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+# SPDX-FileCopyrightText: © 2025 Emanuel Mancio <emanuelmancio@usp.br>
 #
 # SPDX-License-Identifier: CC0-1.0
 
@@ -74,6 +74,7 @@ extend-select = ["I"]
 [lint.per-file-ignores]
 "__init__.py" = ["E402"]
 "**/{tests,docs,tools}/*" = ["E402"]
+"**/{tests}/*" = ["S101", "ANN201", "D"]
 
 [lint.pydocstyle]
 # Use Google-style docstrings.
