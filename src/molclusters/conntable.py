@@ -41,7 +41,7 @@ class ConnectionTable:
         The clustering arguments specifying connectivity rules.
     sels : Dict[str, core.groups.AtomGroup]
         The atom groups for each residue type.
-    conntab : nx.Graph
+    conntab : nx.MultiGraph
         The connectivity graph representing molecular connections.
     cms : Dict[str, np.ndarray]
         The center of mass for each residue type.
@@ -58,7 +58,7 @@ class ConnectionTable:
         ----------
         conntab : ConnectionTable
             The parent connectivity table.
-        _graph : nx.Graph
+        _graph : nx.MultiGraph
             The subgraph representing a subset of the connectivity table.
         _cm : np.ndarray
             The center of mass of the subgraph.
@@ -66,13 +66,16 @@ class ConnectionTable:
 
         __slots__ = ["conntab", "_graph", "_cm", "_rg"]
 
-        def __init__(self, subgraph: nx.Graph, conntable: "ConnectionTable") -> None:
+        def __init__(
+            self, subgraph: nx.MultiGraph, conntable: "ConnectionTable"
+        ) -> None:
             """Initialize a subgraph of the connectivity table.
 
             Parameter
             ----------
-            subgraph : nx.Graph
+            subgraph : nx.MultiGraph
                 The subgraph representing a subset of the connectivity table.
+                MultiGraph is used to allow multiple connections between the same nodes
             conntable : ConnectionTable
                 The parent connectivity table.
             """
@@ -154,7 +157,7 @@ class ConnectionTable:
     def __init__(
         self,
         universe: mda.Universe,
-        cluster_args: Dict[str, Dict[str, Tuple[str, float]]],
+        cluster_args: Dict[str, Dict[str, Tuple[str, float | dict[str, float]]]],
         selections: Dict[str, core.groups.AtomGroup],
     ) -> None:
         """Initialize the ConnectionTable.
@@ -216,6 +219,7 @@ class ConnectionTable:
                     else:
                         self.hbs[resj][resi] = hb
 
+    # TODO: break into two methods for cm and hb
     def __get_connections_and_attributes(
         self,
         resi: str,
@@ -271,6 +275,7 @@ class ConnectionTable:
 
             attributes = [{"distance": dist} for dist in distances]
         else:
+            # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats distance and angle calculations
             hb = self.hbs[resi][resj]
             hb._ts = self.uni.trajectory.ts
 
@@ -332,13 +337,18 @@ class ConnectionTable:
 
         Parameter
         ---------
-        key : Union[Tuple[int, int], int]
+        key : Tuple[int, int], int
             The molecule or connection to retrieve.
 
         Returns
         -------
-        Union[float, List[int]]
+        float, List[int]
             The attributes of the connection or molecule.
+
+        Raises
+        ------
+        KeyError
+            If the key is invalid or not found in the connectivity table.
         """
         if isinstance(key, tuple):
             if len(key) > 2:
@@ -347,15 +357,15 @@ class ConnectionTable:
                 )
 
             if key[0] not in self:
-                raise IndexError(f"{key[0]} not in ConnTable")
+                raise KeyError(f"{key[0]} not in ConnTable")
 
             if key[1] not in self:
-                raise IndexError(f"{key[1]} not in ConnTable")
+                raise KeyError(f"{key[1]} not in ConnTable")
 
             return self.conntab[key[0]][key[1]]["d"]
 
         if key not in self:
-            raise IndexError(f"{key} not in ConnTable")
+            raise KeyError(f"{key} not in ConnTable")
 
         return self.mols_connected_to(key)
 

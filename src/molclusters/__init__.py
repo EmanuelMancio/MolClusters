@@ -24,7 +24,7 @@ Exports
 Example
 -------
     >>> from molclusters import MolClusters
-    >>> analyzer = MolClusters(simulation_data)
+    >>> analyzer = MolClusters(universe, config)
     >>> analyzer.run()
 """
 
