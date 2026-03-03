@@ -6,6 +6,13 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.3.1 (2026-03-03)
+
+### Fix
+
+- update config keys from 'solute' to 'nucleus' and adjust JSON indentation
+- use upper element name for vdwradii
+
 ## 0.3.0 (2025-04-11)
 
 ### Feat
