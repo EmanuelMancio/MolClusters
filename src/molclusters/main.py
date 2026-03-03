@@ -112,7 +112,7 @@ def parse_input_file(
                 config["nucleus"].extend(config["solute"])
             else:
                 print(
-                    "'solute' in nucleus being desconsidered because solute was not defined!"
+                    "'solute' in nucleus being disregarded because solute was not defined!"
                 )
 
             config["nucleus"].remove("solute")
