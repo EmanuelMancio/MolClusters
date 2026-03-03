@@ -38,6 +38,7 @@ from .cluster import Cluster, MDAResidueGroupAnalyzer
 from .conntable import ConnectionTable
 
 # TODO: create analysis class to declutter MolClusters
+# TODO: update type hints to modern way, like `list[int]` instead of `List[int]`
 
 
 class MolClusters:
@@ -110,7 +111,7 @@ class MolClusters:
         # TODO: move start to run
         self.__start_clusters()
         self.__get_clusters_info(0)
-        if self.config.get("solute", False):
+        if self.config.get("nucleus", False):
             self.nucleus_data = np.empty(
                 (len(self.uni.trajectory), 9)
             )  # Value 9 accounts for time column and 8 property columns
@@ -549,7 +550,7 @@ class MolClusters:
                     self.__solute_solvent_analysis(i)
                     self.__write_coordinates()
 
-                if self.config.get("solute", False):
+                if self.config.get("nucleus", False):
                     self.__nucleus_analysis(i)
 
                 self.data_holder.parse_frame()
@@ -592,7 +593,7 @@ class MolClusters:
             self.nucleus_data.to_csv("nucleus_data.csv", index=False)
 
         with path.Path("molclusters.json").open("w+") as json_out:
-            json.dump(self.data_holder.data, json_out, indent=4)
+            json.dump(self.data_holder.data, json_out, indent=2)
 
     def find(self, mol: int) -> int | bool:
         """Find the cluster ID for a given molecule.
@@ -654,6 +655,7 @@ class MolClusters:
                 # TODO: (low priority) Make the skipped lines work
 
 
+# TODO: use orjson for better encoding options
 class MolClustersData:
     """A helper class for encoding and storing molecular cluster data.
 
