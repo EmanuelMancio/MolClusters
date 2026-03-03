@@ -168,8 +168,10 @@ def main() -> None:
     if not args.traj_memory and args.in_memory_step != 1:
         parser.error("--in-memory-step can only be used when --traj-memory is enabled.")
 
+    print("Reading configuration")
     cls_args = parse_input_file(args.inp)
 
+    print("Starting Cluster Analysis")
     uni = mda.Universe(
         args.top,
         args.traj,
@@ -184,7 +186,7 @@ def main() -> None:
                 at.element = "".join(
                     filter(str.isalpha, at.name)
                 )  # Extract only the alphabetic part of the name
-            radiis.append(vdwradii[at.element])
+            radiis.append(vdwradii[at.element.upper()])
     except KeyError as err:
         raise KeyError(f"Atom: {str(at)} does not have a element.") from err
 
