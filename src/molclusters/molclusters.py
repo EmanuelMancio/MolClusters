@@ -24,7 +24,7 @@ import json
 import pathlib as path
 from collections import Counter
 from functools import reduce
-from typing import Any, Dict, Generator, List, Set, Tuple
+from typing import Any, Generator
 
 import MDAnalysis as mda
 import networkx as nx
@@ -38,7 +38,6 @@ from .cluster import Cluster, MDAResidueGroupAnalyzer
 from .conntable import ConnectionTable
 
 # TODO: create analysis class to declutter MolClusters
-# TODO: update type hints to modern way, like `list[int]` instead of `List[int]`
 
 
 class MolClusters:
@@ -53,19 +52,19 @@ class MolClusters:
         The MDAnalysis Universe object associated with the simulation.
     config : dict
         The configuration dictionary containing analysis settings.
-    sels : Dict[str, core.groups.AtomGroup]
+    sels : dict[str, core.groups.AtomGroup]
         Atom groups for each residue type.
     conntab : ConnectionTable
         The connectivity table for molecular clusters.
-    clusters : Dict[int, Cluster]
+    clusters : dict[int, Cluster]
         A dictionary of detected clusters, keyed by cluster ID.
-    mol_clt : Dict[int, int]
+    mol_clt : dict[int, int]
         A mapping of molecule IDs to their respective cluster IDs.
     clusters_size_evo : np.ndarray
         An array tracking the evolution of cluster sizes over time.
-    solutes : List[int]
+    solutes : list[int]
         A list of solute molecule IDs.
-    solvents : List[str]
+    solvents : list[str]
         A list of solvent residue names.
     solute_data : np.ndarray
         An array storing solute-solvent analysis results.
@@ -97,13 +96,13 @@ class MolClusters:
         """
         self.uni = universe
         self.config = config
-        self.sels: Dict[str, core.groups.AtomGroup] = {
+        self.sels: dict[str, core.groups.AtomGroup] = {
             res: self.uni.select_atoms(f"resname {res}") for res in config["rules"]
         }
 
         self.conntab = ConnectionTable(self.uni, self.config["rules"], self.sels)
-        self.clusters: Dict[int, Cluster] = {}
-        self.mol_clt: Dict[int, int] = {}
+        self.clusters: dict[int, Cluster] = {}
+        self.mol_clt: dict[int, int] = {}
 
         self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
         self.radius_evolution = {}
@@ -192,7 +191,7 @@ class MolClusters:
 
     def __start_solute_solvent(self) -> None:
         """Initialize solute-solvent analysis."""
-        self.solutes: List[int] = [
+        self.solutes: list[int] = [
             id for sel in self.config["solute"] for id in self.sels[sel].residues.resids
         ]
         self.solvents = self.config[
@@ -311,7 +310,7 @@ class MolClusters:
         self,
         cls_id: int,
         n: int,
-        conn_info: List[Tuple[ConnectionTable._SubConnTable, Counter]],
+        conn_info: list[tuple[ConnectionTable._SubConnTable, Counter]],
         conn_skip: int,
     ) -> bool:
         """Check if a cluster is dominant over another based on size.
@@ -322,7 +321,7 @@ class MolClusters:
             The ID of the cluster to check for dominance.
         n : int
             The size of the cluster to check for dominance.
-        conn_info : List[Tuple[ConnectionTable._SubConnTable, Counter]]
+        conn_info : list[tuple[ConnectionTable._SubConnTable, Counter]]
             A list of tuples containing subconnection tables and their corresponding counters.
         conn_skip : int
             The index to skip in the connection information.
@@ -366,26 +365,26 @@ class MolClusters:
     def __construct_dominance(
         self,
         origin_clusters: Counter,
-        modified_clusters: Set[int],
-        conn_info: List[Tuple[ConnectionTable._SubConnTable, Counter]],
+        modified_clusters: set[int],
+        conn_info: list[tuple[ConnectionTable._SubConnTable, Counter]],
         i: int,  # TODO: better name for i
-    ) -> Dict[bool, List[int]]:
+    ) -> dict[bool, list[int]]:
         """Construct a dictionary of dominances based on cluster sizes.
 
         Parameters
         ----------
         origin_clusters : Counter
             A counter object containing the counts of each cluster ID in the subconnection table.
-        modified_clusters : Set[int]
+        modified_clusters : set[int]
             A set of modified cluster IDs.
-        conn_info : List[Tuple[ConnectionTable._SubConnTable, Counter]]
+        conn_info : list[tuple[ConnectionTable._SubConnTable, Counter]]
             A list of tuples containing subconnection tables and their corresponding counters.
         i : int
             The index to skip in the connection information.
 
         Returns
         -------
-        Dict[bool, List[int]]
+        dict[bool, list[int]]
             A dictionary with two keys (True and False) containing lists of cluster IDs
             that are dominant or not dominant, respectively.
         """
@@ -409,13 +408,13 @@ class MolClusters:
         return dominances
 
     def __get_older_cluster(
-        self, dominances: Dict[bool, List[int]], origin_clusters: Counter
+        self, dominances: dict[bool, list[int]], origin_clusters: Counter
     ) -> int:
         """Get the ID of the oldest cluster from a list of dominances.
 
         Parameters
         ----------
-        dominances : Dict[bool, List[int]]
+        dominances : dict[bool, list[int]]
             A dictionary with two keys (True and False) containing lists of cluster IDs
             that are dominant or not dominant, respectively.
         origin_clusters : Counter
@@ -516,7 +515,7 @@ class MolClusters:
             # TODO: change to support merges
             if "follow" in self.config:
                 if "solute" in self.config["follow"]:
-                    sol_id: Set[int] = set(cls.resids).intersection(set(self.solutes))
+                    sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
                     if len(sol_id) == 0:
                         print("ERROR: should have a solute here")
                         continue
@@ -530,6 +529,7 @@ class MolClusters:
                     with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
                         out.write("".join(dt))
 
+    # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
         """Run the molecular cluster analysis.
 
@@ -782,7 +782,7 @@ class MolClustersData:
         data["Shape"] = obj.shape_parameter
 
     @staticmethod
-    def encode_composition(obj: Cluster | MDAResidueGroupAnalyzer) -> List[dict]:
+    def encode_composition(obj: Cluster | MDAResidueGroupAnalyzer) -> list[dict]:
         """Encode the composition of a cluster or nucleus.
 
         Parameter
@@ -792,7 +792,7 @@ class MolClustersData:
 
         Returns
         -------
-        List[dict]
+        list[dict]
             A list of dictionaries representing the composition.
         """
         comp = {}
@@ -808,7 +808,7 @@ class MolClustersData:
     @staticmethod
     def encode_connections(
         obj: Cluster,
-    ) -> List[Tuple[int, int, Dict[str, Any]]]:
+    ) -> list[tuple[int, int, dict[str, Any]]]:
         """Encode the connections of a cluster.
 
         Parameter
@@ -818,7 +818,7 @@ class MolClustersData:
 
         Returns
         -------
-        List[Tuple[int, int, Dict[str, Any]]]
+        list[tuple[int, int, dict[str, Any]]]
             A list of tuples representing the connections and their properties.
         """
         return [

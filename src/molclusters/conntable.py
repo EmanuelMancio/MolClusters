@@ -18,7 +18,7 @@ Dependencies:
 """
 
 import warnings
-from typing import Dict, Generator, Iterator, List, Tuple, Type
+from typing import Generator, Iterator, Type
 
 import MDAnalysis as mda
 import networkx as nx
@@ -37,15 +37,15 @@ class ConnectionTable:
     ----------
     uni : MDAnalysis.Universe
         The MDAnalysis Universe object associated with the molecular system.
-    clst_args : Dict[str, Dict[str, Tuple[str, float]]]
+    clst_args : dict[str, dict[str, tuple[str, float]]]
         The clustering arguments specifying connectivity rules.
-    sels : Dict[str, core.groups.AtomGroup]
+    sels : dict[str, core.groups.AtomGroup]
         The atom groups for each residue type.
     conntab : nx.MultiGraph
         The connectivity graph representing molecular connections.
-    cms : Dict[str, np.ndarray]
+    cms : dict[str, np.ndarray]
         The center of mass for each residue type.
-    hbs : Dict[str, Dict[str, HydrogenBondAnalysis]]
+    hbs : dict[str, dict[str, HydrogenBondAnalysis]]
         The hydrogen bond analysis objects for residue pairs.
     """
 
@@ -86,7 +86,7 @@ class ConnectionTable:
             )
             self._cm = self._rg.center_of_mass()
 
-        def __getitem__(self, key: int) -> float | List[int]:
+        def __getitem__(self, key: int) -> float | list[int]:
             """Get the attributes of a connection or molecule in the subgraph.
 
             Parameter
@@ -96,7 +96,7 @@ class ConnectionTable:
 
             Returns
             -------
-            float | List[int]
+            float | list[int]
                 The attributes of the connection or molecule.
             """
             return self.conntab[key]
@@ -134,12 +134,12 @@ class ConnectionTable:
             return self._graph
 
         @property
-        def resnames(self) -> List[str]:
+        def resnames(self) -> list[str]:
             """Get the residue names in the subgraph.
 
             Returns
             -------
-            List[str]
+            list[str]
                 The residue names in the subgraph.
             """
             return self._rg.resnames
@@ -157,8 +157,8 @@ class ConnectionTable:
     def __init__(
         self,
         universe: mda.Universe,
-        cluster_args: Dict[str, Dict[str, Tuple[str, float | dict[str, float]]]],
-        selections: Dict[str, core.groups.AtomGroup],
+        cluster_args: dict[str, dict[str, tuple[str, float | dict[str, float]]]],
+        selections: dict[str, core.groups.AtomGroup],
     ) -> None:
         """Initialize the ConnectionTable.
 
@@ -166,17 +166,17 @@ class ConnectionTable:
         ----------
         universe : mda.Universe
             The MDAnalysis Universe object associated with the molecular system.
-        cluster_args : Dict[str, Dict[str, Tuple[str, float]]]
+        cluster_args : dict[str, dict[str, tuple[str, float]]]
             The clustering arguments specifying connectivity rules.
-        selections : Dict[str, core.groups.AtomGroup]
+        selections : dict[str, core.groups.AtomGroup]
             The atom groups for each residue type.
         """
         self.uni = universe
         self.clst_args = cluster_args
         self.sels = selections
 
-        self.cms: Dict[str, np.ndarray] = {}
-        self.hbs: Dict[str, Dict[str, HydrogenBondAnalysis]] = {}
+        self.cms: dict[str, np.ndarray] = {}
+        self.hbs: dict[str, dict[str, HydrogenBondAnalysis]] = {}
         self.__start_hbonds()
         self.update()
 
@@ -225,7 +225,7 @@ class ConnectionTable:
         resi: str,
         resj: str,
         box: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Private method to compute connections and their attributes between two residues.
 
         This method calculates the connections and associated attributes (e.g., distances, angles)
@@ -241,7 +241,7 @@ class ConnectionTable:
 
         Returns
         -------
-            Tuple[np.ndarray, np.ndarray]:
+            tuple[np.ndarray, np.ndarray]:
                 - A 2D numpy array of connections, where each row represents a pair of residue IDs.
                 - A list of dictionaries containing attributes for each connection, such as distance
                   and angle (if applicable).
@@ -270,8 +270,8 @@ class ConnectionTable:
                 )
 
             for k, (moli, molj) in enumerate(connections):
-                connections[k, 0] = self.sels[resi].residues[moli].resid
-                connections[k, 1] = self.sels[resj].residues[molj].resid
+                connections[k, 0] = self.sels[resi].residues[moli].resid  # noqa: B909
+                connections[k, 1] = self.sels[resj].residues[molj].resid  # noqa: B909
 
             attributes = [{"distance": dist} for dist in distances]
         else:
@@ -332,17 +332,17 @@ class ConnectionTable:
         self.__get_mass_centers()
         self.__construct_table()
 
-    def __getitem__(self, key: Tuple[int, int] | int) -> float | List[int]:
+    def __getitem__(self, key: tuple[int, int] | int) -> float | list[int]:
         """Get the attributes of a connection or molecule in the connectivity table.
 
         Parameter
         ---------
-        key : Tuple[int, int], int
+        key : tuple[int, int], int
             The molecule or connection to retrieve.
 
         Returns
         -------
-        float, List[int]
+        float, list[int]
             The attributes of the connection or molecule.
 
         Raises
@@ -398,7 +398,7 @@ class ConnectionTable:
         """
         return iter(self.conntab)
 
-    def connections_from(self, mol: int) -> List[Tuple[int, int]]:
+    def connections_from(self, mol: int) -> list[tuple[int, int]]:
         """Get the connections from a molecule.
 
         Parameter
@@ -408,12 +408,12 @@ class ConnectionTable:
 
         Returns
         -------
-        List[Tuple[int, int]]
+        list[tuple[int, int]]
             A list of connections from the molecule.
         """
         return list(self.conntab.edges(mol))
 
-    def connection_tree_from(self, mol: int) -> List[Tuple[int, int]]:
+    def connection_tree_from(self, mol: int) -> list[tuple[int, int]]:
         """Get the connection tree from a molecule.
 
         Parameter
@@ -423,13 +423,13 @@ class ConnectionTable:
 
         Returns
         -------
-        List[Tuple[int, int]]
+        list[tuple[int, int]]
             A list of connections in the tree.
         """
         g = self.__graph_from_mol(mol)
         return list(g.edges)
 
-    def mols_connected_to(self, mol: int) -> List[int]:
+    def mols_connected_to(self, mol: int) -> list[int]:
         """Get the molecules connected to a given molecule.
 
         Parameter
@@ -439,12 +439,12 @@ class ConnectionTable:
 
         Returns
         -------
-        List[int]
+        list[int]
             A list of connected molecules.
         """
         return list(self.conntab[mol])
 
-    def mols_connected_tree_to(self, mol: int) -> List[int]:
+    def mols_connected_tree_to(self, mol: int) -> list[int]:
         """Get the molecules in the connection tree of a given molecule.
 
         Parameter
@@ -454,7 +454,7 @@ class ConnectionTable:
 
         Returns
         -------
-        List[int]
+        list[int]
             A list of molecules in the connection tree.
         """
         g = self.__graph_from_mol(mol)

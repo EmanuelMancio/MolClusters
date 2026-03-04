@@ -27,7 +27,7 @@ Dependencies:
     - NumPy: For numerical computations.
 """
 
-from typing import Iterable, Iterator, List, Self, Tuple
+from typing import Iterable, Iterator, Self
 
 import MDAnalysis as mda
 import networkx as nx
@@ -142,23 +142,23 @@ class MDAResidueGroupAnalyzer:
         return len(self)
 
     @property
-    def resnames(self) -> List[str]:
+    def resnames(self) -> list[str]:
         """Get the residue names of the ResidueGroup.
 
         Returns
         -------
-        List[str]
+        list[str]
             A list of residue names in the ResidueGroup.
         """
         return self._rg.resnames
 
     @property
-    def resids(self) -> List[int]:
+    def resids(self) -> list[int]:
         """Get the residue IDs of the ResidueGroup.
 
         Returns
         -------
-        List[int]
+        list[int]
             A list of residue IDs in the ResidueGroup.
         """
         return self._rg.resids
@@ -224,12 +224,12 @@ class MDAResidueGroupAnalyzer:
         return self._rg.shape_parameter()
 
     @property
-    def bsphere(self) -> Tuple[float, np.ndarray]:
+    def bsphere(self) -> tuple[float, np.ndarray]:
         """Calculate the bounding sphere of the ResidueGroup.
 
         Returns
         -------
-        Tuple[float, np.ndarray,]
+        tuple[float, np.ndarray,]
             The radius and center of the bounding sphere.
         """
         self.__make_whole()  # TODO: transform make_whole in decorator
@@ -444,6 +444,11 @@ class Cluster(MDAResidueGroupAnalyzer):
             The residue name of the molecule.
         dist : float
             The distance between the reference molecule and the new molecule.
+
+        Raises
+        ------
+        ValueError
+            If ``ref_mol`` not in the cluster, or ``mol`` already in cluster.
         """
         if ref_mol not in self:
             raise ValueError(f"ref_mol {ref_mol} not in the cluster")
@@ -467,12 +472,18 @@ class Cluster(MDAResidueGroupAnalyzer):
             The second molecule.
         dist : float
             The distance between the two molecules.
+
+        Raises
+        ------
+        ValueError
+            If ``moli`` or ``molj`` not in cluster.
         """
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster, use add_mol instead")
         if molj not in self:
             raise ValueError(f"mol {molj} not in the cluster, use add_mol instead")
 
+        # TODO:  use epsilon around 0
         if dist == 0.0:
             raise ValueError("dist is zero. Check your trajectory")
 
@@ -485,6 +496,11 @@ class Cluster(MDAResidueGroupAnalyzer):
         ----------
         mol : int
             The molecule to remove.
+
+        Raises
+        ------
+        ValueError
+            If ``mol``not in the cluster.
         """
         if mol not in self:
             raise ValueError(f"mol {mol} not in the cluster")
@@ -502,6 +518,11 @@ class Cluster(MDAResidueGroupAnalyzer):
             The first molecule.
         molj : int
             The second molecule.
+
+        Raises
+        ------
+        ValueError
+            If ``moli`` or ``molj`` not in cluster.
         """
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster")
@@ -571,12 +592,12 @@ class Cluster(MDAResidueGroupAnalyzer):
         self.cluster = nx.compose(self.cluster, other._graph)
         self.__recalculate_cm()
 
-    def separate(self) -> List["Cluster"]:
+    def separate(self) -> list["Cluster"]:
         """Separate the cluster into sub-clusters.
 
         Returns
         -------
-        List[Cluster]
+        list[Cluster]
             A list of new Cluster instances representing the sub-clusters.
         """
         sub_clusters = [
@@ -640,6 +661,11 @@ class Cluster(MDAResidueGroupAnalyzer):
         -------
         float
             The distance between the two molecules.
+
+        Raises
+        ------
+        ValueError
+            If ``moli`` or ``molj`` not in cluster.
         """
         if moli not in self:
             raise ValueError(f"mol {moli} not in the cluster")
@@ -659,10 +685,17 @@ class Cluster(MDAResidueGroupAnalyzer):
             The second molecule.
         dist : float
             The new distance between the two molecules.
+
+        Raises
+        ------
+        ValueError
+            If ``dist`` is 0.0
         """
+        # TODO: use eps around 0.0
         if dist == 0.0:
             raise ValueError("dist is zero")
 
+        # FIXME: This will break if moli not in cluster
         self.cluster[moli][molj]["distance"] = dist
 
     def __contains__(self, item: int) -> bool:
