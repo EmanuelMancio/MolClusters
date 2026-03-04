@@ -53,20 +53,21 @@ def start_logging(
 
 
 def _logger_wraps[**P, R](
+    func: Callable[P, R] | None = None,
     *,
     entry: bool = True,
     exit: bool = True,
     level: Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
     | int = "DEBUG",
 ) -> Callable[P, R]:
-    def wrapper(func: Callable[P, R]) -> Callable[P, R]:
-        name = func.__name__
+    def wrapper(inner_func: Callable[P, R]) -> Callable[P, R]:
+        name = inner_func.__name__
 
-        @functools.wraps(func)
+        @functools.wraps(inner_func)
         def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
             global LOG_STATUS
             if LOG_STATUS == STATUS.OFF:
-                return func(*args, **kwargs)
+                return inner_func(*args, **kwargs)
 
             logger_ = logger.opt(depth=1)
 
@@ -76,7 +77,7 @@ def _logger_wraps[**P, R](
                 )
 
             try:
-                result = func(*args, **kwargs)
+                result = inner_func(*args, **kwargs)
             except Exception as e:
                 logger_.log(
                     "ERROR", "Function '{}' raised an exception {}", name, str(e)
@@ -90,4 +91,7 @@ def _logger_wraps[**P, R](
 
         return wrapped
 
-    return wrapper
+    if func is None:
+        return wrapper
+    else:
+        return wrapper(func)
