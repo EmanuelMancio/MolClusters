@@ -6,7 +6,7 @@
 
 Functions:
 ----------
-- parse_input_file(in_file: Type[arg.FileType]) -> Dict[str, Dict[str, Tuple[float, str]]]:
+- parse_input_file(in_file: Type[arg.FileType]) -> dict[str, dict[str, tuple[float, str]]]:
     Parses the input YAML configuration file and processes the rules for molecular cluster analysis.
 
 - main():
@@ -46,7 +46,7 @@ Example:
 import argparse as arg
 import copy
 import pathlib as path
-from typing import Dict, List, Tuple
+from typing import dict, list, tuple
 
 import MDAnalysis as mda
 import yaml
@@ -59,7 +59,7 @@ from .molclusters import MolClusters
 # TODO: add Config class for better config capability
 def parse_input_file(
     in_file: arg.FileType,
-) -> Dict[str, Dict[str | Tuple[str], Tuple[str, Dict[str, float]]] | List[str]]:
+) -> dict[str, dict[str | tuple[str], tuple[str, dict[str, float]]] | list[str]]:
     """Parse the input YAML configuration file for molecular cluster analysis.
 
     This function reads the input YAML file, processes the rules for molecular cluster analysis,
@@ -72,13 +72,8 @@ def parse_input_file(
 
     Returns
     -------
-    Dict[str, Dict[str | Tuple[str], Tuple[str, Dict[str, float]]] | List[str]]:
+    dict[str, dict[str | tuple[str], tuple[str, dict[str, float]]] | list[str]]:
         A dictionary containing the parsed configuration, including rules and other settings.
-
-    Raises
-    ------
-    KeyError:
-        If the input file contains invalid or missing keys.
     """
     config = yaml.safe_load(in_file)
     config["filename"] = str(path.Path(in_file.name).absolute())
@@ -140,7 +135,7 @@ def main() -> None:
 
     Raises
     ------
-    KeyError:
+    KeyError
         If an atom in the topology does not have an associated element.
     """  # noqa: D401
     parser = arg.ArgumentParser()
