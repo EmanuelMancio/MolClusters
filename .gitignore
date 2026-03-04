@@ -137,4 +137,4 @@ dmypy.json
 data/
 
 # Poetry lock
-poetry.lock
+#poetry.lock
