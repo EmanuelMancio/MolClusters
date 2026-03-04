@@ -11,6 +11,7 @@ dynamics, enabling researchers to gain insights into molecular behavior of clust
 Attributes
 ----------
     __version__ (str): The version of the MolClusters package.
+    version (str): The version of the MolClusters package.
 
 Modules
 -------
@@ -20,6 +21,7 @@ Modules
 Exports
 -------
     MolClusters: The primary class for performing cluster analysis.
+    start_logging: Function to set up molclusters logger.
 
 Example
 -------
@@ -28,11 +30,13 @@ Example
     >>> analyzer.run()
 """
 
-import importlib.metadata
+from loguru import logger
 
-__version__ = importlib.metadata.version("MolClusters")
+logger.disable("molclusters")
 
 from . import cluster as cluster
+from .log import start_logging
 from .molclusters import MolClusters
+from .version import __version__, version
 
-__all__ = ["MolClusters"]
+__all__ = ["version", "__version__", "start_logging", "MolClusters"]
