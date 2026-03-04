@@ -10,13 +10,14 @@ Module to analyze formation and life-time of molecular clusters from a molecular
 
 ## Dependencies
 
-The script is written to support python versions greater than 3.11 and depends on the following packages:
+The script is written to support python versions greater than 3.12 and depends on the following packages:
 
 - [MDAnalysis](https://www.mdanalysis.org/)
 - [NetworkX](https://networkx.org/)
 - [Numpy](http://www.numpy.org/)
 - [PyYAML](https://pyyaml.org/)
 - [Pandas](https://pandas.pydata.org/)
+- [Pydantic](https://docs.pydantic.dev/)
 
 You can install the package using pip:
 
