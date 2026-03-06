@@ -6,5 +6,5 @@
 
 import importlib.metadata
 
-version = importlib.metadata.version("mdrhconstant")
+version = importlib.metadata.version("molclusters")
 __version__ = version
