@@ -29,7 +29,7 @@ def start_logging(
     level: Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
     | int = "INFO",
     *,
-    filename: Path = Path("molclusters.log"),
+    filename: Path | str = Path("molclusters.log"),
 ) -> None:
     """Start log handlers for the molclusters library.
 
@@ -41,6 +41,8 @@ def start_logging(
     global LOG_STATUS
 
     if LOG_STATUS == STATUS.OFF:
+        filename = Path(filename)
+
         logger.remove(0)
         logger.add(sys.stderr, level=level)
         logger.add(filename.with_suffix(".json"), serialize=True, level=level)
