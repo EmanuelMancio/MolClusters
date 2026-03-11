@@ -99,7 +99,7 @@ class MDAResidueGroupAnalyzer:
             self._rg.atoms.unwrap(compound="residues", reference="cog", inplace=True)
             # center_in_box(self._ag,point=ref_mol_cm)(self.uni.trajectory.ts)
             # center_in_box(self._ag)(self.uni.trajectory.ts)
-            self.__centered_time: float = self.uni.trajectory.time
+            self.__centered_time: float = float(self.uni.trajectory.time)
 
     def __add__(self, other: core.groups.ResidueGroup | Self) -> Self:
         """Combine this ResidueGroupAnalyzer with another ResidueGroup or ResidueGroupAnalyzer.
