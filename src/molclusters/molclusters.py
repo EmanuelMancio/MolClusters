@@ -19,7 +19,6 @@ Dependencies:
 - tqdm: For progress tracking during analysis.
 """
 
-import copy
 import json
 import pathlib as path
 from collections import Counter
@@ -33,9 +32,10 @@ import pandas as pd
 from MDAnalysis import core
 from tqdm import tqdm
 
-from . import __version__
 from .cluster import Cluster, MDAResidueGroupAnalyzer
+from .config import MolClsConfig
 from .conntable import ConnectionTable
+from .version import __version__
 
 # TODO: create analysis class to declutter MolClusters
 
@@ -84,7 +84,7 @@ class MolClusters:
         "__dict__",
     ]
 
-    def __init__(self, universe: mda.Universe, config: dict) -> None:
+    def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
         """Initialize the MolClusters object.
 
         Parameter
@@ -97,10 +97,11 @@ class MolClusters:
         self.uni = universe
         self.config = config
         self.sels: dict[str, core.groups.AtomGroup] = {
-            res: self.uni.select_atoms(f"resname {res}") for res in config["rules"]
+            res: self.uni.select_atoms(f"resname {res}")
+            for res in config._rules.all_keys()
         }
 
-        self.conntab = ConnectionTable(self.uni, self.config["rules"], self.sels)
+        self.conntab = ConnectionTable(self.uni, self.config._rules, self.sels)
         self.clusters: dict[int, Cluster] = {}
         self.mol_clt: dict[int, int] = {}
 
@@ -110,7 +111,7 @@ class MolClusters:
         # TODO: move start to run
         self.__start_clusters()
         self.__get_clusters_info(0)
-        if self.config.get("nucleus", False):
+        if self.config.nucleus is not None:
             self.nucleus_data = np.empty(
                 (len(self.uni.trajectory), 9)
             )  # Value 9 accounts for time column and 8 property columns
@@ -128,7 +129,7 @@ class MolClusters:
         frame : int
             index of the current frame in the trajectory.
         """
-        self.nucleus_holder = {}
+        self.nucleus_holder: dict[int, list[MDAResidueGroupAnalyzer]] = {}
         n_nucleus = []
         sizes = []
         radius = []
@@ -140,7 +141,7 @@ class MolClusters:
         for cid, cls in self.clusters.items():
             possible_nucleus = []
             for rnm, rid in zip(cls.resnames, cls.resids, strict=True):
-                if rnm in self.config["nucleus"]:
+                if rnm in self.config.nucleus:
                     possible_nucleus.append(rid)
 
             self.nucleus_holder[cid] = []
@@ -192,14 +193,12 @@ class MolClusters:
     def __start_solute_solvent(self) -> None:
         """Initialize solute-solvent analysis."""
         self.solutes: list[int] = [
-            id for sel in self.config["solute"] for id in self.sels[sel].residues.resids
+            id for sel in self.config.solute for id in self.sels[sel].residues.resids
         ]
-        self.solvents = self.config[
-            "solvent"
-        ]  # TODO: solvents should be automatically discovered but file takes precedent
+        self.solvents = self.config.solvent
 
-        self.solute_resnames = set(self.config["solute"])
-        self.solvent_resnames = set(self.config["solvent"])
+        self.solute_resnames = set(self.config.solute)
+        self.solvent_resnames = set(self.config.solvent)
 
         self.solute_data = np.zeros(
             (len(self.uni.trajectory), 10)
@@ -275,8 +274,8 @@ class MolClusters:
     def __start_clusters(self) -> None:
         """Initialize clusters at the beginning of the analysis."""
         for subconn in self.conntab.subconntables():
-            if "ignore_composition" in self.config:
-                if self.config["ignore_composition"].get(
+            if self.config._ignore_composition is not None:
+                if self.config._ignore_composition.get(
                     tuple(sorted(set(subconn.resnames))), False
                 ):
                     continue
@@ -445,11 +444,11 @@ class MolClusters:
         modified_clusters = set()
         merged_clusters = set()  # needs this because of dominance devolution
 
-        if "ignore_composition" in self.config:
+        if self.config._ignore_composition is not None:
             conn_info = [
                 (sub, self.__gen_origin_cluster_counter(sub))
                 for sub in self.conntab.subconntables()
-                if not self.config["ignore_composition"].get(
+                if not self.config._ignore_composition.get(
                     tuple(sorted(set(sub.resnames))), False
                 )
             ]
@@ -499,7 +498,7 @@ class MolClusters:
     def __write_coordinates(self) -> None:
         """Write the coordinates of clusters to files."""
         for cls in self.clusters.values():
-            if not set(self.config["solute"]).intersection(set(cls.resnames)):
+            if not set(self.config.solute).intersection(set(cls.resnames)):
                 continue
 
             with mda.Writer("tmp.gro", multiframe=False) as w:
@@ -513,8 +512,9 @@ class MolClusters:
                 out.write("".join(dt))
 
             # TODO: change to support merges
-            if "follow" in self.config:
-                if "solute" in self.config["follow"]:
+            # FIXME: with changes in config this needs to be updated
+            if self.config.follow is not None:
+                if "solute" in self.config.follow:
                     sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
                     if len(sol_id) == 0:
                         print("ERROR: should have a solute here")
@@ -536,7 +536,7 @@ class MolClusters:
         This method performs cluster detection, solute-solvent analysis, nucleus analysis,
         and exports the results to files.
         """
-        if self.config.get("solute", False):
+        if self.config.solute is not None:
             self.__start_solute_solvent()
             self.__solute_solvent_analysis(0)
 
@@ -546,18 +546,18 @@ class MolClusters:
             for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                 self.__update_clusters()
                 self.__get_clusters_info(i)
-                if self.config.get("solute", False):
+                if self.config.solute is not None:
                     self.__solute_solvent_analysis(i)
                     self.__write_coordinates()
 
-                if self.config.get("nucleus", False):
+                if self.config.nucleus is not None:
                     self.__nucleus_analysis(i)
 
                 self.data_holder.parse_frame()
                 pbar.update()
 
         np.savetxt("evo.txt", self.clusters_size_evo)
-        if self.config.get("solute", False):
+        if self.config.solute is not None:
             self.solute_data = pd.DataFrame(
                 self.solute_data,
                 columns=[
@@ -575,7 +575,7 @@ class MolClusters:
             )
             self.solute_data.to_csv("solute_solvent.csv", index=False)
 
-        if self.config.get("nucleus", False):
+        if self.config.nucleus is not None:
             self.nucleus_data = pd.DataFrame(
                 self.nucleus_data,
                 columns=[
@@ -677,10 +677,7 @@ class MolClustersData:
         """
         self.molcls = molclusters
 
-        conf = copy.deepcopy(self.molcls.config)
-
-        if "ignore_composition" in self.molcls.config:
-            conf["ignore_composition"] = [list(i) for i in conf["ignore_composition"]]
+        conf = self.molcls.config.model_dump()
 
         self.data = {
             "Software": f"MolClusters {__version__}",
@@ -703,7 +700,7 @@ class MolClustersData:
         molclusters_data = []
         for cid, cls in self.molcls.clusters.items():
             cls_data = self.encode_cluster(cls)
-            if self.molcls.config.get("nucleus", False):
+            if self.molcls.config.nucleus is not None:
                 cls_data["Nucleus"] = []
                 if self.molcls.nucleus_holder.get(cid, False):
                     nuclei = reduce(lambda a, b: a + b, self.molcls.nucleus_holder[cid])

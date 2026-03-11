@@ -44,80 +44,16 @@ Example:
 """
 
 import argparse as arg
-import copy
-import pathlib as path
-from typing import dict, list, tuple
+from datetime import datetime
 
 import MDAnalysis as mda
-import yaml
+from loguru import logger
 from MDAnalysis.guesser.tables import vdwradii
 
-from . import __version__
+from .config import read_config
+from .log import start_logging
 from .molclusters import MolClusters
-
-
-# TODO: add Config class for better config capability
-def parse_input_file(
-    in_file: arg.FileType,
-) -> dict[str, dict[str | tuple[str], tuple[str, dict[str, float]]] | list[str]]:
-    """Parse the input YAML configuration file for molecular cluster analysis.
-
-    This function reads the input YAML file, processes the rules for molecular cluster analysis,
-    and returns a structured configuration dictionary.
-
-    Parameter
-    ----------
-    in_file : arg.FileType
-        The input YAML file containing analysis settings.
-
-    Returns
-    -------
-    dict[str, dict[str | tuple[str], tuple[str, dict[str, float]]] | list[str]]:
-        A dictionary containing the parsed configuration, including rules and other settings.
-    """
-    config = yaml.safe_load(in_file)
-    config["filename"] = str(path.Path(in_file.name).absolute())
-
-    for mi, val in copy.deepcopy(config["rules"]).items():
-        for mj, rule in val.items():
-            rule = rule.split()
-            op = rule[0].lower()
-            if op == "cm":
-                dist = float(rule[1])
-                if mj in config["rules"]:
-                    config["rules"][mj][mi] = (op, dist)
-                else:
-                    config["rules"][mj] = {mi: (op, dist)}
-                config["rules"][mi][mj] = (op, dist)
-            else:
-                dist = float(rule[rule.index("d") + 1]) if "d" in rule else 3.5
-                ang = float(rule[rule.index("a") + 1]) if "a" in rule else 150.0
-
-                if mj in config["rules"]:
-                    config["rules"][mj][mi] = (op, {"d": dist, "a": ang})
-                else:
-                    config["rules"][mj] = {mi: (op, {"d": dist, "a": ang})}
-                config["rules"][mi][mj] = (op, {"d": dist, "a": ang})
-
-    # TODO: Implement input correctness analysis
-
-    if "nucleus" in config:
-        if "solute" in config["nucleus"]:
-            if "solute" in config:
-                config["nucleus"].extend(config["solute"])
-            else:
-                print(
-                    "'solute' in nucleus being disregarded because solute was not defined!"
-                )
-
-            config["nucleus"].remove("solute")
-
-    if "ignore_composition" in config:
-        config["ignore_composition"] = {
-            tuple(sorted(i)): True for i in config["ignore_composition"]
-        }
-
-    return config
+from .version import __version__
 
 
 def main() -> None:
@@ -142,9 +78,7 @@ def main() -> None:
 
     parser.add_argument("traj", type=str, help="Trajectory File.")
     parser.add_argument("top", type=str, help="Topology file.")
-    parser.add_argument(
-        "inp", type=arg.FileType("r"), help="Input file with analysis settings."
-    )
+    parser.add_argument("inp", type=str, help="Input file with analysis settings.")
     parser.add_argument(
         "--traj-memory",
         action="store_true",
@@ -163,16 +97,22 @@ def main() -> None:
     if not args.traj_memory and args.in_memory_step != 1:
         parser.error("--in-memory-step can only be used when --traj-memory is enabled.")
 
-    print("Reading configuration")
-    cls_args = parse_input_file(args.inp)
+    start_logging(filename=f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log")
 
-    print("Starting Cluster Analysis")
+    logger.info("Reading configuration")
+    cls_args = read_config(args.inp)
+
+    logger.info("Starting Cluster Analysis")
     uni = mda.Universe(
         args.top,
         args.traj,
         in_memory=args.traj_memory,
         in_memory_step=args.in_memory_step,
     )
+
+    if cls_args.solvent is None and cls_args.solute is not None:
+        cls_args.solvent = set(uni.residues.resnames) - set(cls_args.solute)
+        logger.debug(f"Setting solvent to {cls_args.solvent}")
 
     try:
         radiis = []

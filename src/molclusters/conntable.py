@@ -18,13 +18,16 @@ Dependencies:
 """
 
 import warnings
-from typing import Generator, Iterator, Type
+from typing import Generator, Iterator, Type, overload
 
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
+
+from .config import Rule
+from .symdict import SymmetricDict
 
 
 class ConnectionTable:
@@ -37,7 +40,7 @@ class ConnectionTable:
     ----------
     uni : MDAnalysis.Universe
         The MDAnalysis Universe object associated with the molecular system.
-    clst_args : dict[str, dict[str, tuple[str, float]]]
+    clst_args : SymmetricDict[str, Rule]
         The clustering arguments specifying connectivity rules.
     sels : dict[str, core.groups.AtomGroup]
         The atom groups for each residue type.
@@ -45,7 +48,7 @@ class ConnectionTable:
         The connectivity graph representing molecular connections.
     cms : dict[str, np.ndarray]
         The center of mass for each residue type.
-    hbs : dict[str, dict[str, HydrogenBondAnalysis]]
+    hbs : SymmetricDict[str, HydrogenBondAnalysis]
         The hydrogen bond analysis objects for residue pairs.
     """
 
@@ -157,7 +160,7 @@ class ConnectionTable:
     def __init__(
         self,
         universe: mda.Universe,
-        cluster_args: dict[str, dict[str, tuple[str, float | dict[str, float]]]],
+        cluster_args: SymmetricDict[str, Rule],
         selections: dict[str, core.groups.AtomGroup],
     ) -> None:
         """Initialize the ConnectionTable.
@@ -176,48 +179,34 @@ class ConnectionTable:
         self.sels = selections
 
         self.cms: dict[str, np.ndarray] = {}
-        self.hbs: dict[str, dict[str, HydrogenBondAnalysis]] = {}
+        self.hbs: SymmetricDict[str, HydrogenBondAnalysis] = SymmetricDict()
         self.__start_hbonds()
         self.update()
 
     def __get_mass_centers(self) -> None:
         """Calculate the center of mass for each residue type."""
-        for res in self.clst_args:
+        for res in self.clst_args.all_keys():
             self.cms[res] = self.sels[res].center_of_mass(compound="residues")
 
     def __start_hbonds(self) -> None:
         """Initialize hydrogen bond analysis for residue pairs."""
-        for resi in self.clst_args:
-            for resj in self.clst_args[resi]:
-                if self.clst_args[resi][resj] == "cm":
-                    continue
+        for resi, resj in self.clst_args:
+            if self.clst_args[resi, resj].type == "cm":
+                continue
 
-                if (
-                    (resi not in self.hbs)
-                    or (resj not in self.hbs[resi])
-                    or (resj not in self.hbs)
-                    or (resi not in self.hbs[resj])
-                ):
-                    hb = HydrogenBondAnalysis(
-                        self.uni,
-                        between=[f"resname {resi}", f"resname {resj}"],
-                        d_a_cutoff=self.clst_args[resi][resj][1]["d"],
-                        d_h_a_angle_cutoff=self.clst_args[resi][resj][1]["a"],
-                        update_selections=False,
-                    )
+            if (resi, resj) not in self.hbs:
+                # TODO: activate supported backend
+                hb = HydrogenBondAnalysis(
+                    self.uni,
+                    between=[f"resname {resi}", f"resname {resj}"],
+                    d_a_cutoff=self.clst_args[resi, resj].dist,
+                    d_h_a_angle_cutoff=self.clst_args[resi, resj].ang,
+                    update_selections=False,
+                )
 
-                    hb._prepare()
+                hb._prepare()
 
-                    # TODO: implement symmetric dictionary to avoid setting both ways
-                    if resi not in self.hbs:
-                        self.hbs[resi] = {resj: hb}
-                    else:
-                        self.hbs[resi][resj] = hb
-
-                    if resj not in self.hbs:
-                        self.hbs[resj] = {resi: hb}
-                    else:
-                        self.hbs[resj][resi] = hb
+                self.hbs[resi, resj] = hb
 
     # TODO: break into two methods for cm and hb
     def __get_connections_and_attributes(
@@ -256,9 +245,9 @@ class ConnectionTable:
               through the hydrogen bond data.
             - Warnings are suppressed when no hydrogen bonds are found during the computation.
         """
-        if self.clst_args[resi][resj][0] == "cm":
+        if self.clst_args[resi, resj].type == "cm":
             cm1: Type[np.ndarray] = self.cms[resi]
-            cutoff = self.clst_args[resi][resj][1]
+            cutoff = self.clst_args[resi, resj].dist
             if resi != resj:
                 cm2: Type[np.ndarray] = self.cms[resj]
                 connections, distances = mda.lib.distances.capped_distance(
@@ -276,7 +265,7 @@ class ConnectionTable:
             attributes = [{"distance": dist} for dist in distances]
         else:
             # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats distance and angle calculations
-            hb = self.hbs[resi][resj]
+            hb = self.hbs[resi, resj]
             hb._ts = self.uni.trajectory.ts
 
             # suppress warnings when there are no HBonds
@@ -301,7 +290,7 @@ class ConnectionTable:
                 molj = self.uni.atoms[a_ati].resid
                 connections = np.append(connections, [[moli, molj]], axis=0)
 
-            self.hbs[resi][resj]._prepare()
+            hb._prepare()
 
         return connections, attributes
 
@@ -309,28 +298,24 @@ class ConnectionTable:
         """Construct the connectivity table as a graph."""
         self.conntab = nx.Graph()
 
-        analyzed = dict.fromkeys(self.clst_args.keys())
-        for k in analyzed:
-            analyzed[k] = []
+        for resi, resj in self.clst_args:
+            pairs, attribs = self.__get_connections_and_attributes(
+                resi, resj, self.uni.dimensions
+            )
 
-        # TODO: add multiprocessing in conntab construction
-        for resi in self.clst_args:
-            for resj in self.clst_args[resi]:
-                if resj not in analyzed[resi]:
-                    pairs, attribs = self.__get_connections_and_attributes(
-                        resi, resj, self.uni.dimensions
-                    )
-
-                    for k, (ri, rj) in enumerate(pairs):
-                        self.conntab.add_edge(ri, rj, **attribs[k])
-
-                    analyzed[resi].append(resj)
-                    analyzed[resj].append(resi)
+            for k, (ri, rj) in enumerate(pairs):
+                self.conntab.add_edge(ri, rj, **attribs[k])
 
     def update(self) -> None:
         """Update the connectivity table."""
         self.__get_mass_centers()
         self.__construct_table()
+
+    @overload
+    def __getitem__(self, key: tuple[int, int]) -> int: ...
+
+    @overload
+    def __getitem__(self, key: int) -> list[int]: ...
 
     def __getitem__(self, key: tuple[int, int] | int) -> float | list[int]:
         """Get the attributes of a connection or molecule in the connectivity table.
