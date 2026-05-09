@@ -1,8 +1,13 @@
-from molclusters.cluster import Cluster
+# SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+import numpy as np
+import pytest
 from MDAnalysis import Universe
 
-import pytest
-import numpy as np
+from molclusters.cluster import Cluster
+
 
 class TestCluster:
     cls = Cluster(
@@ -11,7 +16,6 @@ class TestCluster:
             "tests/data/met-mal/start.pdb",
         )
     )
-
 
     def test_cluster_creation(self):
         assert self.cls is not None
