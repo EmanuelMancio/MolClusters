@@ -6,6 +6,28 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.4.0 (2026-05-09)
+
+### BREAKING CHANGE
+
+- dropped python 3.11 support.
+
+### Feat
+
+- **config**: implement MolClsConfig class to handle configuration
+- **log**: allow string to be passed to logger initializer
+- **log**: change log decorator so no parentheses are needed
+- **log**: add logging tools and configuration
+- drop python 3.11 and add new dependencies
+
+### Fix
+
+- correct package name in version
+
+### Refactor
+
+- update type hints to use built-in types (e.g., list, dict) across multiple files
+
 ## 0.3.1 (2026-03-03)
 
 ### Fix
