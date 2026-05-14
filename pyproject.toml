@@ -39,7 +39,7 @@ requires-poetry = ">=2.0"
 packages = [{ include = "molclusters", from = "src" }]
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.1.1"
+pytest = "^9.0.3"
 ruff = "^0.11.4"
 pytest-cov = "^5.0.0"
 pre-commit = "^4.2.0"
