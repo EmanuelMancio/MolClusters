@@ -27,9 +27,8 @@ Dependencies are managed with `uv` (see `uv.lock`, `uv_build` backend).
 - Run all pre-commit hooks (ruff check --fix, ruff format, conventional-commit message lint, REUSE license lint): `uv run pre-commit run --all-files`
 - Version bump / changelog (commitizen, semver, tag format `v$version`): `uv run cz bump`
 
-Note: both `pytest.ini` and `pyproject.toml` define pytest config; `pytest.ini` takes precedence when
-both exist, so the `--cov=src --cov-report html` addopts in `pyproject.toml` are currently **not**
-applied by a plain `uv run pytest` — pass `--cov` flags explicitly if you need a coverage report.
+Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--cov=src
+--cov-report html`), so a plain `uv run pytest` produces an HTML coverage report under `htmlcov/`.
 
 ## Architecture
 
