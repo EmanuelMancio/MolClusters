@@ -6,6 +6,10 @@ SPDX-License-Identifier: GPL-3.0-only
 
 # CHANGELOG
 
+## 0.5.0 (2026-09-22)
+
+- build system change
+
 ## 0.4.0 (2026-05-09)
 
 ### BREAKING CHANGE
@@ -136,6 +140,8 @@ SPDX-License-Identifier: GPL-3.0-only
 - modify Cluster to use SubConnTables
 - add SubConnTable to ConnTable
 - changes ConnTab construction
+
+## Unreleased
 
 ## v0.5.0 (2026-09-22)
 
