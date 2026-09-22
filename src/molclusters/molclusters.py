@@ -502,21 +502,20 @@ class MolClusters:
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
-            if self.config.follow is not None:
-                if "solute" in self.config.follow:
-                    sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
-                    if len(sol_id) == 0:
-                        print("ERROR: should have a solute here")
-                        continue
-                    elif len(sol_id) > 1:
-                        # TODO: make more feature-rich follow procedure
-                        print("WARNING: MORE THAN ONE SOLUTE, WILL NOT FOLLOW!")
-                        continue
+            if self.config._follow_solute:
+                sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
+                if len(sol_id) == 0:
+                    print("ERROR: should have a solute here")
+                    continue
+                elif len(sol_id) > 1:
+                    # TODO: make more feature-rich follow procedure
+                    print("WARNING: MORE THAN ONE SOLUTE, WILL NOT FOLLOW!")
+                    continue
 
-                    sol_id = sol_id.pop()
+                sol_id = sol_id.pop()
 
-                    with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
-                        out.write("".join(dt))
+                with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
+                    out.write("".join(dt))
 
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:

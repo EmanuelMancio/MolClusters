@@ -119,6 +119,8 @@ class MDAResidueGroupAnalyzer:
         elif isinstance(other, MDAResidueGroupAnalyzer):
             return MDAResidueGroupAnalyzer(self.uni, self._rg + other.ag)
 
+        return NotImplemented
+
     @property
     def ag(self) -> core.groups.ResidueGroup:
         """Get the ResidueGroup being analyzed.
@@ -689,13 +691,17 @@ class Cluster(MDAResidueGroupAnalyzer):
         Raises
         ------
         ValueError
-            If ``dist`` is 0.0
+            If ``moli`` or ``molj`` not in cluster, or if ``dist`` is 0.0
         """
+        if moli not in self:
+            raise ValueError(f"mol {moli} not in the cluster")
+        if molj not in self:
+            raise ValueError(f"mol {molj} not in the cluster")
+
         # TODO: use eps around 0.0
         if dist == 0.0:
             raise ValueError("dist is zero")
 
-        # FIXME: This will break if moli not in cluster
         self.cluster[moli][molj]["distance"] = dist
 
     def __contains__(self, item: int) -> bool:
