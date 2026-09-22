@@ -45,9 +45,6 @@ dev = [
     "reuse>=6.0.0,<7.0.0",
 ]
 
-[tool.pytest.ini_options]
-addopts = "--import-mode=importlib --cov=src --cov-report html"
-
 [tool.commitizen]
 name = "cz_conventional_commits"
 version_provider = "pep621"
