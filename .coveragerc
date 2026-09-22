@@ -4,12 +4,11 @@
 
 [run]
 # The source you want coverage for
-source = src/mdrhconstant
+source = src/molclusters
 
 # Files to omit from coverage
 omit =
-    src/mdrhconstant/utils/log.py
-    src/mdrhconstant/**/generated_*.py  # example for auto-generated files
+    src/molclusters/log.py
 
 # Automatically measure coverage
 branch = True

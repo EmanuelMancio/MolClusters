@@ -134,7 +134,9 @@ dmypy.json
 
 # VSCode config folder
 .vscode/
-data/
+
+# Top-level scratch data directory (not tests/data/, which holds test fixtures)
+/data/
 
 # CLAUDE
 .claude/
