@@ -135,6 +135,3 @@ dmypy.json
 # VSCode config folder
 .vscode/
 data/
-
-# Poetry lock
-#poetry.lock
