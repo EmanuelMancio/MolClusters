@@ -4,10 +4,18 @@
 
 """Provides the `SymmetricDict` class."""
 
-from collections.abc import Hashable, Iterable, MutableMapping
-from typing import TypeVar, overload
+from collections.abc import Iterable, MutableMapping
+from typing import Protocol, TypeVar, overload
 
-_KT = TypeVar("_KT", bound=Hashable)
+
+class _SupportsHashableLE(Protocol):
+    """A hashable object that supports `<=` comparison, as `_normalize` requires."""
+
+    def __hash__(self) -> int: ...
+    def __le__(self, other: object) -> bool: ...
+
+
+_KT = TypeVar("_KT", bound=_SupportsHashableLE)
 _VT = TypeVar("_VT")
 
 
