@@ -497,7 +497,14 @@ class MolClusters:
                 dt = tmp.readlines()
                 dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
 
+            # pooled by size: an ensemble of what an N-mer looks like, across all
+            # clusters that were ever that size, independent of cluster identity
             with path.Path(f"cls-n{cls.size}.gro").open("a+") as out:
+                out.write("".join(dt))
+
+            # pooled by identity: this specific cluster's own trajectory, tracked
+            # across frames via the dominance algorithm regardless of size changes
+            with path.Path(f"cls-id{cls.id}.gro").open("a+") as out:
                 out.write("".join(dt))
 
             # TODO: change to support merges
