@@ -32,4 +32,4 @@ jobs:
         run: uv sync --locked --dev
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest ${{ matrix.python-version == '3.12' && '--cov-report=term-missing' || '' }}
