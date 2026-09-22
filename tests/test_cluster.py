@@ -38,5 +38,13 @@ class TestCluster:
         with pytest.raises(ValueError):
             self.cls.add_con(0, 2, 2.0)
 
+    def test_set_dist_exception_moli_not_in_cluster(self):
+        with pytest.raises(ValueError):
+            self.cls.set_dist(0, 1, 2.0)
+
+    def test_add_unsupported_operand(self):
+        with pytest.raises(TypeError):
+            self.cls + "not a residue group"
+
     def test_print_cluster_np(self):
         print(np.array(self.cls.cluster))

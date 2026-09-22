@@ -347,7 +347,7 @@ class ConnectionTable:
             if key[1] not in self:
                 raise KeyError(f"{key[1]} not in ConnTable")
 
-            return self.conntab[key[0]][key[1]]["d"]
+            return self.conntab[key[0]][key[1]]["distance"]
 
         if key not in self:
             raise KeyError(f"{key} not in ConnTable")

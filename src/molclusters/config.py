@@ -139,6 +139,7 @@ class MolClsConfig(BaseSettings):
     nucleus: list[str] | None = None
 
     follow: list[str | PositiveInt] | None = None
+    _follow_solute: bool = PrivateAttr(default=False)
 
     ignore_composition: list[list[str]] | None = None
 
@@ -186,6 +187,9 @@ class MolClsConfig(BaseSettings):
             raise ValueError("'solute' configuration cannot be solute.")
 
         errors = []
+
+        if self.follow is not None:
+            self._follow_solute = "solute" in self.follow
 
         def expand(values: list, attr_nm: str) -> list:
             if "solute" not in values:
