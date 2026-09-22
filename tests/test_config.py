@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
+import textwrap
+from pathlib import Path
+
 import pytest
 from loguru import logger
 
-from molclusters.config import MolClsConfig
+from molclusters.config import MolClsConfig, read_config
 
 
 @pytest.fixture
@@ -153,3 +156,72 @@ class TestLammpsResnames:
         assert config.resname_for_resid(1) == "SOL"
         assert config.resname_for_resid(1_500_000) == "SOL"
         assert config.resname_for_resid(2_000_001) is None
+
+
+class TestReadConfigYaml:
+    """Exercises `read_config` end to end, through an actual YAML file on disk.
+
+    `MolClsConfig(...)` built directly from a Python dict (as the other tests in
+    this module do) skips PyYAML's own type resolution, e.g. whether an unquoted
+    ``1-3`` becomes a string, or a list mixing a quoted and an unquoted id
+    survives intact. These tests write the YAML a user would actually type.
+    """
+
+    def test_reads_rules_and_solute(self, tmp_path: Path):
+        path = tmp_path / "input.yaml"
+        path.write_text(
+            textwrap.dedent("""\
+                rules:
+                  SOL:
+                    SOL: cm 5.0
+                solute: [SOL]
+                """)
+        )
+
+        config = read_config(path)
+
+        assert config.solute == ["SOL"]
+        assert config.rules == {"SOL": {"SOL": "cm 5.0"}}
+
+    def test_reads_lammps_resnames_written_the_way_a_user_would(self, tmp_path: Path):
+        # Unquoted range, a plain int, and a list mixing a quoted and an
+        # unquoted id -- exactly as someone editing the file by hand would
+        # write it, with no reason to know PyYAML would parse them differently.
+        path = tmp_path / "input.yaml"
+        path.write_text(
+            textwrap.dedent("""\
+                rules:
+                  SOL:
+                    SOL: cm 5.0
+                lammps_resnames:
+                  SOL: 1-3
+                  NA: 4
+                  CL: ["5", 6]
+                """)
+        )
+
+        config = read_config(path)
+
+        assert [config.resname_for_resid(i) for i in range(1, 7)] == [
+            "SOL",
+            "SOL",
+            "SOL",
+            "NA",
+            "CL",
+            "CL",
+        ]
+
+    def test_invalid_lammps_range_from_yaml_raises(self, tmp_path: Path):
+        path = tmp_path / "input.yaml"
+        path.write_text(
+            textwrap.dedent("""\
+                rules:
+                  SOL:
+                    SOL: cm 5.0
+                lammps_resnames:
+                  SOL: 5-1
+                """)
+        )
+
+        with pytest.raises(ValueError, match="first id must not be greater"):
+            read_config(path)
