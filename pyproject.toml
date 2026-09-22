@@ -52,10 +52,11 @@ version_scheme = "semver2"
 update_changelog_on_bump = true
 gpg_sign = true
 annotated_tag = true
-bump_message = "chore: release v$current_version -> v$new_version [skip-ci]"
+bump_message = "chore: release v$current_version -> v$new_version [skip ci]"
 changelog_incremental = true
 major_version_zero = true
 tag_format = "v$version"
+pre_bump_hooks = ["uv lock"]
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
