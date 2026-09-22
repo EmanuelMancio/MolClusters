@@ -21,6 +21,7 @@ Dependencies:
 
 import json
 import pathlib as path
+import tempfile
 from collections import Counter
 from functools import reduce
 from typing import Any, Generator
@@ -29,6 +30,7 @@ import MDAnalysis as mda
 import networkx as nx
 import numpy as np
 import pandas as pd
+from loguru import logger
 from MDAnalysis import core
 from tqdm import tqdm
 
@@ -490,12 +492,16 @@ class MolClusters:
             if not set(self.config.solute).intersection(set(cls.resnames)):
                 continue
 
-            with mda.Writer("tmp.gro", multiframe=False) as w:
-                w.write(cls.ag.atoms.sort())
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = path.Path(tmp_dir) / "cluster.gro"
 
-            with path.Path("tmp.gro").open() as tmp:
-                dt = tmp.readlines()
-                dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
+                with mda.Writer(str(tmp_path), multiframe=False) as w:
+                    w.write(cls.ag.atoms.sort())
+
+                with tmp_path.open() as tmp:
+                    dt = tmp.readlines()
+
+            dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
 
             # pooled by size: an ensemble of what an N-mer looks like, across all
             # clusters that were ever that size, independent of cluster identity
@@ -512,11 +518,13 @@ class MolClusters:
             if self.config._follow_solute:
                 sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
                 if len(sol_id) == 0:
-                    print("ERROR: should have a solute here")
+                    logger.error(f"Cluster {cls.id}: expected a solute, found none")
                     continue
                 elif len(sol_id) > 1:
                     # TODO: make more feature-rich follow procedure
-                    print("WARNING: MORE THAN ONE SOLUTE, WILL NOT FOLLOW!")
+                    logger.warning(
+                        f"Cluster {cls.id}: more than one solute, will not follow"
+                    )
                     continue
 
                 sol_id = sol_id.pop()

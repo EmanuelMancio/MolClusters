@@ -7,6 +7,28 @@ import pytest
 from MDAnalysis import Universe
 
 from molclusters.cluster import Cluster
+from molclusters.config import MolClsConfig
+from molclusters.conntable import ConnectionTable
+
+
+@pytest.fixture
+def populated_cluster() -> Cluster:
+    """Build a real two-molecule Cluster via the same path production code uses.
+
+    Returns
+    -------
+    Cluster
+        A cluster containing the two connected MOL residues from the fixture.
+    """
+    uni = Universe(
+        "tests/data/met-mal/met-mal.tpr",
+        "tests/data/met-mal/start.pdb",
+    )
+    config = MolClsConfig(rules={"MOL": {"MOL": "cm 15.0"}})
+    sels = {res: uni.select_atoms(f"resname {res}") for res in config._rules.all_keys()}
+    conntab = ConnectionTable(uni, config._rules, sels)
+
+    return Cluster(uni, next(conntab.subconntables()))
 
 
 class TestCluster:
@@ -23,16 +45,8 @@ class TestCluster:
     def test_cluster_length(self):
         assert len(self.cls) == 0
 
-    @pytest.mark.skip()
-    def test_distance_between_mols(self):
-        assert self.cls.get_dist(0, 1) == 1.0
-
     def test_id(self):
         assert self.cls.id == 1
-
-    @pytest.mark.skip()
-    def test_contains(self):
-        assert 0 in self.cls
 
     def test_add_con_exception(self):
         with pytest.raises(ValueError):
@@ -48,3 +62,18 @@ class TestCluster:
 
     def test_print_cluster_np(self):
         print(np.array(self.cls.cluster))
+
+
+class TestPopulatedCluster:
+    def test_distance_between_mols(self, populated_cluster: Cluster):
+        moli = next(iter(populated_cluster))
+        molj = next(iter(populated_cluster.neighbors(moli)))
+
+        expected = populated_cluster.cluster[moli][molj]["distance"]
+        assert populated_cluster.get_dist(moli, molj) == expected
+
+    def test_contains(self, populated_cluster: Cluster):
+        mol = next(iter(populated_cluster))
+
+        assert mol in populated_cluster
+        assert -1 not in populated_cluster
