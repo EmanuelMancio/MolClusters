@@ -360,7 +360,17 @@ class MolClsConfig(BaseSettings):
         for start, end, name in ranges:
             if merged and merged[-1][2] == name and start <= merged[-1][1] + 1:
                 prev_start, prev_end, _ = merged[-1]
-                merged[-1] = (prev_start, max(prev_end, end), name)
+                new_end = max(prev_end, end)
+
+                if start <= prev_end:
+                    logger.warning(
+                        f"'lammps_resnames' for {name!r} has overlapping entries: "
+                        f"molecule id(s) {start}-{min(end, prev_end)} are listed "
+                        f"more than once. They will be treated as a single range, "
+                        f"{prev_start}-{new_end}, covering every id in either entry."
+                    )
+
+                merged[-1] = (prev_start, new_end, name)
             else:
                 merged.append((start, end, name))
 
