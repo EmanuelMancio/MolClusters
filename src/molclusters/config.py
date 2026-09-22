@@ -123,6 +123,64 @@ def _parse_rule(spec: str) -> Rule:
     )
 
 
+# One `lammps_resnames` entry: a single LAMMPS molecule id (``501``), or an
+# inclusive id range written ``"first-last"`` (``"1-500"``).
+_LammpsResidSpec = int | str
+
+
+def _expand_lammps_resid_spec(spec: _LammpsResidSpec, name: str) -> list[int]:
+    """
+    Expand one `lammps_resnames` entry into the LAMMPS molecule ids it covers.
+
+    Parameters
+    ----------
+    spec : int | str
+        A single molecule id, or an inclusive range written ``"first-last"``.
+    name : str
+        The resname this entry is being assigned to, used in error messages.
+
+    Returns
+    -------
+    list[int]
+        The molecule ids covered by `spec`.
+
+    Raises
+    ------
+    ValueError
+        If `spec` is not a plain integer or a well-formed ``"first-last"`` range.
+    """
+    if isinstance(spec, int):
+        return [spec]
+
+    text = spec.strip()
+
+    if "-" in text:
+        start_s, _, end_s = text.partition("-")
+        try:
+            start, end = int(start_s), int(end_s)
+        except ValueError:
+            raise ValueError(
+                f"Invalid LAMMPS molecule id range {spec!r} for {name!r}: expected "
+                "'first-last', e.g. '1-500'."
+            ) from None
+
+        if start > end:
+            raise ValueError(
+                f"Invalid LAMMPS molecule id range {spec!r} for {name!r}: the first "
+                "id must not be greater than the last."
+            )
+
+        return list(range(start, end + 1))
+
+    try:
+        return [int(text)]
+    except ValueError:
+        raise ValueError(
+            f"Invalid LAMMPS molecule id {spec!r} for {name!r}: expected a whole "
+            "number or a range like '1-500'."
+        ) from None
+
+
 class MolClsConfig(BaseSettings):
     """Settings class for input parameters."""
 
@@ -144,6 +202,31 @@ class MolClsConfig(BaseSettings):
     ignore_composition: list[list[str]] | None = None
 
     _ignore_composition: set[frozenset[str]] = PrivateAttr(default_factory=set)
+
+    # LAMMPS topologies have no residue names, only numeric molecule ids: this maps
+    # each name used elsewhere in this file (rules, solute, ...) to the LAMMPS
+    # molecule id(s) it stands for, e.g. {"SOL": "1-500", "NA": 501}.
+    lammps_resnames: dict[str, _LammpsResidSpec | list[_LammpsResidSpec]] | None = None
+
+    _lammps_resid_to_name: dict[int, str] = PrivateAttr(default_factory=dict)
+
+    def resname_for_resid(self, resid: int) -> str | None:
+        """
+        Look up the resname configured for a LAMMPS molecule id.
+
+        Parameters
+        ----------
+        resid : int
+            A LAMMPS molecule id (the ``mol`` column), which MDAnalysis exposes as
+            `resid` for a topology parsed from a LAMMPS DATA file.
+
+        Returns
+        -------
+        str | None
+            The name assigned to `resid` via `lammps_resnames`, or None if it isn't
+            covered.
+        """
+        return self._lammps_resid_to_name.get(resid)
 
     def is_ignored_composition(self, resnames: Iterable[str]) -> bool:
         """
@@ -225,6 +308,25 @@ class MolClsConfig(BaseSettings):
     def _build_ignore_composition(self) -> Self:
         if self.ignore_composition is not None:
             self._ignore_composition = {frozenset(i) for i in self.ignore_composition}
+
+        return self
+
+    @model_validator(mode="after")
+    def _build_lammps_resnames(self) -> Self:
+        if self.lammps_resnames is None:
+            return self
+
+        for name, spec in self.lammps_resnames.items():
+            specs = spec if isinstance(spec, list) else [spec]
+            for one in specs:
+                for resid in _expand_lammps_resid_spec(one, name):
+                    other = self._lammps_resid_to_name.get(resid)
+                    if other is not None and other != name:
+                        raise ValueError(
+                            f"LAMMPS molecule id {resid} is assigned to both "
+                            f"{other!r} and {name!r} in 'lammps_resnames'."
+                        )
+                    self._lammps_resid_to_name[resid] = name
 
         return self
 

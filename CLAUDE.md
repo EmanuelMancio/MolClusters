@@ -35,13 +35,17 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
 Core pipeline, all under `src/molclusters/`:
 
 - `main.py` — CLI entry point (argparse). Builds an `MDAnalysis.Universe` from the topology +
-  trajectory, fills in missing vdW radii per atom, reads the analysis config, then drives
-  `MolClusters.run()`.
+  trajectory, applies `lammps_resnames` (if set) via `_apply_lammps_resnames` since LAMMPS
+  topologies carry no residue names, fills in missing vdW radii per atom, reads the analysis
+  config, then drives `MolClusters.run()`.
 - `config.py` — `MolClsConfig` (pydantic-settings, env prefix `MOLCLS_`), parses the YAML/JSON/TOML
   input file. Per-residue-pair `rules` (`"cm <dist>"` for a center-of-mass distance cutoff, or
   `"hb [d <dist>] [a <angle>]"` for hydrogen bonding) are validated and compiled into a
   `SymmetricDict[(resname, resname), Rule]`. Also owns `solute`/`solvent`/`nucleus`/`follow`/
-  `ignore_composition`, including expanding the `"solute"` keyword into the configured solute resnames.
+  `ignore_composition`, including expanding the `"solute"` keyword into the configured solute
+  resnames, and `lammps_resnames` (name -> LAMMPS molecule id or `"first-last"` id range),
+  compiled into a resid -> resname lookup (`resname_for_resid`) for LAMMPS inputs, which have no
+  residue names of their own.
 - `conntable.py` — `ConnectionTable` builds a per-frame NetworkX graph of molecule-molecule
   connections from the compiled rules, using MDAnalysis capped-distance search for `cm` rules and
   `HydrogenBondAnalysis` for `hb` rules. `subconntables()` yields each connected component
