@@ -3,8 +3,23 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import pytest
+from loguru import logger
 
 from molclusters.config import MolClsConfig
+
+
+@pytest.fixture
+def captured_logs():
+    # The package disables its logger by default (see `molclusters/__init__.py`);
+    # `start_logging()` re-enables it for a real run. A dedicated sink is used
+    # instead of capsys/capfd, since loguru's default handler binds its own
+    # stderr reference ahead of pytest's output capture.
+    messages: list[str] = []
+    logger.enable("molclusters")
+    handler_id = logger.add(messages.append, format="{message}")
+    yield messages
+    logger.remove(handler_id)
+    logger.disable("molclusters")
 
 
 class TestFollowSolute:
@@ -102,6 +117,29 @@ class TestLammpsResnames:
         )
 
         assert config.resname_for_resid(70) == "SOL"
+
+    def test_overlapping_same_name_ranges_warn_how_they_are_merged(
+        self, captured_logs: list[str]
+    ):
+        MolClsConfig(
+            rules={"SOL": {"SOL": "cm 5.0"}},
+            lammps_resnames={"SOL": ["1-100", "50-60"]},
+        )
+
+        warning = "\n".join(captured_logs)
+        assert "overlapping entries" in warning
+        assert "50-60" in warning
+        assert "single range, 1-100" in warning
+
+    def test_adjacent_same_name_ranges_do_not_warn(self, captured_logs: list[str]):
+        # Touching-but-not-overlapping ranges (e.g. two chunks "1-100"/"101-200"
+        # of the same species) are a normal way to write a config, not a mistake.
+        MolClsConfig(
+            rules={"SOL": {"SOL": "cm 5.0"}},
+            lammps_resnames={"SOL": ["1-100", "101-200"]},
+        )
+
+        assert captured_logs == []
 
     def test_large_range_is_stored_as_a_range_not_expanded(self):
         # A config spanning millions of molecule ids must stay a handful of
