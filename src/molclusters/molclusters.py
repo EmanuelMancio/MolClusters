@@ -274,11 +274,8 @@ class MolClusters:
     def __start_clusters(self) -> None:
         """Initialize clusters at the beginning of the analysis."""
         for subconn in self.conntab.subconntables():
-            if self.config._ignore_composition is not None:
-                if self.config._ignore_composition.get(
-                    tuple(sorted(set(subconn.resnames))), False
-                ):
-                    continue
+            if self.config.is_ignored_composition(subconn.resnames):
+                continue
 
             cls_id = self.__create_new_cluster(subconn)
 
@@ -444,19 +441,11 @@ class MolClusters:
         modified_clusters = set()
         merged_clusters = set()  # needs this because of dominance devolution
 
-        if self.config._ignore_composition is not None:
-            conn_info = [
-                (sub, self.__gen_origin_cluster_counter(sub))
-                for sub in self.conntab.subconntables()
-                if not self.config._ignore_composition.get(
-                    tuple(sorted(set(sub.resnames))), False
-                )
-            ]
-        else:
-            conn_info = [
-                (sub, self.__gen_origin_cluster_counter(sub))
-                for sub in self.conntab.subconntables()
-            ]
+        conn_info = [
+            (sub, self.__gen_origin_cluster_counter(sub))
+            for sub in self.conntab.subconntables()
+            if not self.config.is_ignored_composition(sub.resnames)
+        ]
 
         for i, (subconn, origin_clusters) in enumerate(conn_info):
             if len(origin_clusters) == 1:
