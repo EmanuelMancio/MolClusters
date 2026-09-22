@@ -4,6 +4,7 @@
 
 """Provides the `MolClsConfig` class that stores the configuration information for the analysis."""
 
+import bisect
 import json
 import tomllib
 from collections.abc import Iterable
@@ -128,9 +129,13 @@ def _parse_rule(spec: str) -> Rule:
 _LammpsResidSpec = int | str
 
 
-def _expand_lammps_resid_spec(spec: _LammpsResidSpec, name: str) -> list[int]:
+def _parse_lammps_resid_range(spec: _LammpsResidSpec, name: str) -> tuple[int, int]:
     """
-    Expand one `lammps_resnames` entry into the LAMMPS molecule ids it covers.
+    Parse one `lammps_resnames` entry into an inclusive (start, end) id range.
+
+    Kept as a `(start, end)` pair rather than the individual ids it covers, since a
+    range like ``"1-500000"`` is meant to describe a whole block of solvent
+    molecules cheaply, not to be expanded into half a million entries.
 
     Parameters
     ----------
@@ -141,8 +146,9 @@ def _expand_lammps_resid_spec(spec: _LammpsResidSpec, name: str) -> list[int]:
 
     Returns
     -------
-    list[int]
-        The molecule ids covered by `spec`.
+    tuple[int, int]
+        The inclusive `(start, end)` range covered by `spec` (`start == end` for a
+        single id).
 
     Raises
     ------
@@ -150,7 +156,7 @@ def _expand_lammps_resid_spec(spec: _LammpsResidSpec, name: str) -> list[int]:
         If `spec` is not a plain integer or a well-formed ``"first-last"`` range.
     """
     if isinstance(spec, int):
-        return [spec]
+        return spec, spec
 
     text = spec.strip()
 
@@ -170,15 +176,17 @@ def _expand_lammps_resid_spec(spec: _LammpsResidSpec, name: str) -> list[int]:
                 "id must not be greater than the last."
             )
 
-        return list(range(start, end + 1))
+        return start, end
 
     try:
-        return [int(text)]
+        value = int(text)
     except ValueError:
         raise ValueError(
             f"Invalid LAMMPS molecule id {spec!r} for {name!r}: expected a whole "
             "number or a range like '1-500'."
         ) from None
+
+    return value, value
 
 
 class MolClsConfig(BaseSettings):
@@ -208,7 +216,11 @@ class MolClsConfig(BaseSettings):
     # molecule id(s) it stands for, e.g. {"SOL": "1-500", "NA": 501}.
     lammps_resnames: dict[str, _LammpsResidSpec | list[_LammpsResidSpec]] | None = None
 
-    _lammps_resid_to_name: dict[int, str] = PrivateAttr(default_factory=dict)
+    # Sorted, non-overlapping (start, end, name) ranges built from `lammps_resnames`,
+    # kept as ranges (not one dict entry per id) so a config spanning millions of
+    # molecule ids costs only as much memory as the handful of lines the user wrote.
+    _lammps_resid_ranges: list[tuple[int, int, str]] = PrivateAttr(default_factory=list)
+    _lammps_resid_starts: list[int] = PrivateAttr(default_factory=list)
 
     def resname_for_resid(self, resid: int) -> str | None:
         """
@@ -226,7 +238,12 @@ class MolClsConfig(BaseSettings):
             The name assigned to `resid` via `lammps_resnames`, or None if it isn't
             covered.
         """
-        return self._lammps_resid_to_name.get(resid)
+        idx = bisect.bisect_right(self._lammps_resid_starts, resid) - 1
+        if idx < 0:
+            return None
+
+        start, end, name = self._lammps_resid_ranges[idx]
+        return name if start <= resid <= end else None
 
     def is_ignored_composition(self, resnames: Iterable[str]) -> bool:
         """
@@ -316,17 +333,39 @@ class MolClsConfig(BaseSettings):
         if self.lammps_resnames is None:
             return self
 
+        ranges: list[tuple[int, int, str]] = []
         for name, spec in self.lammps_resnames.items():
             specs = spec if isinstance(spec, list) else [spec]
-            for one in specs:
-                for resid in _expand_lammps_resid_spec(one, name):
-                    other = self._lammps_resid_to_name.get(resid)
-                    if other is not None and other != name:
-                        raise ValueError(
-                            f"LAMMPS molecule id {resid} is assigned to both "
-                            f"{other!r} and {name!r} in 'lammps_resnames'."
-                        )
-                    self._lammps_resid_to_name[resid] = name
+            ranges.extend(
+                (*_parse_lammps_resid_range(one, name), name) for one in specs
+            )
+
+        ranges.sort(key=lambda r: r[0])
+
+        # Ranges are user-authored (one line per species, not per molecule), so
+        # this stays a handful of entries even for a huge system: an O(R^2) check
+        # is simpler than a sweep and is negligible at that size.
+        for i, (start_i, end_i, name_i) in enumerate(ranges):
+            for start_j, end_j, name_j in ranges[i + 1 :]:
+                if start_j > end_i:
+                    break  # sorted by start: nothing further can overlap `i`
+                if name_j != name_i:
+                    lo, hi = max(start_i, start_j), min(end_i, end_j)
+                    raise ValueError(
+                        f"LAMMPS molecule id(s) {lo}-{hi} are assigned to both "
+                        f"{name_i!r} and {name_j!r} in 'lammps_resnames'."
+                    )
+
+        merged: list[tuple[int, int, str]] = []
+        for start, end, name in ranges:
+            if merged and merged[-1][2] == name and start <= merged[-1][1] + 1:
+                prev_start, prev_end, _ = merged[-1]
+                merged[-1] = (prev_start, max(prev_end, end), name)
+            else:
+                merged.append((start, end, name))
+
+        self._lammps_resid_ranges = merged
+        self._lammps_resid_starts = [r[0] for r in merged]
 
         return self
 
