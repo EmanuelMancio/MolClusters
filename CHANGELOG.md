@@ -141,7 +141,27 @@ SPDX-License-Identifier: GPL-3.0-only
 - add SubConnTable to ConnTable
 - changes ConnTab construction
 
-## Unreleased
+## v0.6.0 (2026-09-22)
+
+### Feat
+
+- **config**: warn when lammps_resnames ranges overlap for the same name
+- **config**: add lammps_resnames mapping for LAMMPS topologies
+- also write per-cluster-identity coordinate output
+
+### Fix
+
+- **ci**: pin setup-uv to an exact tag, v10 doesn't exist
+- **pre-commit**: scope reuse-lint-file hook to the pre-commit stage
+- temp-file hygiene, logging consistency, and TypeVar bound
+- **config**: store lammps_resnames as ranges instead of per-id entries
+- correct dominance-adjacent correctness bugs from code review
+- correct config drift and untrack test fixtures gitignore rule
+- restrict reuse-lint-file hook to pre-commit stage
+
+### Refactor
+
+- **config**: simplify rule and solute-keyword parsing
 
 ## v0.5.0 (2026-09-22)
 
