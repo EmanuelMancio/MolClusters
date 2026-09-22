@@ -21,6 +21,7 @@ Dependencies:
 
 import json
 import pathlib as path
+import tempfile
 from collections import Counter
 from functools import reduce
 from typing import Any, Generator
@@ -29,6 +30,7 @@ import MDAnalysis as mda
 import networkx as nx
 import numpy as np
 import pandas as pd
+from loguru import logger
 from MDAnalysis import core
 from tqdm import tqdm
 
@@ -274,11 +276,8 @@ class MolClusters:
     def __start_clusters(self) -> None:
         """Initialize clusters at the beginning of the analysis."""
         for subconn in self.conntab.subconntables():
-            if self.config._ignore_composition is not None:
-                if self.config._ignore_composition.get(
-                    tuple(sorted(set(subconn.resnames))), False
-                ):
-                    continue
+            if self.config.is_ignored_composition(subconn.resnames):
+                continue
 
             cls_id = self.__create_new_cluster(subconn)
 
@@ -444,19 +443,11 @@ class MolClusters:
         modified_clusters = set()
         merged_clusters = set()  # needs this because of dominance devolution
 
-        if self.config._ignore_composition is not None:
-            conn_info = [
-                (sub, self.__gen_origin_cluster_counter(sub))
-                for sub in self.conntab.subconntables()
-                if not self.config._ignore_composition.get(
-                    tuple(sorted(set(sub.resnames))), False
-                )
-            ]
-        else:
-            conn_info = [
-                (sub, self.__gen_origin_cluster_counter(sub))
-                for sub in self.conntab.subconntables()
-            ]
+        conn_info = [
+            (sub, self.__gen_origin_cluster_counter(sub))
+            for sub in self.conntab.subconntables()
+            if not self.config.is_ignored_composition(sub.resnames)
+        ]
 
         for i, (subconn, origin_clusters) in enumerate(conn_info):
             if len(origin_clusters) == 1:
@@ -501,33 +492,45 @@ class MolClusters:
             if not set(self.config.solute).intersection(set(cls.resnames)):
                 continue
 
-            with mda.Writer("tmp.gro", multiframe=False) as w:
-                w.write(cls.ag.atoms.sort())
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = path.Path(tmp_dir) / "cluster.gro"
 
-            with path.Path("tmp.gro").open() as tmp:
-                dt = tmp.readlines()
-                dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
+                with mda.Writer(str(tmp_path), multiframe=False) as w:
+                    w.write(cls.ag.atoms.sort())
 
+                with tmp_path.open() as tmp:
+                    dt = tmp.readlines()
+
+            dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
+
+            # pooled by size: an ensemble of what an N-mer looks like, across all
+            # clusters that were ever that size, independent of cluster identity
             with path.Path(f"cls-n{cls.size}.gro").open("a+") as out:
+                out.write("".join(dt))
+
+            # pooled by identity: this specific cluster's own trajectory, tracked
+            # across frames via the dominance algorithm regardless of size changes
+            with path.Path(f"cls-id{cls.id}.gro").open("a+") as out:
                 out.write("".join(dt))
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
-            if self.config.follow is not None:
-                if "solute" in self.config.follow:
-                    sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
-                    if len(sol_id) == 0:
-                        print("ERROR: should have a solute here")
-                        continue
-                    elif len(sol_id) > 1:
-                        # TODO: make more feature-rich follow procedure
-                        print("WARNING: MORE THAN ONE SOLUTE, WILL NOT FOLLOW!")
-                        continue
+            if self.config._follow_solute:
+                sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
+                if len(sol_id) == 0:
+                    logger.error(f"Cluster {cls.id}: expected a solute, found none")
+                    continue
+                elif len(sol_id) > 1:
+                    # TODO: make more feature-rich follow procedure
+                    logger.warning(
+                        f"Cluster {cls.id}: more than one solute, will not follow"
+                    )
+                    continue
 
-                    sol_id = sol_id.pop()
+                sol_id = sol_id.pop()
 
-                    with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
-                        out.write("".join(dt))
+                with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
+                    out.write("".join(dt))
 
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:

@@ -50,10 +50,52 @@ import MDAnalysis as mda
 from loguru import logger
 from MDAnalysis.guesser.tables import vdwradii
 
-from .config import read_config
+from .config import MolClsConfig, read_config
 from .log import start_logging
 from .molclusters import MolClusters
 from .version import __version__
+
+
+def _apply_lammps_resnames(uni: mda.Universe, config: MolClsConfig) -> None:
+    """Fill in residue names on a LAMMPS topology from the `lammps_resnames` config.
+
+    LAMMPS files carry no residue names, only a numeric molecule id per atom
+    (exposed by MDAnalysis as `resid`). This assigns each residue's `resname` by
+    looking up its `resid` in `config.lammps_resnames`, so the rest of the
+    pipeline can treat a LAMMPS system exactly like a GROMACS one. A no-op when
+    `lammps_resnames` isn't set.
+
+    Parameters
+    ----------
+    uni : mda.Universe
+        The Universe to update in place.
+    config : MolClsConfig
+        The analysis configuration.
+
+    Raises
+    ------
+    ValueError
+        If some residue's molecule id isn't covered by `lammps_resnames`.
+    """
+    if config.lammps_resnames is None:
+        return
+
+    resids = uni.residues.resids
+    names = [config.resname_for_resid(int(resid)) for resid in resids]
+
+    missing = sorted({int(r) for r, n in zip(resids, names, strict=True) if n is None})
+    if missing:
+        raise ValueError(
+            "'lammps_resnames' does not cover LAMMPS molecule id(s) "
+            f"{missing}. Add an entry for every molecule id present in the topology."
+        )
+
+    if hasattr(uni.residues, "resnames"):
+        uni.residues.resnames = names
+    else:
+        uni.add_TopologyAttr("resnames", values=names)
+
+    logger.debug(f"Assigned resnames from 'lammps_resnames' to {len(names)} residues.")
 
 
 def main() -> None:
@@ -109,6 +151,8 @@ def main() -> None:
         in_memory=args.traj_memory,
         in_memory_step=args.in_memory_step,
     )
+
+    _apply_lammps_resnames(uni, cls_args)
 
     if cls_args.solvent is None and cls_args.solute is not None:
         cls_args.solvent = set(uni.residues.resnames) - set(cls_args.solute)

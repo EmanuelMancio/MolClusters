@@ -4,24 +4,17 @@
 
 """Provides the `MolClsConfig` class that stores the configuration information for the analysis."""
 
+import bisect
 import json
-import re
 import tomllib
+from collections.abc import Iterable
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 import yaml
 from loguru import logger
-from pydantic import (
-    BaseModel,
-    Field,
-    PositiveFloat,
-    PositiveInt,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, PositiveInt, PrivateAttr, model_validator
 from pydantic.dataclasses import dataclass
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,80 +29,10 @@ class RuleType(StrEnum):
     HB = auto()
 
 
-NUMBER_RE = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
-
-
-class _RuleInput(BaseModel):
-    rules: dict[
-        str,
-        dict[str, str],
-    ]
-
-    @field_validator("rules")
-    @classmethod
-    def validate_rules(
-        cls,
-        value: dict[
-            str,
-            dict[str, str],
-        ],
-    ) -> dict[
-        str,
-        dict[str, str],
-    ]:
-        for k1 in value:
-            for k2, rl in value[k1].items():
-                try:
-                    cls._validate_rule(rl)
-                except ValueError as e:
-                    e.add_note(f"From rule {k1}:{k2}")
-                    raise
-        return value
-
-    @staticmethod
-    def _validate_rule(value: str) -> None:
-        parts = value.split()
-
-        if not parts:
-            raise ValueError("Empty rule is not accepted")
-
-        cmd = parts[0]
-
-        if cmd == "cm":
-            if len(parts) != 2:
-                raise ValueError("Formar for 'cm' rule must be: cm <number>")
-            if not NUMBER_RE.fullmatch(parts[1]):
-                raise ValueError(
-                    "cm requires a valid positive number (float or scientific notation allowed)."
-                )
-
-        elif cmd == "hb":
-            used_flags = set()
-            i = 1
-
-            while i < len(parts):
-                flag = parts[i]
-
-                if flag not in {"d", "a"}:
-                    raise ValueError("'hb' rule only supporrs flags 'd' and 'a'.")
-
-                if flag in used_flags:
-                    raise ValueError(f"Flag '{flag}' cannot be used twice.")
-
-                if i + 1 >= len(parts):
-                    raise ValueError(f"Flag '{flag}' must be followed by a number.")
-
-                number = parts[i + 1]
-
-                if not NUMBER_RE.fullmatch(number):
-                    raise ValueError(
-                        f"Invalid number for flag '{flag}'. Must be positive (float or scientific notation allowed)."
-                    )
-
-                used_flags.add(flag)
-                i += 2
-        else:
-            raise ValueError("Command must be either 'cm' or 'hb'.")
+# A distance in Angstrom: positive and finite (rules are written as plain-text
+# numbers, so `inf`/`nan` must be rejected explicitly rather than relying on a
+# hand-rolled number regex).
+_Distance = Annotated[float, Field(gt=0.0, allow_inf_nan=False)]
 
 
 @dataclass
@@ -123,7 +46,7 @@ class Rule:
 class CMRule(Rule):
     """Rule class for `cm` rule."""
 
-    dist: PositiveFloat
+    dist: _Distance
     type: RuleType = Field(RuleType.CM, frozen=True)
 
 
@@ -131,19 +54,150 @@ class CMRule(Rule):
 class HBRule(Rule):
     """Rule class for `hb` rule."""
 
-    dist: PositiveFloat
-    ang: Annotated[float, Field(ge=0.0, le=180.0)]
+    dist: _Distance = 3.5
+    ang: Annotated[float, Field(ge=0.0, le=180.0)] = 150.0
     type: RuleType = Field(RuleType.HB, frozen=True)
 
 
-class MolClsConfig(BaseSettings, _RuleInput):
+_HB_FLAGS = {"d": "dist", "a": "ang"}
+
+
+def _to_float(raw: str, label: str) -> float:
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f"Invalid number for '{label}': {raw!r}.") from None
+
+
+def _parse_rule(spec: str) -> Rule:
+    """
+    Parse a rule string such as ``"cm 5.0"`` or ``"hb d 3.5 a 150"`` into a `Rule`.
+
+    Parameters
+    ----------
+    spec : str
+        The raw rule string as written in the configuration file.
+
+    Returns
+    -------
+    Rule
+        The parsed `CMRule` or `HBRule`.
+
+    Raises
+    ------
+    ValueError
+        If `spec` is empty, uses an unknown command, or has an invalid/malformed
+        argument for its command.
+    """
+    parts = spec.split()
+
+    if not parts:
+        raise ValueError("Empty rule is not accepted.")
+
+    try:
+        rule_type = RuleType(parts[0])
+    except ValueError:
+        raise ValueError("Command must be either 'cm' or 'hb'.") from None
+
+    args = parts[1:]
+
+    if rule_type == RuleType.CM:
+        if len(args) != 1:
+            raise ValueError("Format for 'cm' rule must be: cm <number>")
+        return CMRule(dist=_to_float(args[0], "cm"))
+
+    if len(args) % 2:
+        raise ValueError("'hb' flags must be given as '<flag> <number>' pairs.")
+
+    flags = dict(zip(args[0::2], args[1::2], strict=True))
+    if len(flags) != len(args) // 2:
+        raise ValueError("Each 'hb' flag can only be used once.")
+
+    unknown = flags.keys() - _HB_FLAGS.keys()
+    if unknown:
+        raise ValueError(
+            f"'hb' rule only supports flags 'd' and 'a', got {sorted(unknown)}."
+        )
+
+    return HBRule(
+        **{_HB_FLAGS[flag]: _to_float(value, flag) for flag, value in flags.items()}
+    )
+
+
+# One `lammps_resnames` entry: a single LAMMPS molecule id (``501``), or an
+# inclusive id range written ``"first-last"`` (``"1-500"``).
+_LammpsResidSpec = int | str
+
+
+def _parse_lammps_resid_range(spec: _LammpsResidSpec, name: str) -> tuple[int, int]:
+    """
+    Parse one `lammps_resnames` entry into an inclusive (start, end) id range.
+
+    Kept as a `(start, end)` pair rather than the individual ids it covers, since a
+    range like ``"1-500000"`` is meant to describe a whole block of solvent
+    molecules cheaply, not to be expanded into half a million entries.
+
+    Parameters
+    ----------
+    spec : int | str
+        A single molecule id, or an inclusive range written ``"first-last"``.
+    name : str
+        The resname this entry is being assigned to, used in error messages.
+
+    Returns
+    -------
+    tuple[int, int]
+        The inclusive `(start, end)` range covered by `spec` (`start == end` for a
+        single id).
+
+    Raises
+    ------
+    ValueError
+        If `spec` is not a plain integer or a well-formed ``"first-last"`` range.
+    """
+    if isinstance(spec, int):
+        return spec, spec
+
+    text = spec.strip()
+
+    if "-" in text:
+        start_s, _, end_s = text.partition("-")
+        try:
+            start, end = int(start_s), int(end_s)
+        except ValueError:
+            raise ValueError(
+                f"Invalid LAMMPS molecule id range {spec!r} for {name!r}: expected "
+                "'first-last', e.g. '1-500'."
+            ) from None
+
+        if start > end:
+            raise ValueError(
+                f"Invalid LAMMPS molecule id range {spec!r} for {name!r}: the first "
+                "id must not be greater than the last."
+            )
+
+        return start, end
+
+    try:
+        value = int(text)
+    except ValueError:
+        raise ValueError(
+            f"Invalid LAMMPS molecule id {spec!r} for {name!r}: expected a whole "
+            "number or a range like '1-500'."
+        ) from None
+
+    return value, value
+
+
+class MolClsConfig(BaseSettings):
     """Settings class for input parameters."""
 
     model_config = SettingsConfigDict(
         env_prefix="MOLCLS_", use_enum_values=True, extra="ignore"
     )
 
-    _rules: SymmetricDict[str, Rule] = PrivateAttr(default=SymmetricDict())
+    rules: dict[str, dict[str, str]]
+    _rules: SymmetricDict[str, Rule] = PrivateAttr(default_factory=SymmetricDict)
 
     solute: list[str] | None = None
     solvent: list[str] | None = None
@@ -151,90 +205,116 @@ class MolClsConfig(BaseSettings, _RuleInput):
     nucleus: list[str] | None = None
 
     follow: list[str | PositiveInt] | None = None
+    _follow_solute: bool = PrivateAttr(default=False)
 
     ignore_composition: list[list[str]] | None = None
 
-    _ignore_composition: dict[tuple[str], Literal[True]] | None = PrivateAttr(
-        default=None
-    )
+    _ignore_composition: set[frozenset[str]] = PrivateAttr(default_factory=set)
+
+    # LAMMPS topologies have no residue names, only numeric molecule ids: this maps
+    # each name used elsewhere in this file (rules, solute, ...) to the LAMMPS
+    # molecule id(s) it stands for, e.g. {"SOL": "1-500", "NA": 501}.
+    lammps_resnames: dict[str, _LammpsResidSpec | list[_LammpsResidSpec]] | None = None
+
+    # Sorted, non-overlapping (start, end, name) ranges built from `lammps_resnames`,
+    # kept as ranges (not one dict entry per id) so a config spanning millions of
+    # molecule ids costs only as much memory as the handful of lines the user wrote.
+    _lammps_resid_ranges: list[tuple[int, int, str]] = PrivateAttr(default_factory=list)
+    _lammps_resid_starts: list[int] = PrivateAttr(default_factory=list)
+
+    def resname_for_resid(self, resid: int) -> str | None:
+        """
+        Look up the resname configured for a LAMMPS molecule id.
+
+        Parameters
+        ----------
+        resid : int
+            A LAMMPS molecule id (the ``mol`` column), which MDAnalysis exposes as
+            `resid` for a topology parsed from a LAMMPS DATA file.
+
+        Returns
+        -------
+        str | None
+            The name assigned to `resid` via `lammps_resnames`, or None if it isn't
+            covered.
+        """
+        idx = bisect.bisect_right(self._lammps_resid_starts, resid) - 1
+        if idx < 0:
+            return None
+
+        start, end, name = self._lammps_resid_ranges[idx]
+        return name if start <= resid <= end else None
+
+    def is_ignored_composition(self, resnames: Iterable[str]) -> bool:
+        """
+        Check whether a cluster composition is configured to be ignored.
+
+        Parameters
+        ----------
+        resnames : Iterable[str]
+            The residue names making up a candidate cluster.
+
+        Returns
+        -------
+        bool
+            True if this composition matches an `ignore_composition` entry.
+        """
+        return frozenset(resnames) in self._ignore_composition
 
     @model_validator(mode="after")
-    def _build_rules_internal(self) -> Self:
-        for mi, val in self.rules.items():
-            for mj, rule in val.items():
-                rl = rule.split()
-                op = rl[0].lower()
-
-                if mi == "solute" or mj == "solute":
+    def _build_rules(self) -> Self:
+        for mi, neighbors in self.rules.items():
+            for mj, spec in neighbors.items():
+                if "solute" in (mi, mj):
                     raise ValueError(
                         "'solute' is not supported in 'rules' configuration."
                     )
 
-                match op:
-                    case RuleType.CM:
-                        d = float(rl[1])
-                        logger.trace(
-                            f"Using {op} rule between {mi} and {mj} with dist={d}A"
-                        )
-                        self._rules[mi, mj] = CMRule(dist=d)
-                    case RuleType.HB:
-                        d = float(rl[rl.index("d") + 1]) if "d" in rl else 3.5
-                        a = float(rl[rl.index("a") + 1]) if "a" in rl else 150.0
-                        logger.trace(
-                            f"Using {op} rule between {mi} and {mj} with dist={d}A and ang={a}º"
-                        )
-                        self._rules[mi, mj] = HBRule(dist=d, ang=a)
+                try:
+                    rule = _parse_rule(spec)
+                except ValueError as e:
+                    e.add_note(f"From rule {mi}:{mj}")
+                    raise
+
+                logger.trace(f"Using rule between {mi} and {mj}: {rule}")
+                self._rules[mi, mj] = rule
 
         return self
 
     @model_validator(mode="after")
     def _parse_solute(self) -> Self:
-        if self.solute is not None:
-            if "solute" in self.solute:
-                raise ValueError("'solute' configuration cannot be solute.")
+        if self.solute is not None and "solute" in self.solute:
+            raise ValueError("'solute' configuration cannot be solute.")
 
         errors = []
 
-        attrs_solute_list = ("nucleus", "follow")
+        if self.follow is not None:
+            self._follow_solute = "solute" in self.follow
 
-        for attr_nm in attrs_solute_list:
-            attr = getattr(self, attr_nm)
-            if attr is None:
-                continue
+        def expand(values: list, attr_nm: str) -> list:
+            if "solute" not in values:
+                return values
 
-            if "solute" in attr:
-                if self.solute is None:
-                    errors.append(
-                        ValueError(
-                            f"'solute' keywork used in {attr_nm}, but 'solute' not defined."
-                        )
+            if self.solute is None:
+                errors.append(
+                    ValueError(
+                        f"'solute' keyword used in {attr_nm}, but 'solute' not defined."
                     )
+                )
+                return values
 
-                id_s = attr.index("solute")
-                attr.pop((id_s))
-                attr[id_s:id_s] = self.solute
-                setattr(self, attr_nm, list(set(attr)))
+            return list({*values, *self.solute} - {"solute"})
 
-        attrs_solute_list_list = ("ignore_composition",)
+        for attr_nm in ("nucleus", "follow"):
+            values = getattr(self, attr_nm)
+            if values is not None:
+                setattr(self, attr_nm, expand(values, attr_nm))
 
-        for attr_nm in attrs_solute_list_list:
-            attr = getattr(self, attr_nm)
-            if attr is None:
-                continue
-
-            for i, val in enumerate(attr):
-                if "solute" in val:
-                    if self.solute is None:
-                        errors.append(
-                            ValueError(
-                                f"'solute' keywork used in {attr_nm}, but 'solute' not defined."
-                            )
-                        )
-
-                    id_s = val.index("solute")
-                    attr[i].pop((id_s))
-                    attr[i][id_s:id_s] = self.solute
-                    attr[i] = list(set(attr[i]))
+        if self.ignore_composition is not None:
+            self.ignore_composition = [
+                expand(values, "ignore_composition")
+                for values in self.ignore_composition
+            ]
 
         if errors:
             raise ExceptionGroup("Errors in input file", errors)
@@ -242,11 +322,60 @@ class MolClsConfig(BaseSettings, _RuleInput):
         return self
 
     @model_validator(mode="after")
-    def _parse_ignore_composition(self) -> Self:
+    def _build_ignore_composition(self) -> Self:
         if self.ignore_composition is not None:
-            self._ignore_composition = {
-                tuple(sorted(i)): True for i in self.ignore_composition
-            }
+            self._ignore_composition = {frozenset(i) for i in self.ignore_composition}
+
+        return self
+
+    @model_validator(mode="after")
+    def _build_lammps_resnames(self) -> Self:
+        if self.lammps_resnames is None:
+            return self
+
+        ranges: list[tuple[int, int, str]] = []
+        for name, spec in self.lammps_resnames.items():
+            specs = spec if isinstance(spec, list) else [spec]
+            ranges.extend(
+                (*_parse_lammps_resid_range(one, name), name) for one in specs
+            )
+
+        ranges.sort(key=lambda r: r[0])
+
+        # Ranges are user-authored (one line per species, not per molecule), so
+        # this stays a handful of entries even for a huge system: an O(R^2) check
+        # is simpler than a sweep and is negligible at that size.
+        for i, (start_i, end_i, name_i) in enumerate(ranges):
+            for start_j, end_j, name_j in ranges[i + 1 :]:
+                if start_j > end_i:
+                    break  # sorted by start: nothing further can overlap `i`
+                if name_j != name_i:
+                    lo, hi = max(start_i, start_j), min(end_i, end_j)
+                    raise ValueError(
+                        f"LAMMPS molecule id(s) {lo}-{hi} are assigned to both "
+                        f"{name_i!r} and {name_j!r} in 'lammps_resnames'."
+                    )
+
+        merged: list[tuple[int, int, str]] = []
+        for start, end, name in ranges:
+            if merged and merged[-1][2] == name and start <= merged[-1][1] + 1:
+                prev_start, prev_end, _ = merged[-1]
+                new_end = max(prev_end, end)
+
+                if start <= prev_end:
+                    logger.warning(
+                        f"'lammps_resnames' for {name!r} has overlapping entries: "
+                        f"molecule id(s) {start}-{min(end, prev_end)} are listed "
+                        f"more than once. They will be treated as a single range, "
+                        f"{prev_start}-{new_end}, covering every id in either entry."
+                    )
+
+                merged[-1] = (prev_start, new_end, name)
+            else:
+                merged.append((start, end, name))
+
+        self._lammps_resid_ranges = merged
+        self._lammps_resid_starts = [r[0] for r in merged]
 
         return self
 

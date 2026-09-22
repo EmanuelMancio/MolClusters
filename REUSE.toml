@@ -10,7 +10,10 @@ path = [
     "tests/data/**/*.mdp",
     "tests/data/**/*.gro",
     "tests/data/**/*.top",
-    "tests/data/**/*.yml"
+    "tests/data/**/*.yml",
+    "tests/data/**/*.tpr",
+    "tests/data/**/*.pdb",
+    "tests/data/**/*.data"
 ]
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"
