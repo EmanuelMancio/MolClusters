@@ -15,11 +15,8 @@ path = [
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"
 
-# Two computer-generated files.
+# Computer-generated file.
 [[annotations]]
-path = [
-    "poetry.lock",
-    "requirements.txt"
-]
+path = ["uv.lock"]
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"
