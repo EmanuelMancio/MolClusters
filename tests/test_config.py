@@ -92,3 +92,26 @@ class TestLammpsResnames:
                 rules={"SOL": {"SOL": "cm 5.0"}},
                 lammps_resnames={"SOL": "abc"},
             )
+
+    def test_nested_same_name_ranges_cover_the_full_outer_range(self):
+        # A narrower range listed after a wider one for the same name must not
+        # shadow the wider one's coverage.
+        config = MolClsConfig(
+            rules={"SOL": {"SOL": "cm 5.0"}},
+            lammps_resnames={"SOL": ["1-100", "50-60"]},
+        )
+
+        assert config.resname_for_resid(70) == "SOL"
+
+    def test_large_range_is_stored_as_a_range_not_expanded(self):
+        # A config spanning millions of molecule ids must stay a handful of
+        # stored ranges, not one dict/list entry per id.
+        config = MolClsConfig(
+            rules={"SOL": {"SOL": "cm 5.0"}},
+            lammps_resnames={"SOL": "1-2000000"},
+        )
+
+        assert len(config._lammps_resid_ranges) == 1
+        assert config.resname_for_resid(1) == "SOL"
+        assert config.resname_for_resid(1_500_000) == "SOL"
+        assert config.resname_for_resid(2_000_001) is None
