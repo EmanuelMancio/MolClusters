@@ -5,23 +5,15 @@
 """Provides the `MolClsConfig` class that stores the configuration information for the analysis."""
 
 import json
-import re
 import tomllib
+from collections.abc import Iterable
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 import yaml
 from loguru import logger
-from pydantic import (
-    BaseModel,
-    Field,
-    PositiveFloat,
-    PositiveInt,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, PositiveInt, PrivateAttr, model_validator
 from pydantic.dataclasses import dataclass
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,80 +28,10 @@ class RuleType(StrEnum):
     HB = auto()
 
 
-NUMBER_RE = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
-
-
-class _RuleInput(BaseModel):
-    rules: dict[
-        str,
-        dict[str, str],
-    ]
-
-    @field_validator("rules")
-    @classmethod
-    def validate_rules(
-        cls,
-        value: dict[
-            str,
-            dict[str, str],
-        ],
-    ) -> dict[
-        str,
-        dict[str, str],
-    ]:
-        for k1 in value:
-            for k2, rl in value[k1].items():
-                try:
-                    cls._validate_rule(rl)
-                except ValueError as e:
-                    e.add_note(f"From rule {k1}:{k2}")
-                    raise
-        return value
-
-    @staticmethod
-    def _validate_rule(value: str) -> None:
-        parts = value.split()
-
-        if not parts:
-            raise ValueError("Empty rule is not accepted")
-
-        cmd = parts[0]
-
-        if cmd == "cm":
-            if len(parts) != 2:
-                raise ValueError("Formar for 'cm' rule must be: cm <number>")
-            if not NUMBER_RE.fullmatch(parts[1]):
-                raise ValueError(
-                    "cm requires a valid positive number (float or scientific notation allowed)."
-                )
-
-        elif cmd == "hb":
-            used_flags = set()
-            i = 1
-
-            while i < len(parts):
-                flag = parts[i]
-
-                if flag not in {"d", "a"}:
-                    raise ValueError("'hb' rule only supporrs flags 'd' and 'a'.")
-
-                if flag in used_flags:
-                    raise ValueError(f"Flag '{flag}' cannot be used twice.")
-
-                if i + 1 >= len(parts):
-                    raise ValueError(f"Flag '{flag}' must be followed by a number.")
-
-                number = parts[i + 1]
-
-                if not NUMBER_RE.fullmatch(number):
-                    raise ValueError(
-                        f"Invalid number for flag '{flag}'. Must be positive (float or scientific notation allowed)."
-                    )
-
-                used_flags.add(flag)
-                i += 2
-        else:
-            raise ValueError("Command must be either 'cm' or 'hb'.")
+# A distance in Angstrom: positive and finite (rules are written as plain-text
+# numbers, so `inf`/`nan` must be rejected explicitly rather than relying on a
+# hand-rolled number regex).
+_Distance = Annotated[float, Field(gt=0.0, allow_inf_nan=False)]
 
 
 @dataclass
@@ -123,7 +45,7 @@ class Rule:
 class CMRule(Rule):
     """Rule class for `cm` rule."""
 
-    dist: PositiveFloat
+    dist: _Distance
     type: RuleType = Field(RuleType.CM, frozen=True)
 
 
@@ -131,19 +53,85 @@ class CMRule(Rule):
 class HBRule(Rule):
     """Rule class for `hb` rule."""
 
-    dist: PositiveFloat
-    ang: Annotated[float, Field(ge=0.0, le=180.0)]
+    dist: _Distance = 3.5
+    ang: Annotated[float, Field(ge=0.0, le=180.0)] = 150.0
     type: RuleType = Field(RuleType.HB, frozen=True)
 
 
-class MolClsConfig(BaseSettings, _RuleInput):
+_HB_FLAGS = {"d": "dist", "a": "ang"}
+
+
+def _to_float(raw: str, label: str) -> float:
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f"Invalid number for '{label}': {raw!r}.") from None
+
+
+def _parse_rule(spec: str) -> Rule:
+    """
+    Parse a rule string such as ``"cm 5.0"`` or ``"hb d 3.5 a 150"`` into a `Rule`.
+
+    Parameters
+    ----------
+    spec : str
+        The raw rule string as written in the configuration file.
+
+    Returns
+    -------
+    Rule
+        The parsed `CMRule` or `HBRule`.
+
+    Raises
+    ------
+    ValueError
+        If `spec` is empty, uses an unknown command, or has an invalid/malformed
+        argument for its command.
+    """
+    parts = spec.split()
+
+    if not parts:
+        raise ValueError("Empty rule is not accepted.")
+
+    try:
+        rule_type = RuleType(parts[0])
+    except ValueError:
+        raise ValueError("Command must be either 'cm' or 'hb'.") from None
+
+    args = parts[1:]
+
+    if rule_type == RuleType.CM:
+        if len(args) != 1:
+            raise ValueError("Format for 'cm' rule must be: cm <number>")
+        return CMRule(dist=_to_float(args[0], "cm"))
+
+    if len(args) % 2:
+        raise ValueError("'hb' flags must be given as '<flag> <number>' pairs.")
+
+    flags = dict(zip(args[0::2], args[1::2], strict=True))
+    if len(flags) != len(args) // 2:
+        raise ValueError("Each 'hb' flag can only be used once.")
+
+    unknown = flags.keys() - _HB_FLAGS.keys()
+    if unknown:
+        raise ValueError(
+            f"'hb' rule only supports flags 'd' and 'a', got {sorted(unknown)}."
+        )
+
+    return HBRule(
+        **{_HB_FLAGS[flag]: _to_float(value, flag) for flag, value in flags.items()}
+    )
+
+
+class MolClsConfig(BaseSettings):
     """Settings class for input parameters."""
 
     model_config = SettingsConfigDict(
         env_prefix="MOLCLS_", use_enum_values=True, extra="ignore"
     )
 
-    _rules: SymmetricDict[str, Rule] = PrivateAttr(default=SymmetricDict())
+    rules: dict[str, dict[str, str]]
+    _rules: SymmetricDict[str, Rule] = PrivateAttr(default_factory=SymmetricDict)
 
     solute: list[str] | None = None
     solvent: list[str] | None = None
@@ -154,87 +142,75 @@ class MolClsConfig(BaseSettings, _RuleInput):
 
     ignore_composition: list[list[str]] | None = None
 
-    _ignore_composition: dict[tuple[str], Literal[True]] | None = PrivateAttr(
-        default=None
-    )
+    _ignore_composition: set[frozenset[str]] = PrivateAttr(default_factory=set)
+
+    def is_ignored_composition(self, resnames: Iterable[str]) -> bool:
+        """
+        Check whether a cluster composition is configured to be ignored.
+
+        Parameters
+        ----------
+        resnames : Iterable[str]
+            The residue names making up a candidate cluster.
+
+        Returns
+        -------
+        bool
+            True if this composition matches an `ignore_composition` entry.
+        """
+        return frozenset(resnames) in self._ignore_composition
 
     @model_validator(mode="after")
-    def _build_rules_internal(self) -> Self:
-        for mi, val in self.rules.items():
-            for mj, rule in val.items():
-                rl = rule.split()
-                op = rl[0].lower()
-
-                if mi == "solute" or mj == "solute":
+    def _build_rules(self) -> Self:
+        for mi, neighbors in self.rules.items():
+            for mj, spec in neighbors.items():
+                if "solute" in (mi, mj):
                     raise ValueError(
                         "'solute' is not supported in 'rules' configuration."
                     )
 
-                match op:
-                    case RuleType.CM:
-                        d = float(rl[1])
-                        logger.trace(
-                            f"Using {op} rule between {mi} and {mj} with dist={d}A"
-                        )
-                        self._rules[mi, mj] = CMRule(dist=d)
-                    case RuleType.HB:
-                        d = float(rl[rl.index("d") + 1]) if "d" in rl else 3.5
-                        a = float(rl[rl.index("a") + 1]) if "a" in rl else 150.0
-                        logger.trace(
-                            f"Using {op} rule between {mi} and {mj} with dist={d}A and ang={a}º"
-                        )
-                        self._rules[mi, mj] = HBRule(dist=d, ang=a)
+                try:
+                    rule = _parse_rule(spec)
+                except ValueError as e:
+                    e.add_note(f"From rule {mi}:{mj}")
+                    raise
+
+                logger.trace(f"Using rule between {mi} and {mj}: {rule}")
+                self._rules[mi, mj] = rule
 
         return self
 
     @model_validator(mode="after")
     def _parse_solute(self) -> Self:
-        if self.solute is not None:
-            if "solute" in self.solute:
-                raise ValueError("'solute' configuration cannot be solute.")
+        if self.solute is not None and "solute" in self.solute:
+            raise ValueError("'solute' configuration cannot be solute.")
 
         errors = []
 
-        attrs_solute_list = ("nucleus", "follow")
+        def expand(values: list, attr_nm: str) -> list:
+            if "solute" not in values:
+                return values
 
-        for attr_nm in attrs_solute_list:
-            attr = getattr(self, attr_nm)
-            if attr is None:
-                continue
-
-            if "solute" in attr:
-                if self.solute is None:
-                    errors.append(
-                        ValueError(
-                            f"'solute' keywork used in {attr_nm}, but 'solute' not defined."
-                        )
+            if self.solute is None:
+                errors.append(
+                    ValueError(
+                        f"'solute' keyword used in {attr_nm}, but 'solute' not defined."
                     )
+                )
+                return values
 
-                id_s = attr.index("solute")
-                attr.pop((id_s))
-                attr[id_s:id_s] = self.solute
-                setattr(self, attr_nm, list(set(attr)))
+            return list({*values, *self.solute} - {"solute"})
 
-        attrs_solute_list_list = ("ignore_composition",)
+        for attr_nm in ("nucleus", "follow"):
+            values = getattr(self, attr_nm)
+            if values is not None:
+                setattr(self, attr_nm, expand(values, attr_nm))
 
-        for attr_nm in attrs_solute_list_list:
-            attr = getattr(self, attr_nm)
-            if attr is None:
-                continue
-
-            for i, val in enumerate(attr):
-                if "solute" in val:
-                    if self.solute is None:
-                        errors.append(
-                            ValueError(
-                                f"'solute' keywork used in {attr_nm}, but 'solute' not defined."
-                            )
-                        )
-
-                    id_s = val.index("solute")
-                    attr[i].pop((id_s))
-                    attr[i][id_s:id_s] = self.solute
-                    attr[i] = list(set(attr[i]))
+        if self.ignore_composition is not None:
+            self.ignore_composition = [
+                expand(values, "ignore_composition")
+                for values in self.ignore_composition
+            ]
 
         if errors:
             raise ExceptionGroup("Errors in input file", errors)
@@ -242,11 +218,9 @@ class MolClsConfig(BaseSettings, _RuleInput):
         return self
 
     @model_validator(mode="after")
-    def _parse_ignore_composition(self) -> Self:
+    def _build_ignore_composition(self) -> Self:
         if self.ignore_composition is not None:
-            self._ignore_composition = {
-                tuple(sorted(i)): True for i in self.ignore_composition
-            }
+            self._ignore_composition = {frozenset(i) for i in self.ignore_composition}
 
         return self
 
