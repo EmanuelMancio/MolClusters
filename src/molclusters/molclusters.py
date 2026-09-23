@@ -338,9 +338,7 @@ class MolClusters:
             return True
 
         for subconn, count in conn_info[conn_skip + 1 :]:
-            if len(subconn) == 2:
-                return False
-            if count[cls_id] > n:
+            if count[cls_id] > n or (len(subconn) == 2 and count[cls_id] == n):
                 return False
 
         return True
