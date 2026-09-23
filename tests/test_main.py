@@ -11,7 +11,6 @@ from typing import Any
 import pandas as pd
 import pytest
 from MDAnalysis import Universe
-from MDAnalysis.exceptions import NoDataError
 
 import molclusters.main as cli
 from molclusters.config import MolClsConfig
@@ -188,17 +187,19 @@ class TestMain:
         with pytest.raises(KeyError, match="does not have an element"):
             cli_env("traj.xtc", "top.tpr", str(config_file))
 
-    @pytest.mark.xfail(
-        raises=NoDataError,
-        strict=True,
-        reason="bug: main() reads Atom.element, which TPR topologies don't provide",
-    )
-    def test_runs_on_a_tpr_topology(self, cli_env: RunCli, config_file: Path):
+    def test_runs_on_a_tpr_topology(self, cli_env: RunCli, tmp_path: Path):
+        # TPR files have no elements, and atom names such as 'CMB' or 'HM3' can't
+        # be turned into one by just dropping their digits
+        config = tmp_path / "input.yaml"
+        config.write_text("rules:\n  MOL:\n    MOL: cm 5.0\n    MAL: cm 5.0\n")
+
         cli_env(
             str(DATA_DIR / "met-mal" / "start.pdb"),
             str(DATA_DIR / "met-mal" / "met-mal.tpr"),
-            str(config_file),
+            str(config),
         )
+
+        assert (tmp_path / "molclusters.json").exists()
 
 
 def test_version(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):

@@ -158,6 +158,11 @@ def main() -> None:
         cls_args.solvent = sorted(set(uni.residues.resnames) - set(cls_args.solute))
         logger.debug(f"Setting solvent to {cls_args.solvent}")
 
+    if not hasattr(uni.atoms, "elements"):
+        # e.g. TPR topologies carry types and masses but no elements
+        logger.debug("Topology has no elements, guessing them from atom names.")
+        uni.guess_TopologyAttrs(to_guess=["elements"])
+
     try:
         radiis = []
         for at in uni.atoms:
