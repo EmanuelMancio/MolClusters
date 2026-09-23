@@ -159,6 +159,8 @@ class TestMain:
         reason="bug: main() defaults solvent to a set, which run() can't write to "
         "molclusters.json -- after the whole trajectory has been processed",
     )
+    # pydantic flags the same set when dumping the config; goes away with the fix
+    @pytest.mark.filterwarnings("ignore:Pydantic serializer warnings:UserWarning")
     def test_solvent_defaults_to_every_non_solute_resname(
         self, cli_env: RunCli, fake_universe: FakeUniverse, tmp_path: Path
     ):
