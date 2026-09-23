@@ -24,7 +24,10 @@ Dependencies are managed with `uv` (see `uv.lock`, `uv_build` backend).
 - Run a single test: `uv run pytest tests/test_cluster.py::TestCluster::test_cluster_creation`
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
-- Run all pre-commit hooks (ruff check --fix, ruff format, conventional-commit message lint, REUSE license lint): `uv run pre-commit run --all-files`
+- Run all pre-commit hooks (ruff check --fix, ruff format, REUSE license lint, pytest, and
+  `cz check` commit-message lint): `uv run pre-commit run --all-files`. All hooks are `local`
+  and run the uv-installed tools, so their versions come from `uv.lock` (bumped weekly by
+  Dependabot, `.github/dependabot.yml`); don't use `pre-commit autoupdate`.
 - Version bump / changelog (commitizen, semver, tag format `v$version`): `uv run cz bump`
 
 Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--cov=src
@@ -76,7 +79,9 @@ in-memory cluster state, and only writes results to disk once the full run finis
 - Ruff (`.ruff.toml`) enforces numpy-style docstrings, double quotes, 88-char lines, and the
   bandit (`S`), annotations (`ANN`), pathlib (`PTH`), and perf (`PERF`) rule sets; files under
   `tests/` are exempt from `S101`, `ANN201`, and docstring rules.
-- Commit messages must follow Conventional Commits (enforced by pre-commit + commitizen); commitizen
-  uses them to drive semver bumps and `CHANGELOG.md` generation.
+- Commit messages must follow Conventional Commits using the Angular convention (types `feat`,
+  `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, with an
+  optional scope, e.g. `fix(release): ...`), enforced by pre-commit + commitizen; commitizen uses
+  them to drive semver bumps and `CHANGELOG.md` generation.
 - Every file needs a REUSE/SPDX license header (see `REUSE.toml`, `LICENSES/`), enforced by
   pre-commit's `reuse-lint-file` hook.
