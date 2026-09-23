@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import json
+from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -158,6 +159,51 @@ class TestClusterIdentity:
 
         assert snapshot(molcls) == {older: {1, 2, 3, 4, 5, 6}}
 
+    def test_three_way_merge_of_equal_sizes_keeps_the_oldest_id(self, analyze: Analyze):
+        # the oldest cluster holds the highest resids, so it is not the first
+        # candidate seen when the merged component is scanned
+        molcls = analyze(
+            [
+                [[7, 8]],
+                [[7, 8], [1, 2]],
+                [[7, 8], [1, 2], [4, 5]],
+                [[1, 2, 4, 5, 7, 8]],
+            ],
+            8,
+        )
+        step(molcls, 1)
+        step(molcls, 2)
+        oldest = id_of(molcls, {7, 8})
+        middle, youngest = id_of(molcls, {1, 2}), id_of(molcls, {4, 5})
+        assert oldest < middle < youngest
+
+        step(molcls, 3)
+
+        assert snapshot(molcls) == {oldest: {1, 2, 4, 5, 7, 8}}
+
+    @pytest.mark.parametrize("order", [[6, 7, 5], [7, 5, 6], [5, 6, 7]])
+    def test_older_cluster_is_the_lowest_id_among_all_top_ties(
+        self, analyze: Analyze, order: list[int]
+    ):
+        molcls = analyze([[[1, 2]]], 2)
+        origin = Counter({cid: 3 for cid in order})
+
+        older = molcls._MolClusters__get_older_cluster({True: order, False: []}, origin)
+
+        assert older == 5
+
+    def test_older_cluster_ignores_lower_ids_with_smaller_counts(
+        self, analyze: Analyze
+    ):
+        molcls = analyze([[[1, 2]]], 2)
+        origin = Counter({6: 4, 7: 4, 5: 2})
+
+        older = molcls._MolClusters__get_older_cluster(
+            {True: [6, 7, 5], False: []}, origin
+        )
+
+        assert older == 6
+
     def test_dimer_bridging_two_clusters_is_always_new(self, analyze: Analyze):
         molcls = analyze([[[1, 2], [3, 4]], [[2, 3]]], 4)
         old_ids = set(molcls.clusters)
@@ -200,6 +246,29 @@ class TestClusterIdentity:
 
         assert id_of(molcls, {3, 4}) == cid
         assert id_of(molcls, {1, 2, 10, 11, 12, 13}) > cid
+
+    def test_unrelated_dimer_does_not_take_the_id(self, analyze: Analyze):
+        # {20, 21} pair up elsewhere in the box, sharing nothing with the cluster
+        molcls = analyze([[[1, 2, 3, 4, 5, 6]], [[1, 2, 3, 4, 5, 10], [20, 21]]], 21)
+        cid = id_of(molcls, {1, 2, 3, 4, 5, 6})
+
+        step(molcls, 1)
+
+        assert id_of(molcls, {1, 2, 3, 4, 5, 10}) == cid
+        assert id_of(molcls, {20, 21}) > cid
+
+    def test_larger_fragment_keeps_the_id_over_a_dimer_fragment(self, analyze: Analyze):
+        # the cluster splits into seven members (plus a newcomer) and a dimer; the
+        # dimer holds less of the cluster, so it must not inherit the id
+        molcls = analyze(
+            [[[1, 2, 3, 4, 5, 6, 7, 8, 9]], [[1, 2, 3, 4, 5, 6, 7, 20], [8, 9]]], 20
+        )
+        cid = id_of(molcls, set(range(1, 10)))
+
+        step(molcls, 1)
+
+        assert id_of(molcls, {1, 2, 3, 4, 5, 6, 7, 20}) == cid
+        assert id_of(molcls, {8, 9}) > cid
 
     def test_surviving_fragment_with_new_members_keeps_the_id(self, analyze: Analyze):
         # half the cluster dissolves while the other half picks up a newcomer
