@@ -155,7 +155,7 @@ def main() -> None:
     _apply_lammps_resnames(uni, cls_args)
 
     if cls_args.solvent is None and cls_args.solute is not None:
-        cls_args.solvent = set(uni.residues.resnames) - set(cls_args.solute)
+        cls_args.solvent = sorted(set(uni.residues.resnames) - set(cls_args.solute))
         logger.debug(f"Setting solvent to {cls_args.solvent}")
 
     try:
