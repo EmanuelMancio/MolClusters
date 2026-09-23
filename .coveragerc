@@ -20,6 +20,9 @@ show_missing = True
 exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:
+    # typing-only stubs, never executed
+    @overload
+    class .*\(Protocol\):
 
 [html]
 # HTML report output directory

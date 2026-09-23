@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 from loguru import logger
+from pydantic import ValidationError
 
-from molclusters.config import MolClsConfig, read_config
+from molclusters.config import CMRule, HBRule, MolClsConfig, read_config
 
 
 @pytest.fixture
@@ -224,4 +225,120 @@ class TestReadConfigYaml:
         )
 
         with pytest.raises(ValueError, match="first id must not be greater"):
+            read_config(path)
+
+
+class TestRules:
+    def test_cm_rule(self):
+        rule = MolClsConfig(rules={"A": {"B": "cm 4.5"}})._rules["B", "A"]
+
+        assert rule == CMRule(dist=4.5)
+
+    def test_hb_rule_defaults(self):
+        rule = MolClsConfig(rules={"A": {"A": "hb"}})._rules["A", "A"]
+
+        assert rule == HBRule(dist=3.5, ang=150.0)
+
+    def test_hb_rule_flags_in_any_order(self):
+        rule = MolClsConfig(rules={"A": {"A": "hb a 120 d 3.0"}})._rules["A", "A"]
+
+        assert rule == HBRule(dist=3.0, ang=120.0)
+
+    @pytest.mark.parametrize(
+        ("spec", "message"),
+        [
+            ("", "Empty rule"),
+            ("xx 1.0", "either 'cm' or 'hb'"),
+            ("cm", "cm <number>"),
+            ("cm 1 2", "cm <number>"),
+            ("cm far", "Invalid number for 'cm'"),
+            ("hb d", "pairs"),
+            ("hb d 3 d 4", "only be used once"),
+            ("hb x 3", "only supports flags"),
+            ("hb a wide", "Invalid number for 'a'"),
+        ],
+    )
+    def test_invalid_rules_raise(self, spec: str, message: str):
+        with pytest.raises(ValidationError, match=message) as err:
+            MolClsConfig(rules={"A": {"B": spec}})
+
+        # the note is attached to the original error, which pydantic wraps
+        original = err.value.errors()[0]["ctx"]["error"]
+        assert original.__notes__ == ["From rule A:B"]
+
+    @pytest.mark.parametrize("spec", ["hb a 200", "hb d -1", "cm 0"])
+    def test_out_of_range_values_raise(self, spec: str):
+        with pytest.raises(ValidationError):
+            MolClsConfig(rules={"A": {"B": spec}})
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="pydantic drops the 'From rule A:B' note from the message it prints",
+    )
+    def test_invalid_rule_message_names_the_rule(self):
+        with pytest.raises(ValidationError, match="A:B"):
+            MolClsConfig(rules={"A": {"B": "cm far"}})
+
+    def test_solute_keyword_not_allowed_in_rules(self):
+        with pytest.raises(ValueError, match="not supported in 'rules'"):
+            MolClsConfig(rules={"solute": {"A": "cm 1.0"}})
+
+
+class TestSoluteKeyword:
+    def test_solute_cannot_be_named_solute(self):
+        with pytest.raises(ValueError, match="cannot be solute"):
+            MolClsConfig(rules={"A": {"A": "cm 1.0"}}, solute=["solute"])
+
+    def test_nucleus_is_expanded(self):
+        config = MolClsConfig(
+            rules={"A": {"A": "cm 1.0"}}, solute=["A", "B"], nucleus=["solute", "C"]
+        )
+
+        assert sorted(config.nucleus) == ["A", "B", "C"]
+
+    def test_keyword_without_solute_defined_raises(self):
+        with pytest.raises(ExceptionGroup) as err:
+            MolClsConfig(
+                rules={"A": {"A": "cm 1.0"}},
+                nucleus=["solute"],
+                ignore_composition=[["solute"]],
+            )
+
+        assert len(err.value.exceptions) == 2
+
+    def test_ignore_composition(self):
+        config = MolClsConfig(
+            rules={"A": {"A": "cm 1.0"}},
+            solute=["A"],
+            ignore_composition=[["B"], ["solute", "B"]],
+        )
+
+        assert config.is_ignored_composition(["B", "B"])
+        assert config.is_ignored_composition(["B", "A", "B"])
+        assert not config.is_ignored_composition(["A"])
+
+
+class TestReadConfigFormats:
+    def test_json(self, tmp_path: Path):
+        path = tmp_path / "input.json"
+        path.write_text('{"rules": {"SOL": {"SOL": "cm 5.0"}}, "nucleus": ["SOL"]}')
+
+        config = read_config(path)
+
+        assert config.nucleus == ["SOL"]
+
+    def test_toml(self, tmp_path: Path):
+        path = tmp_path / "input.toml"
+        path.write_text('solute = ["SOL"]\n[rules.SOL]\nSOL = "hb d 3.0"\n')
+
+        config = read_config(str(path))
+
+        assert config.solute == ["SOL"]
+        assert config._rules["SOL", "SOL"] == HBRule(dist=3.0)
+
+    def test_unsupported_extension(self, tmp_path: Path):
+        path = tmp_path / "input.ini"
+        path.write_text("")
+
+        with pytest.raises(ValueError, match="Unsupported config type"):
             read_config(path)
