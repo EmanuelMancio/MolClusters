@@ -289,26 +289,36 @@ class MolClusters:
             for mol in subconn:
                 self.mol_clt[mol] = cls_id
 
-    # TODO: make a better name for this function and better documentation
+    # TODO: make a better name for this function
     def __gen_origin_cluster_counter(
         self, subconn: ConnectionTable._SubConnTable
     ) -> Counter:
-        """Generate a counter for the origin clusters of a given subconnection table.
+        """Count where the molecules of a new connected group came from.
+
+        Each molecule of `subconn` (a connected group of the current frame) is
+        looked up in `mol_clt`, which still holds the *previous* frame's assignment,
+        so the result says how many of the connected group's molecules each
+        previous cluster contributed. Molecules that were free in the previous frame
+        are counted under id ``0`` (safe as a sentinel because cluster ids start
+        at 1).
+
+        For example, a connected group made of 4 molecules of cluster 7, 2 of
+        cluster 9 and 1 free molecule gives ``Counter({7: 4, 9: 2, 0: 1})``.
 
         Parameters
         ----------
         subconn : ConnectionTable._SubConnTable
-            The subconnection table for which to generate the counter.
+            A connected group of the current frame.
 
         Returns
         -------
         Counter
-            A counter object containing the counts of each cluster ID in the subconnection table.
+            Previous-frame cluster id (``0`` for free molecules) -> number of the
+            connected group's molecules that came from it.
         """
         mols_origin_clusters = {mol: self.mol_clt.get(mol, 0) for mol in subconn}
         return Counter(mols_origin_clusters.values())
 
-    # TODO: better document dominance algorithm
     def __check_dominance(
         self,
         cls_id: int,
@@ -316,24 +326,43 @@ class MolClusters:
         conn_info: list[tuple[ConnectionTable._SubConnTable, Counter]],
         conn_skip: int,
     ) -> bool:
-        """Check if a cluster is dominant over another based on size.
+        """Check whether the current connected group holds most of a previous cluster.
+
+        A previous cluster is *dominant* in a connected group when no other
+        connected group of the current frame holds more of its molecules, i.e. the
+        connected group is the cluster's best continuation. Only the connected
+        groups after `conn_skip` need to be checked: an earlier connected group that
+        took `cls_id` already put it in `modified_clusters`, which the caller checks
+        before calling this.
+
+        A later connected group wins over the current one when:
+
+        - it holds more of the cluster's molecules (``count[cls_id] > n``); or
+        - it is a dimer holding exactly as many (``count[cls_id] == n``). A dimer
+          that reaches this point is a pure fragment of the cluster (both molecules
+          came from it), so on a tie the id goes to the fragment made only of the
+          cluster's own molecules rather than to one mixed with newcomers. This
+          only applies to dimers that contain the cluster: an unrelated dimer has
+          ``count[cls_id] == 0`` and never matches.
 
         Parameters
         ----------
         cls_id : int
-            The ID of the cluster to check for dominance.
+            Previous-frame id of the cluster being checked.
         n : int
-            The size of the cluster to check for dominance.
+            Number of the cluster's molecules in the current connected group.
         conn_info : list[tuple[ConnectionTable._SubConnTable, Counter]]
-            A list of tuples containing subconnection tables and their corresponding counters.
+            Every connected group of the current frame, largest first, each with its
+            origin counter (see `__gen_origin_cluster_counter`).
         conn_skip : int
-            The index to skip in the connection information.
+            Index of the current connected group in `conn_info`.
 
         Returns
         -------
         bool
-            True if the cluster is dominant, False otherwise.
+            True if no later connected group has a better claim on `cls_id`.
         """
+        # the whole cluster is in this connected group, so no other one holds any
         if self.clusters[cls_id].size == n:
             return True
 
@@ -362,7 +391,6 @@ class MolClusters:
 
         return id
 
-    # TODO: better document dominance algorithm and docstrings
     def __construct_dominance(
         self,
         origin_clusters: Counter,
@@ -370,29 +398,43 @@ class MolClusters:
         conn_info: list[tuple[ConnectionTable._SubConnTable, Counter]],
         i: int,  # TODO: better name for i
     ) -> dict[bool, list[int]]:
-        """Construct a dictionary of dominances based on cluster sizes.
+        """Sort the previous clusters found in a mixed connected group into candidates.
+
+        Used when a connected group (of three or more molecules) has molecules from
+        more than one origin. Each previous cluster in it is classified as:
+
+        - not a candidate if it contributed a single molecule: one molecule joining
+          other molecules doesn't carry the cluster's identity;
+        - not a candidate if it was already given to an earlier connected group
+          this frame (it is in `modified_clusters`): an id can only continue once;
+        - otherwise, a candidate if `__check_dominance` finds no later connected
+          group holding more of it.
+
+        Free molecules (origin ``0``) are skipped; they never carry an id.
 
         Parameters
         ----------
         origin_clusters : Counter
-            A counter object containing the counts of each cluster ID in the subconnection table.
+            Origin counter of the current connected group (see
+            `__gen_origin_cluster_counter`).
         modified_clusters : set[int]
-            A set of modified cluster IDs.
+            Ids already assigned to a connected group earlier in this frame.
         conn_info : list[tuple[ConnectionTable._SubConnTable, Counter]]
-            A list of tuples containing subconnection tables and their corresponding counters.
+            Every connected group of the current frame, largest first, each with its
+            origin counter.
         i : int
-            The index to skip in the connection information.
+            Index of the current connected group in `conn_info`.
 
         Returns
         -------
         dict[bool, list[int]]
-            A dictionary with two keys (True and False) containing lists of cluster IDs
-            that are dominant or not dominant, respectively.
+            ``True`` -> candidate ids, ``False`` -> the rest. Both lists are ordered
+            by contribution, largest first (from ``Counter.most_common``).
         """
         dominances = {True: [], False: []}
 
         for cls_id, n in origin_clusters.most_common():
-            if not cls_id:
+            if not cls_id:  # free molecules
                 continue
 
             if n == 1:
@@ -411,31 +453,82 @@ class MolClusters:
     def __get_older_cluster(
         self, dominances: dict[bool, list[int]], origin_clusters: Counter
     ) -> int:
-        """Get the ID of the oldest cluster from a list of dominances.
+        """Pick which candidate cluster keeps its id in a merge.
+
+        The candidate that contributed the most molecules wins, so a large cluster
+        absorbing a small one keeps its id even if it is younger. If several
+        candidates tie for the most molecules, the oldest wins. Cluster ids are
+        handed out in increasing order, so the oldest is the lowest id. The
+        candidates' order in `dominances[True]` doesn't matter.
 
         Parameters
         ----------
         dominances : dict[bool, list[int]]
-            A dictionary with two keys (True and False) containing lists of cluster IDs
-            that are dominant or not dominant, respectively.
+            Output of `__construct_dominance`; ``dominances[True]`` must be
+            non-empty and ordered by contribution, largest first.
         origin_clusters : Counter
-            A counter object containing the counts of each cluster ID in the subconnection table.
+            Origin counter of the current connected group.
 
         Returns
         -------
         int
-            The ID of the oldest cluster.
+            Id of the cluster that continues as the merged connected group.
         """
         top = origin_clusters[dominances[True][0]]
         return min(c for c in dominances[True] if origin_clusters[c] == top)
 
     def __update_clusters(self) -> None:
-        """Update clusters based on dominance and connectivity information."""
+        """Reconcile the current frame's connected groups with the previous clusters.
+
+        This is the dominance algorithm, which keeps cluster ids stable while
+        clusters grow, shrink, split and merge.
+
+        A *connected group* (``subconn`` in the code, a
+        `ConnectionTable._SubConnTable`) is a set of molecules linked to each
+        other, directly or through other molecules, by the config's rules in the
+        current frame, and to nothing outside the set. Free (unlinked) molecules
+        form no connected group. A connected group has no id yet; a *cluster* is
+        what it becomes once this method gives it one, new or inherited from the
+        previous frame.
+
+        The connection table is rebuilt for the current frame and its connected
+        groups (ignored compositions excluded) are processed **largest first**. For
+        each connected group, the previous clusters its molecules came from are
+        counted (see `__gen_origin_cluster_counter`), and then:
+
+        1. All molecules from a single origin:
+
+           - all were free -> a new cluster forms;
+           - the origin cluster was already given to an earlier (so larger)
+             connected group this frame -> this is a split-off fragment and
+             becomes a new cluster, so the larger fragment keeps the id;
+           - otherwise the cluster continues here, grown or shrunk.
+
+        2. A dimer with mixed origins (e.g. one molecule from each of two clusters,
+           or one from a cluster plus a free molecule) -> always a new cluster.
+
+        3. Any other mixed connected group (merges, or a fragment joined by
+           newcomers): the previous clusters that are *dominant* here, i.e. no later
+           connected group holds more of their molecules (see
+           `__construct_dominance` and `__check_dominance`), are the candidates. If
+           there are none, the connected group is a new cluster; otherwise the
+           candidate that contributed the most molecules keeps its id, with the
+           oldest winning ties (see `__get_older_cluster`).
+
+        Each id can continue in at most one connected group per frame. Previous
+        clusters that no connected group claimed (dissolved, or absorbed by a merge)
+        are dropped, along with the `mol_clt` entries of molecules that are now
+        free.
+        """
         self.conntab.update()
 
         modified_mols = set()
-        modified_clusters = set()
-        merged_clusters = set()  # needs this because of dominance devolution
+        modified_clusters = set()  # ids already given to a connected group this frame
+        # Ids absorbed by a merge. Currently collected but never read: a cluster that
+        # loses a merge is not in `modified_clusters`, so it can still continue in a
+        # later connected group where it is dominant, and otherwise it is dropped at
+        # the end like any unclaimed cluster.
+        merged_clusters = set()
 
         conn_info = [
             (sub, self.__gen_origin_cluster_counter(sub))
