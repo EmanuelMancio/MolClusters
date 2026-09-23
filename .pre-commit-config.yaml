@@ -2,36 +2,38 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
+# Every hook runs the tool installed by uv, so versions are pinned in uv.lock
+# (updated by Dependabot) and always match `uv run <tool>`; no autoupdate needed.
+
 default_install_hook_types:
   - pre-commit
   - commit-msg
 
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.15.12
-    hooks:
-      # Run the linter.
-      - id: ruff-check
-        args: [--fix]
-      # Run the formatter.
-      - id: ruff-format
-
-  - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.4.0
-    hooks:
-      - id: conventional-pre-commit
-        stages: [commit-msg]
-        args: []
-
-  - repo: https://github.com/fsfe/reuse-tool
-    rev: v6.2.0
-    hooks:
-      - id: reuse-lint-file
-        stages: [pre-commit]
-
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
+        stages: [pre-commit]
+
+      - id: reuse-lint-file
+        name: reuse lint-file
+        entry: uv run reuse lint-file
+        language: system
+        stages: [pre-commit]
+
       - id: pytest
         name: pytest
         entry: uv run pytest
@@ -39,3 +41,9 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+
+      - id: commitizen
+        name: conventional commit message
+        entry: uv run cz check --commit-msg-file
+        language: system
+        stages: [commit-msg]
