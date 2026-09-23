@@ -67,9 +67,9 @@ class MDAResidueGroupAnalyzer:
     ) -> None:
         """Initialize the MDAResidueGroupAnalyzer with a universe and residues.
 
-        Parameter
+        Parameters
         ----------
-        universe : Type[mda.Universe]
+        universe : mda.Universe
             The MDAnalysis Universe object associated with the ResidueGroup.
         residues : Union[Iterable[int], core.groups.ResidueGroup]
             The residues to be analyzed, either as an iterable with residue IDs (0-based) or a ResidueGroup.
@@ -104,7 +104,7 @@ class MDAResidueGroupAnalyzer:
     def __add__(self, other: core.groups.ResidueGroup | Self) -> Self:
         """Combine this ResidueGroupAnalyzer with another ResidueGroup or ResidueGroupAnalyzer.
 
-        Parameter
+        Parameters
         ----------
         other : Union[core.groups.ResidueGroup, Self]
             The other ResidueGroup or ResidueGroupAnalyzer to combine with.
@@ -123,7 +123,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def ag(self) -> core.groups.ResidueGroup:
-        """Get the ResidueGroup being analyzed.
+        """The ResidueGroup being analyzed.
 
         Returns
         -------
@@ -134,7 +134,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def size(self) -> int:
-        """Get the size of the ResidueGroup.
+        """The size of the ResidueGroup.
 
         Returns
         -------
@@ -145,7 +145,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def resnames(self) -> list[str]:
-        """Get the residue names of the ResidueGroup.
+        """The residue names of the ResidueGroup.
 
         Returns
         -------
@@ -156,7 +156,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def resids(self) -> list[int]:
-        """Get the residue IDs of the ResidueGroup.
+        """The residue IDs of the ResidueGroup.
 
         Returns
         -------
@@ -251,7 +251,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def radius(self) -> float:
-        """Get the radius of the ResidueGroup.
+        """The radius of the ResidueGroup.
 
         Returns
         -------
@@ -351,7 +351,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     ) -> None:
         """Initialize a Cluster instance.
 
-        Parameter
+        Parameters
         ----------
         universe : mda.Universe
             The MDAnalysis Universe object associated with the cluster.
@@ -375,9 +375,9 @@ class Cluster(MDAResidueGroupAnalyzer):
     def _from_graph(cls, uni: mda.Universe, graph: nx.Graph) -> "Cluster":
         """Create a Cluster instance from a graph.
 
-        Parameter
+        Parameters
         ----------
-        uni : Type[mda.Universe]
+        uni : mda.Universe
             The MDAnalysis Universe object.
         graph : nx.Graph
             The graph representation of the cluster.
@@ -394,7 +394,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def id(self) -> int:
-        """Get the unique identifier of the cluster.
+        """The unique identifier of the cluster.
 
         Returns
         -------
@@ -405,7 +405,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def cm(self) -> np.ndarray:
-        """Get the center of mass of the cluster.
+        """The center of mass of the cluster.
 
         Returns
         -------
@@ -418,7 +418,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def cm(self, value: np.ndarray) -> None:
         """Set the center of mass of the cluster.
 
-        Parameter
+        Parameters
         ----------
         value : np.ndarray
             The new center of mass.
@@ -436,7 +436,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def add_mol(self, ref_mol: int, mol: int, resname: str, dist: float) -> None:
         """Add a molecule to the cluster.
 
-        Parameter
+        Parameters
         ----------
         ref_mol : int
             The reference molecule already in the cluster.
@@ -466,7 +466,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def add_con(self, moli: int, molj: int, dist: float) -> None:
         """Add a connection between two molecules in the cluster.
 
-        Parameter
+        Parameters
         ----------
         moli : int
             The first molecule.
@@ -494,7 +494,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def remove_mol(self, mol: int) -> None:
         """Remove a molecule from the cluster.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to remove.
@@ -514,7 +514,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def remove_con(self, moli: int, molj: int) -> None:
         """Remove a connection between two molecules in the cluster.
 
-        Parameter
+        Parameters
         ----------
         moli : int
             The first molecule.
@@ -536,7 +536,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def neighbors(self, ref: int, *, level: int | None = None) -> set:
         """Get the neighbors of a molecule in the cluster.
 
-        Parameter
+        Parameters
         ----------
         ref : int
             The reference molecule.
@@ -558,7 +558,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def remove_cons(self, ref_mol: int, cons: Iterable[int]) -> None:
         """Remove multiple connections from a molecule.
 
-        Parameter
+        Parameters
         ----------
         ref_mol : int
             The reference molecule.
@@ -571,11 +571,6 @@ class Cluster(MDAResidueGroupAnalyzer):
     def get_age(self) -> float:
         """Get the age of the cluster.
 
-        Parameter
-        ----------
-        time : float
-            The current time.
-
         Returns
         -------
         float
@@ -586,7 +581,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def merge(self, other: "Cluster") -> None:
         """Merge another cluster into this cluster.
 
-        Parameter
+        Parameters
         ----------
         other : Cluster
             The cluster to merge.
@@ -617,7 +612,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def _graph(self) -> nx.Graph:
-        """Get the graph representation of the cluster.
+        """The graph representation of the cluster.
 
         Returns
         -------
@@ -628,7 +623,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def size(self) -> int:
-        """Get the size of the cluster.
+        """The size of the cluster.
 
         Returns
         -------
@@ -640,7 +635,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def update_from_conntable(self, conn: ConnectionTable._SubConnTable) -> None:
         """Update the cluster from a connectivity table.
 
-        Parameter
+        Parameters
         ----------
         conn : ConnTable._SubConnTable
             The connectivity table to update from.
@@ -652,7 +647,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def get_dist(self, moli: int, molj: int) -> float:
         """Get the distance between two molecules in the cluster.
 
-        Parameter
+        Parameters
         ----------
         moli : int
             The first molecule.
@@ -679,7 +674,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def set_dist(self, moli: int, molj: int, dist: float) -> None:
         """Set the distance between two molecules in the cluster.
 
-        Parameter
+        Parameters
         ----------
         moli : int
             The first molecule.
@@ -707,7 +702,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def __contains__(self, item: int) -> bool:
         """Check if a molecule is in the cluster.
 
-        Parameter
+        Parameters
         ----------
         item : int
             The residue ID of the molecule to check.
@@ -732,7 +727,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def __getitem__(self, key: int) -> dict:
         """Get the attributes of a molecule in the cluster.
 
-        Parameter
+        Parameters
         ----------
         key : int
             The molecule to retrieve.
@@ -747,7 +742,7 @@ class Cluster(MDAResidueGroupAnalyzer):
     def __eq__(self, other: object) -> bool:
         """Check if two clusters are equal.
 
-        Parameter
+        Parameters
         ----------
         other : object
             The other cluster to compare.
@@ -761,6 +756,14 @@ class Cluster(MDAResidueGroupAnalyzer):
             return False
 
         return nx.utils.graphs_equal(self.cluster, other.cluster)
+
+    # Cluster is mutable (add_mol/remove_mol/merge/... change self.cluster in
+    # place), and __eq__ above is value-based. Hashing by value would break if
+    # a Cluster's contents changed after being placed in a set/dict; hashing by
+    # identity would violate "equal objects must hash equal". So it stays
+    # unhashable — made explicit here rather than relying on Python's implicit
+    # __hash__ = None whenever __eq__ is defined without __hash__.
+    __hash__ = None
 
     def __len__(self) -> int:
         """Get the number of molecules in the cluster.

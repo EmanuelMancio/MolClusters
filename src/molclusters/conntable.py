@@ -18,16 +18,64 @@ Dependencies:
 """
 
 import warnings
-from typing import Generator, Iterator, Type, overload
+from typing import Generator, Iterator, overload
 
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
+from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
 from .config import Rule
 from .symdict import SymmetricDict
+
+# ConnectionTable drives HydrogenBondAnalysis one frame at a time via these
+# undocumented methods (see _check_hb_private_api below), plus a third: it
+# also assigns hb._ts directly (read internally by _single_frame() as "the
+# current frame") instead of letting run() iterate the trajectory itself,
+# which isn't compatible with this per-frame external loop. _ts isn't
+# checked below since it doesn't exist as an attribute until that
+# assignment happens — a hasattr check on it would always fail regardless
+# of whether the underlying mechanism still works.
+_HB_PRIVATE_API = ("_prepare", "_single_frame")
+
+
+def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
+    """Fail fast if MDAnalysis's private HydrogenBondAnalysis API has changed.
+
+    These methods have no semver guarantee, so an MDAnalysis upgrade could
+    silently rename or remove them. Checking eagerly, at construction time,
+    turns that into a clear error instead of a cryptic AttributeError raised
+    mid-analysis, potentially after a long-running trajectory has already
+    been partially processed. This cannot catch every incompatibility (e.g.
+    _single_frame changing what it reads instead of self._ts would silently
+    produce wrong results, not an error) — only that these hooks still exist.
+
+    Parameters
+    ----------
+    hb : HydrogenBondAnalysis
+        The analysis instance to check.
+
+    Raises
+    ------
+    RuntimeError
+        If any of the private methods this class relies on are missing.
+    """
+    missing = [name for name in _HB_PRIVATE_API if not hasattr(hb, name)]
+    if missing:
+        logger.critical(
+            f"This MDAnalysis version ({mda.__version__}) is incompatible with "
+            "MolClusters' 'hb' rule support and the analysis cannot continue. "
+            "This is a MolClusters bug, not something you did — please report "
+            "it at https://github.com/EmanuelMancio/MolClusters/issues, "
+            "including your MDAnalysis version."
+        )
+        raise RuntimeError(
+            f"HydrogenBondAnalysis no longer exposes {missing} — this "
+            "MDAnalysis version is incompatible with ConnectionTable's 'hb' "
+            "rule support (see conntable.py)."
+        )
 
 
 class ConnectionTable:
@@ -74,7 +122,7 @@ class ConnectionTable:
         ) -> None:
             """Initialize a subgraph of the connectivity table.
 
-            Parameter
+            Parameters
             ----------
             subgraph : nx.MultiGraph
                 The subgraph representing a subset of the connectivity table.
@@ -92,7 +140,7 @@ class ConnectionTable:
         def __getitem__(self, key: int) -> float | list[int]:
             """Get the attributes of a connection or molecule in the subgraph.
 
-            Parameter
+            Parameters
             ----------
             key : int
                 The molecule or connection to retrieve.
@@ -116,7 +164,7 @@ class ConnectionTable:
 
         @property
         def cm(self) -> np.ndarray:
-            """Get the center of mass of the subgraph.
+            """The center of mass of the subgraph.
 
             Returns
             -------
@@ -127,7 +175,7 @@ class ConnectionTable:
 
         @property
         def graph(self) -> nx.Graph:
-            """Get the graph representation of the subgraph.
+            """The graph representation of the subgraph.
 
             Returns
             -------
@@ -138,7 +186,7 @@ class ConnectionTable:
 
         @property
         def resnames(self) -> list[str]:
-            """Get the residue names in the subgraph.
+            """The residue names in the subgraph.
 
             Returns
             -------
@@ -165,7 +213,7 @@ class ConnectionTable:
     ) -> None:
         """Initialize the ConnectionTable.
 
-        Parameter
+        Parameters
         ----------
         universe : mda.Universe
             The MDAnalysis Universe object associated with the molecular system.
@@ -203,6 +251,7 @@ class ConnectionTable:
                     d_h_a_angle_cutoff=self.clst_args[resi, resj].ang,
                     update_selections=False,
                 )
+                _check_hb_private_api(hb)
 
                 hb._prepare()
 
@@ -222,8 +271,8 @@ class ConnectionTable:
         bonding information. The method supports both center-of-mass (CM) distance calculations
         and hydrogen bond (HB) analysis.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
             resi (str): The identifier for the first residue.
             resj (str): The identifier for the second residue.
             box (np.ndarray): The simulation box dimensions, used for periodic boundary conditions.
@@ -246,10 +295,10 @@ class ConnectionTable:
             - Warnings are suppressed when no hydrogen bonds are found during the computation.
         """
         if self.clst_args[resi, resj].type == "cm":
-            cm1: Type[np.ndarray] = self.cms[resi]
+            cm1: np.ndarray = self.cms[resi]
             cutoff = self.clst_args[resi, resj].dist
             if resi != resj:
-                cm2: Type[np.ndarray] = self.cms[resj]
+                cm2: np.ndarray = self.cms[resj]
                 connections, distances = mda.lib.distances.capped_distance(
                     cm1, cm2, cutoff, box=box
                 )
@@ -264,7 +313,9 @@ class ConnectionTable:
 
             attributes = [{"distance": dist} for dist in distances]
         else:
-            # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats distance and angle calculations
+            # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats
+            # distance and angle calculations. Until then, this depends on the private
+            # API guarded by _check_hb_private_api (see its docstring for why).
             hb = self.hbs[resi, resj]
             hb._ts = self.uni.trajectory.ts
 
@@ -320,8 +371,8 @@ class ConnectionTable:
     def __getitem__(self, key: tuple[int, int] | int) -> float | list[int]:
         """Get the attributes of a connection or molecule in the connectivity table.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         key : tuple[int, int], int
             The molecule or connection to retrieve.
 
@@ -357,7 +408,7 @@ class ConnectionTable:
     def __contains__(self, item: int) -> bool:
         """Check if a molecule is in the connectivity table.
 
-        Parameter
+        Parameters
         ----------
         item : int
             The molecule to check.
@@ -386,7 +437,7 @@ class ConnectionTable:
     def connections_from(self, mol: int) -> list[tuple[int, int]]:
         """Get the connections from a molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve connections from.
@@ -401,7 +452,7 @@ class ConnectionTable:
     def connection_tree_from(self, mol: int) -> list[tuple[int, int]]:
         """Get the connection tree from a molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve the connection tree from.
@@ -417,7 +468,7 @@ class ConnectionTable:
     def mols_connected_to(self, mol: int) -> list[int]:
         """Get the molecules connected to a given molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve connected molecules for.
@@ -432,7 +483,7 @@ class ConnectionTable:
     def mols_connected_tree_to(self, mol: int) -> list[int]:
         """Get the molecules in the connection tree of a given molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve the connection tree for.
