@@ -273,8 +273,9 @@ class MolClsConfig(BaseSettings):
                 try:
                     rule = _parse_rule(spec)
                 except ValueError as e:
-                    e.add_note(f"From rule {mi}:{mj}")
-                    raise
+                    # pydantic builds its message from str(e) alone and drops
+                    # notes, so the rule has to be named in the message itself
+                    raise ValueError(f"Invalid rule {mi}:{mj} ({spec!r}): {e}") from e
 
                 logger.trace(f"Using rule between {mi} and {mj}: {rule}")
                 self._rules[mi, mj] = rule

@@ -259,22 +259,14 @@ class TestRules:
         ],
     )
     def test_invalid_rules_raise(self, spec: str, message: str):
-        with pytest.raises(ValidationError, match=message) as err:
+        with pytest.raises(ValidationError, match=message):
             MolClsConfig(rules={"A": {"B": spec}})
-
-        # the note is attached to the original error, which pydantic wraps
-        original = err.value.errors()[0]["ctx"]["error"]
-        assert original.__notes__ == ["From rule A:B"]
 
     @pytest.mark.parametrize("spec", ["hb a 200", "hb d -1", "cm 0"])
     def test_out_of_range_values_raise(self, spec: str):
         with pytest.raises(ValidationError):
             MolClsConfig(rules={"A": {"B": spec}})
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="pydantic drops the 'From rule A:B' note from the message it prints",
-    )
     def test_invalid_rule_message_names_the_rule(self):
         with pytest.raises(ValidationError, match="A:B"):
             MolClsConfig(rules={"A": {"B": "cm far"}})
