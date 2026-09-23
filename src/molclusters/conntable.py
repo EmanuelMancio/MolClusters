@@ -29,6 +29,46 @@ from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysi
 from .config import Rule
 from .symdict import SymmetricDict
 
+# ConnectionTable drives HydrogenBondAnalysis one frame at a time via these
+# undocumented methods (see _check_hb_private_api below), plus a third: it
+# also assigns hb._ts directly (read internally by _single_frame() as "the
+# current frame") instead of letting run() iterate the trajectory itself,
+# which isn't compatible with this per-frame external loop. _ts isn't
+# checked below since it doesn't exist as an attribute until that
+# assignment happens — a hasattr check on it would always fail regardless
+# of whether the underlying mechanism still works.
+_HB_PRIVATE_API = ("_prepare", "_single_frame")
+
+
+def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
+    """Fail fast if MDAnalysis's private HydrogenBondAnalysis API has changed.
+
+    These methods have no semver guarantee, so an MDAnalysis upgrade could
+    silently rename or remove them. Checking eagerly, at construction time,
+    turns that into a clear error instead of a cryptic AttributeError raised
+    mid-analysis, potentially after a long-running trajectory has already
+    been partially processed. This cannot catch every incompatibility (e.g.
+    _single_frame changing what it reads instead of self._ts would silently
+    produce wrong results, not an error) — only that these hooks still exist.
+
+    Parameters
+    ----------
+    hb : HydrogenBondAnalysis
+        The analysis instance to check.
+
+    Raises
+    ------
+    RuntimeError
+        If any of the private methods this class relies on are missing.
+    """
+    missing = [name for name in _HB_PRIVATE_API if not hasattr(hb, name)]
+    if missing:
+        raise RuntimeError(
+            f"HydrogenBondAnalysis no longer exposes {missing} — this "
+            "MDAnalysis version is incompatible with ConnectionTable's 'hb' "
+            "rule support (see conntable.py)."
+        )
+
 
 class ConnectionTable:
     """Represents a connectivity table for molecular clusters.
@@ -203,6 +243,7 @@ class ConnectionTable:
                     d_h_a_angle_cutoff=self.clst_args[resi, resj].ang,
                     update_selections=False,
                 )
+                _check_hb_private_api(hb)
 
                 hb._prepare()
 
@@ -264,7 +305,9 @@ class ConnectionTable:
 
             attributes = [{"distance": dist} for dist in distances]
         else:
-            # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats distance and angle calculations
+            # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats
+            # distance and angle calculations. Until then, this depends on the private
+            # API guarded by _check_hb_private_api (see its docstring for why).
             hb = self.hbs[resi, resj]
             hb._ts = self.uni.trajectory.ts
 
