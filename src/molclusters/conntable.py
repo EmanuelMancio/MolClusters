@@ -164,7 +164,7 @@ class ConnectionTable:
 
         @property
         def cm(self) -> np.ndarray:
-            """Get the center of mass of the subgraph.
+            """The center of mass of the subgraph.
 
             Returns
             -------
@@ -175,7 +175,7 @@ class ConnectionTable:
 
         @property
         def graph(self) -> nx.Graph:
-            """Get the graph representation of the subgraph.
+            """The graph representation of the subgraph.
 
             Returns
             -------
@@ -186,7 +186,7 @@ class ConnectionTable:
 
         @property
         def resnames(self) -> list[str]:
-            """Get the residue names in the subgraph.
+            """The residue names in the subgraph.
 
             Returns
             -------

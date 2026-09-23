@@ -123,7 +123,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def ag(self) -> core.groups.ResidueGroup:
-        """Get the ResidueGroup being analyzed.
+        """The ResidueGroup being analyzed.
 
         Returns
         -------
@@ -134,7 +134,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def size(self) -> int:
-        """Get the size of the ResidueGroup.
+        """The size of the ResidueGroup.
 
         Returns
         -------
@@ -145,7 +145,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def resnames(self) -> list[str]:
-        """Get the residue names of the ResidueGroup.
+        """The residue names of the ResidueGroup.
 
         Returns
         -------
@@ -156,7 +156,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def resids(self) -> list[int]:
-        """Get the residue IDs of the ResidueGroup.
+        """The residue IDs of the ResidueGroup.
 
         Returns
         -------
@@ -251,7 +251,7 @@ class MDAResidueGroupAnalyzer:
 
     @property
     def radius(self) -> float:
-        """Get the radius of the ResidueGroup.
+        """The radius of the ResidueGroup.
 
         Returns
         -------
@@ -394,7 +394,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def id(self) -> int:
-        """Get the unique identifier of the cluster.
+        """The unique identifier of the cluster.
 
         Returns
         -------
@@ -405,7 +405,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def cm(self) -> np.ndarray:
-        """Get the center of mass of the cluster.
+        """The center of mass of the cluster.
 
         Returns
         -------
@@ -612,7 +612,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def _graph(self) -> nx.Graph:
-        """Get the graph representation of the cluster.
+        """The graph representation of the cluster.
 
         Returns
         -------
@@ -623,7 +623,7 @@ class Cluster(MDAResidueGroupAnalyzer):
 
     @property
     def size(self) -> int:
-        """Get the size of the cluster.
+        """The size of the cluster.
 
         Returns
         -------
