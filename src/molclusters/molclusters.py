@@ -426,17 +426,8 @@ class MolClusters:
         int
             The ID of the oldest cluster.
         """
-        id = dominances[True][0]
-
-        # this loop makes sure that in case the cluster that comes from merges of same
-        # size agglomerates take the oldest one
-        for j in dominances[True][1:]:
-            if origin_clusters[id] == origin_clusters[j] and j < id:
-                id = j
-            else:
-                break
-
-        return id
+        top = origin_clusters[dominances[True][0]]
+        return min(c for c in dominances[True] if origin_clusters[c] == top)
 
     def __update_clusters(self) -> None:
         """Update clusters based on dominance and connectivity information."""
