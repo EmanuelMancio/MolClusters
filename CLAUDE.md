@@ -24,7 +24,10 @@ Dependencies are managed with `uv` (see `uv.lock`, `uv_build` backend).
 - Run a single test: `uv run pytest tests/test_cluster.py::TestCluster::test_cluster_creation`
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
-- Run all pre-commit hooks (ruff check --fix, ruff format, conventional-commit message lint, REUSE license lint): `uv run pre-commit run --all-files`
+- Run all pre-commit hooks (ruff check --fix, ruff format, REUSE license lint, pytest, and
+  `cz check` commit-message lint): `uv run pre-commit run --all-files`. All hooks are `local`
+  and run the uv-installed tools, so their versions come from `uv.lock` (bumped weekly by
+  Dependabot, `.github/dependabot.yml`); don't use `pre-commit autoupdate`.
 - Version bump / changelog (commitizen, semver, tag format `v$version`): `uv run cz bump`
 
 Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--cov=src
