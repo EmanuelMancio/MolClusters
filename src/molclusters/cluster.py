@@ -757,6 +757,14 @@ class Cluster(MDAResidueGroupAnalyzer):
 
         return nx.utils.graphs_equal(self.cluster, other.cluster)
 
+    # Cluster is mutable (add_mol/remove_mol/merge/... change self.cluster in
+    # place), and __eq__ above is value-based. Hashing by value would break if
+    # a Cluster's contents changed after being placed in a set/dict; hashing by
+    # identity would violate "equal objects must hash equal". So it stays
+    # unhashable — made explicit here rather than relying on Python's implicit
+    # __hash__ = None whenever __eq__ is defined without __hash__.
+    __hash__ = None
+
     def __len__(self) -> int:
         """Get the number of molecules in the cluster.
 
