@@ -89,7 +89,7 @@ class MolClusters:
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
         """Initialize the MolClusters object.
 
-        Parameter
+        Parameters
         ----------
         universe : mda.Universe
             The MDAnalysis Universe object associated with the simulation.
@@ -559,7 +559,11 @@ class MolClusters:
                 self.data_holder.parse_frame()
                 pbar.update()
 
-        np.savetxt("evo.txt", self.clusters_size_evo)
+        np.savetxt(
+            "evo.txt",
+            self.clusters_size_evo,
+            header="Time NClusters MinSize AvgSize MaxSize",
+        )
         if self.config.solute is not None:
             self.solute_data = pd.DataFrame(
                 self.solute_data,
@@ -601,7 +605,7 @@ class MolClusters:
     def find(self, mol: int) -> int | bool:
         """Find the cluster ID for a given molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule ID to search for.
@@ -616,7 +620,7 @@ class MolClusters:
     def __get_clusters_info(self, k: int) -> None:
         """Update cluster size evolution information for a given frame.
 
-        Parameter
+        Parameters
         ----------
         k : int
             The frame index.
@@ -673,7 +677,7 @@ class MolClustersData:
     def __init__(self, molclusters: MolClusters) -> None:
         """Initialize the MolClustersData object.
 
-        Parameter
+        Parameters
         ----------
         molclusters : MolClusters
             The parent MolClusters object.
@@ -720,7 +724,7 @@ class MolClustersData:
     def encode_cluster(cls: Cluster) -> dict:
         """Encode a cluster into a dictionary.
 
-        Parameter
+        Parameters
         ----------
         cls : Cluster
             The cluster to encode.
@@ -739,7 +743,7 @@ class MolClustersData:
     def encode_nucleus(nuc: MDAResidueGroupAnalyzer) -> dict:
         """Encode a nucleus into a dictionary.
 
-        Parameter
+        Parameters
         ----------
         nuc : MDAResidueGroupAnalyzer
             The nucleus to encode.
@@ -757,7 +761,7 @@ class MolClustersData:
     def encode_properties(obj: Cluster | MDAResidueGroupAnalyzer, data: dict) -> None:
         """Encode the properties of a cluster or nucleus.
 
-        Parameter
+        Parameters
         ----------
         obj : Cluster | MDAResidueGroupAnalyzer
             The object to encode.
@@ -785,7 +789,7 @@ class MolClustersData:
     def encode_composition(obj: Cluster | MDAResidueGroupAnalyzer) -> list[dict]:
         """Encode the composition of a cluster or nucleus.
 
-        Parameter
+        Parameters
         ----------
         obj : Cluster | MDAResidueGroupAnalyzer
             The object to encode.
@@ -811,7 +815,7 @@ class MolClustersData:
     ) -> list[tuple[int, int, dict[str, Any]]]:
         """Encode the connections of a cluster.
 
-        Parameter
+        Parameters
         ----------
         obj : Cluster
             The object to encode.
