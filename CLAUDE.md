@@ -76,7 +76,9 @@ in-memory cluster state, and only writes results to disk once the full run finis
 - Ruff (`.ruff.toml`) enforces numpy-style docstrings, double quotes, 88-char lines, and the
   bandit (`S`), annotations (`ANN`), pathlib (`PTH`), and perf (`PERF`) rule sets; files under
   `tests/` are exempt from `S101`, `ANN201`, and docstring rules.
-- Commit messages must follow Conventional Commits (enforced by pre-commit + commitizen); commitizen
-  uses them to drive semver bumps and `CHANGELOG.md` generation.
+- Commit messages must follow Conventional Commits using the Angular convention (types `feat`,
+  `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, with an
+  optional scope, e.g. `fix(release): ...`), enforced by pre-commit + commitizen; commitizen uses
+  them to drive semver bumps and `CHANGELOG.md` generation.
 - Every file needs a REUSE/SPDX license header (see `REUSE.toml`, `LICENSES/`), enforced by
   pre-commit's `reuse-lint-file` hook.
