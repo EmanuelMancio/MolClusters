@@ -18,7 +18,7 @@ Dependencies:
 """
 
 import warnings
-from typing import Generator, Iterator, Type, overload
+from typing import Generator, Iterator, overload
 
 import MDAnalysis as mda
 import networkx as nx
@@ -74,7 +74,7 @@ class ConnectionTable:
         ) -> None:
             """Initialize a subgraph of the connectivity table.
 
-            Parameter
+            Parameters
             ----------
             subgraph : nx.MultiGraph
                 The subgraph representing a subset of the connectivity table.
@@ -92,7 +92,7 @@ class ConnectionTable:
         def __getitem__(self, key: int) -> float | list[int]:
             """Get the attributes of a connection or molecule in the subgraph.
 
-            Parameter
+            Parameters
             ----------
             key : int
                 The molecule or connection to retrieve.
@@ -165,7 +165,7 @@ class ConnectionTable:
     ) -> None:
         """Initialize the ConnectionTable.
 
-        Parameter
+        Parameters
         ----------
         universe : mda.Universe
             The MDAnalysis Universe object associated with the molecular system.
@@ -222,8 +222,8 @@ class ConnectionTable:
         bonding information. The method supports both center-of-mass (CM) distance calculations
         and hydrogen bond (HB) analysis.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
             resi (str): The identifier for the first residue.
             resj (str): The identifier for the second residue.
             box (np.ndarray): The simulation box dimensions, used for periodic boundary conditions.
@@ -246,10 +246,10 @@ class ConnectionTable:
             - Warnings are suppressed when no hydrogen bonds are found during the computation.
         """
         if self.clst_args[resi, resj].type == "cm":
-            cm1: Type[np.ndarray] = self.cms[resi]
+            cm1: np.ndarray = self.cms[resi]
             cutoff = self.clst_args[resi, resj].dist
             if resi != resj:
-                cm2: Type[np.ndarray] = self.cms[resj]
+                cm2: np.ndarray = self.cms[resj]
                 connections, distances = mda.lib.distances.capped_distance(
                     cm1, cm2, cutoff, box=box
                 )
@@ -320,8 +320,8 @@ class ConnectionTable:
     def __getitem__(self, key: tuple[int, int] | int) -> float | list[int]:
         """Get the attributes of a connection or molecule in the connectivity table.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         key : tuple[int, int], int
             The molecule or connection to retrieve.
 
@@ -357,7 +357,7 @@ class ConnectionTable:
     def __contains__(self, item: int) -> bool:
         """Check if a molecule is in the connectivity table.
 
-        Parameter
+        Parameters
         ----------
         item : int
             The molecule to check.
@@ -386,7 +386,7 @@ class ConnectionTable:
     def connections_from(self, mol: int) -> list[tuple[int, int]]:
         """Get the connections from a molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve connections from.
@@ -401,7 +401,7 @@ class ConnectionTable:
     def connection_tree_from(self, mol: int) -> list[tuple[int, int]]:
         """Get the connection tree from a molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve the connection tree from.
@@ -417,7 +417,7 @@ class ConnectionTable:
     def mols_connected_to(self, mol: int) -> list[int]:
         """Get the molecules connected to a given molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve connected molecules for.
@@ -432,7 +432,7 @@ class ConnectionTable:
     def mols_connected_tree_to(self, mol: int) -> list[int]:
         """Get the molecules in the connection tree of a given molecule.
 
-        Parameter
+        Parameters
         ----------
         mol : int
             The molecule to retrieve the connection tree for.
