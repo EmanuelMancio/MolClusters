@@ -12,7 +12,34 @@ from molclusters.conntable import ConnectionTable
 
 
 @pytest.fixture
-def populated_cluster() -> Cluster:
+def uni() -> Universe:
+    """Fresh Universe for the met-mal fixture data, isolated per test.
+
+    Returns
+    -------
+    Universe
+        A newly loaded Universe from the met-mal topology/structure files.
+    """
+    return Universe(
+        "tests/data/met-mal/met-mal.tpr",
+        "tests/data/met-mal/start.pdb",
+    )
+
+
+@pytest.fixture
+def empty_cluster(uni: Universe) -> Cluster:
+    """A fresh, empty Cluster, independent per test.
+
+    Returns
+    -------
+    Cluster
+        A newly constructed Cluster with no molecules.
+    """
+    return Cluster(uni)
+
+
+@pytest.fixture
+def populated_cluster(uni: Universe) -> Cluster:
     """Build a real two-molecule Cluster via the same path production code uses.
 
     Returns
@@ -20,10 +47,6 @@ def populated_cluster() -> Cluster:
     Cluster
         A cluster containing the two connected MOL residues from the fixture.
     """
-    uni = Universe(
-        "tests/data/met-mal/met-mal.tpr",
-        "tests/data/met-mal/start.pdb",
-    )
     config = MolClsConfig(rules={"MOL": {"MOL": "cm 15.0"}})
     sels = {res: uni.select_atoms(f"resname {res}") for res in config._rules.all_keys()}
     conntab = ConnectionTable(uni, config._rules, sels)
@@ -32,36 +55,32 @@ def populated_cluster() -> Cluster:
 
 
 class TestCluster:
-    cls = Cluster(
-        Universe(
-            "tests/data/met-mal/met-mal.tpr",
-            "tests/data/met-mal/start.pdb",
-        )
-    )
+    def test_cluster_creation(self, empty_cluster: Cluster):
+        assert empty_cluster is not None
 
-    def test_cluster_creation(self):
-        assert self.cls is not None
+    def test_cluster_length(self, empty_cluster: Cluster):
+        assert len(empty_cluster) == 0
 
-    def test_cluster_length(self):
-        assert len(self.cls) == 0
+    def test_id_increments_per_instance(self, uni: Universe):
+        first = Cluster(uni)
+        second = Cluster(uni)
 
-    def test_id(self):
-        assert self.cls.id == 1
+        assert second.id == first.id + 1
 
-    def test_add_con_exception(self):
+    def test_add_con_exception(self, empty_cluster: Cluster):
         with pytest.raises(ValueError):
-            self.cls.add_con(0, 2, 2.0)
+            empty_cluster.add_con(0, 2, 2.0)
 
-    def test_set_dist_exception_moli_not_in_cluster(self):
+    def test_set_dist_exception_moli_not_in_cluster(self, empty_cluster: Cluster):
         with pytest.raises(ValueError):
-            self.cls.set_dist(0, 1, 2.0)
+            empty_cluster.set_dist(0, 1, 2.0)
 
-    def test_add_unsupported_operand(self):
+    def test_add_unsupported_operand(self, empty_cluster: Cluster):
         with pytest.raises(TypeError):
-            self.cls + "not a residue group"
+            empty_cluster + "not a residue group"
 
-    def test_print_cluster_np(self):
-        print(np.array(self.cls.cluster))
+    def test_print_cluster_np(self, empty_cluster: Cluster):
+        print(np.array(empty_cluster.cluster))
 
 
 class TestPopulatedCluster:
