@@ -23,6 +23,7 @@ from typing import Generator, Iterator, overload
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
+from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
@@ -63,6 +64,13 @@ def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
     """
     missing = [name for name in _HB_PRIVATE_API if not hasattr(hb, name)]
     if missing:
+        logger.critical(
+            f"This MDAnalysis version ({mda.__version__}) is incompatible with "
+            "MolClusters' 'hb' rule support and the analysis cannot continue. "
+            "This is a MolClusters bug, not something you did — please report "
+            "it at https://github.com/EmanuelMancio/MolClusters/issues, "
+            "including your MDAnalysis version."
+        )
         raise RuntimeError(
             f"HydrogenBondAnalysis no longer exposes {missing} — this "
             "MDAnalysis version is incompatible with ConnectionTable's 'hb' "
