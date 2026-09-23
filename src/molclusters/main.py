@@ -6,41 +6,39 @@
 
 Functions:
 ----------
-- parse_input_file(in_file: Type[arg.FileType]) -> dict[str, dict[str, tuple[float, str]]]:
-    Parses the input YAML configuration file and processes the rules for molecular cluster analysis.
-
 - main():
-    The main function that sets up the command-line interface, parses arguments, initializes the MDAnalysis Universe,
-    and runs the molecular cluster analysis.
+    Sets up the command-line interface, parses arguments, initializes the MDAnalysis Universe,
+    fills in missing van der Waals radii, reads the analysis config, and runs the molecular
+    cluster analysis.
 
 Dependencies:
 -------------
 - argparse: For parsing command-line arguments.
-- copy: For deep copying configuration data.
-- pathlib: For handling file paths.
-- typing: For type annotations.
+- datetime: For timestamping the log file.
 - MDAnalysis: For molecular dynamics trajectory and structure analysis.
-- yaml: For parsing YAML configuration files.
+- loguru: For logging.
 - MolClusters: The core library for molecular cluster analysis.
 
 Usage:
 ------
-Run this script from the command line with the required arguments:
-    python main.py <trajectory_file> <topology_file> <input_file>
+Run via the installed console script with the required arguments:
+    molclusters <trajectory_file> <topology_file> <input_file>
 
 Arguments:
 ----------
 - traj: The trajectory file for the molecular dynamics simulation.
 - top: The topology file for the molecular dynamics simulation.
-- inp: The input YAML file containing analysis settings.
+- inp: The input YAML/JSON/TOML file containing analysis settings.
 
 Optional Arguments:
 -------------------
+- --traj-memory: Load the trajectory into memory.
+- --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
 - --version: Displays the version of the MolClusters library.
 
 Example:
 --------
-    python main.py trajectory.dcd topology.pdb input.yaml
+    molclusters trajectory.dcd topology.pdb input.yaml
 """
 
 import argparse as arg
@@ -66,7 +64,9 @@ def main() -> None:
     -----------------------
     - traj: The trajectory file for the molecular dynamics simulation.
     - top: The topology file for the molecular dynamics simulation.
-    - inp: The input YAML file containing analysis settings.
+    - inp: The input YAML/JSON/TOML file containing analysis settings.
+    - --traj-memory: Load the trajectory into memory.
+    - --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
     - --version: Displays the version of the MolClusters library.
 
     Raises
@@ -123,7 +123,7 @@ def main() -> None:
                 )  # Extract only the alphabetic part of the name
             radiis.append(vdwradii[at.element.upper()])
     except KeyError as err:
-        raise KeyError(f"Atom: {str(at)} does not have a element.") from err
+        raise KeyError(f"Atom: {str(at)} does not have an element.") from err
 
     uni.add_TopologyAttr("radii", values=radiis)
 
