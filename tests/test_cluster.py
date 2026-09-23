@@ -242,12 +242,6 @@ class TestClusterGraph:
         assert chain.separate() == []
         assert members(chain) == [1, 2, 3]
 
-    @pytest.mark.xfail(
-        raises=ValueError,
-        strict=True,
-        reason="bug: _from_graph() never rebuilds the ResidueGroup, so the center "
-        "of mass is computed over an empty group",
-    )
     def test_separate_keeps_largest_component(self, chain: Cluster):
         chain.remove_con(2, 3)
 

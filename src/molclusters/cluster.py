@@ -389,6 +389,7 @@ class Cluster(MDAResidueGroupAnalyzer):
         """
         tmp_cls = cls(uni, None)
         tmp_cls.cluster = graph
+        tmp_cls.__update_rg()
         tmp_cls.__recalculate_cm()
         return tmp_cls
 
