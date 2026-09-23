@@ -588,6 +588,7 @@ class Cluster(MDAResidueGroupAnalyzer):
             The cluster to merge.
         """
         self.cluster = nx.compose(self.cluster, other._graph)
+        self.__update_rg()
         self.__recalculate_cm()
 
     def separate(self) -> list["Cluster"]:

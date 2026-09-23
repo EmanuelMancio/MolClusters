@@ -267,9 +267,6 @@ class TestClusterGraph:
         assert sorted(first) == [1, 2, 3, 4]
         assert first.size == 4
 
-    @pytest.mark.xfail(
-        strict=True, reason="bug: merge() updates the graph but not the ResidueGroup"
-    )
     def test_merge_updates_residue_group(self, pair_of_clusters: list[Cluster]):
         first, second = pair_of_clusters
 
