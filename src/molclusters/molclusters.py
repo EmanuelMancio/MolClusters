@@ -80,10 +80,15 @@ class MolClusters:
         "clusters",
         "mol_clt",
         "clusters_size_evo",
+        "radius_evolution",
         "solutes",
         "solvents",
+        "solute_resnames",
+        "solvent_resnames",
         "solute_data",
-        "__dict__",
+        "nucleus_data",
+        "nucleus_holder",
+        "data_holder",
     ]
 
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
