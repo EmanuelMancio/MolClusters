@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 from MDAnalysis import Universe
 
+from molclusters.cluster import MDAResidueGroupAnalyzer
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
 
@@ -410,6 +411,31 @@ class TestRun:
         assert [p.name for p in full_run.glob("solute-*.gro")] == ["solute-1.gro"]
         frames = (full_run / "solute-1.gro").read_text().count("Cluster-")
         assert frames == 1
+
+    def test_nucleus_analysis_does_not_distort_the_cluster_geometry(
+        self,
+        analyze: Analyze,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        # the nucleus (MOL 3, 4) is not the cluster's first residue, so centering
+        # the nucleus in place used to shift it away from the rest of the cluster
+        frames = [[[1, 2, 3, 4]], [[1, 2, 3, 4]]]
+        resnames = ["SOL", "SOL", "MOL", "MOL"]
+        molcls = analyze(frames, 4, resnames, rules=ALL_PAIRS_RULES, nucleus=["MOL"])
+        pristine = MDAResidueGroupAnalyzer(
+            make_universe(frames, 4, resnames), [1, 2, 3, 4]
+        )
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        data = json.loads((tmp_path / "molclusters.json").read_text())
+        for frame in data["MolClusters"]:
+            (cluster,) = frame["Clusters"]
+            assert cluster["Radius"] == pytest.approx(pristine.radius_of_gyration)
+            assert cluster["Shape"] == pytest.approx(pristine.shape_parameter)
 
 
 class TestWriteCoordinates:

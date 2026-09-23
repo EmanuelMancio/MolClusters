@@ -582,8 +582,11 @@ class MolClusters:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 tmp_path = path.Path(tmp_dir) / "cluster.gro"
 
-                with mda.Writer(str(tmp_path), multiframe=False) as w:
-                    w.write(cls.ag.atoms.sort())
+                with (
+                    mda.Writer(str(tmp_path), multiframe=False) as w,
+                    cls.whole() as atoms,
+                ):
+                    w.write(atoms.sort())
 
                 with tmp_path.open() as tmp:
                     dt = tmp.readlines()

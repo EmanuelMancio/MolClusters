@@ -18,7 +18,6 @@ Classes:
 Constants:
 ----------
     - EA2D: Conversion factor for dipole moment from atomic units to Debye.
-    - NOT_CENTERED: A constant representing an uncentered state for molecular trajectories.
 
 Dependencies:
 -------------
@@ -27,7 +26,9 @@ Dependencies:
     - NumPy: For numerical computations.
 """
 
-from typing import Iterable, Iterator, Self
+from contextlib import contextmanager
+from functools import wraps
+from typing import Callable, Iterable, Iterator, Self
 
 import MDAnalysis as mda
 import networkx as nx
@@ -37,7 +38,23 @@ from MDAnalysis import core
 from .conntable import ConnectionTable
 
 EA2D = 1 / 0.3934303
-NOT_CENTERED = -np.inf
+
+
+def _on_whole[T](method: Callable[..., T]) -> Callable[..., T]:
+    """Run `method` with the analyzer's atoms temporarily made whole (see `whole`).
+
+    Returns
+    -------
+    Callable
+        The wrapped method.
+    """
+
+    @wraps(method)
+    def wrapper(self: "MDAResidueGroupAnalyzer", *args: object, **kwargs: object) -> T:
+        with self.whole():
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 
 class MDAResidueGroupAnalyzer:
@@ -52,15 +69,17 @@ class MDAResidueGroupAnalyzer:
         The MDAnalysis Universe object associated with the AtomGroup.
     _rg : MDAnalysis.core.groups.ResidueGroup
         The ResidueGroup being analyzed.
-    __centered_time : float
-        The time at which the AtomGroup was last centered.
+    __whole_key : tuple[int, bytes] | None
+        Frame and residue indices that `__whole_positions` was computed for.
+    __whole_positions : np.ndarray | None
+        Cached whole positions of the group's atoms (see `whole`).
 
     Methods
     -------
     Various properties and methods to compute molecular properties.
     """
 
-    __slots__ = ["uni", "_rg", "__centered_time"]
+    __slots__ = ["uni", "_rg", "__whole_key", "__whole_positions"]
 
     def __init__(
         self, universe: mda.Universe, residues: Iterable[int] | core.groups.ResidueGroup
@@ -81,25 +100,66 @@ class MDAResidueGroupAnalyzer:
         else:
             self._rg = core.groups.ResidueGroup(np.array(residues) - 1, self.uni)
 
-        self.__centered_time = NOT_CENTERED
+        self.__whole_key: tuple[int, bytes] | None = None
+        self.__whole_positions: np.ndarray | None = None
 
-    def __make_whole(self) -> None:
-        """Ensure the ResidueGroup is made whole by unwrapping and centering it.
+    def __compute_whole_positions(self) -> np.ndarray:
+        """Compute the group's atom positions with the group made whole.
 
-        This method adjusts the positions of the residues to ensure they are
-        properly centered and unwrapped within the simulation box.
+        The group is translated so that its first residue sits at the box center,
+        then each residue is wrapped back into the box by its center of geometry,
+        which gathers the group around the center (assuming it spans less than half
+        the box). The Universe's positions are left exactly as they were.
+
+        Returns
+        -------
+        np.ndarray
+            Whole positions, one row per atom of ``self._rg.atoms``.
         """
-        if self.__centered_time != self.uni.trajectory.time:
+        atoms = self._rg.atoms
+        original = atoms.positions  # a copy
+        try:
             boxcenter = np.sum(self.uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
-            # self._ag.atoms.unwrap(compound="residues",reference="cog",inplace=True)
-
             ref_mol_cm = self._rg[:1].center_of_mass(unwrap=True)
-            vector = boxcenter - ref_mol_cm
-            self._rg.atoms.positions += vector
-            self._rg.atoms.unwrap(compound="residues", reference="cog", inplace=True)
-            # center_in_box(self._ag,point=ref_mol_cm)(self.uni.trajectory.ts)
-            # center_in_box(self._ag)(self.uni.trajectory.ts)
-            self.__centered_time: float = float(self.uni.trajectory.time)
+            atoms.positions += boxcenter - ref_mol_cm
+            atoms.unwrap(compound="residues", reference="cog", inplace=True)
+            return atoms.positions
+        finally:
+            atoms.positions = original
+
+    @contextmanager
+    def whole(self) -> Iterator[core.groups.AtomGroup]:
+        """Temporarily place the group's atoms in whole, centered positions.
+
+        Inside the ``with`` block the group's atoms are whole across periodic
+        boundaries, so geometric properties (and writers) see the real shape. On
+        exit, even on error, the atoms go back to their original positions.
+
+        Positions are never changed for good because they belong to the shared
+        Universe: other analyzers over overlapping residues (e.g. a nucleus inside a
+        cluster) would otherwise move atoms under each other and corrupt each
+        other's geometry.
+
+        The whole positions are cached per frame and residue set, so the unwrap
+        runs once per frame no matter how many properties are read.
+
+        Yields
+        ------
+        core.groups.AtomGroup
+            The group's atoms, in whole positions.
+        """
+        key = (self.uni.trajectory.ts.frame, self._rg.ix.tobytes())
+        if self.__whole_key != key:
+            self.__whole_positions = self.__compute_whole_positions()
+            self.__whole_key = key
+
+        atoms = self._rg.atoms
+        original = atoms.positions  # a copy
+        atoms.positions = self.__whole_positions
+        try:
+            yield atoms
+        finally:
+            atoms.positions = original
 
     def __add__(self, other: core.groups.ResidueGroup | Self) -> Self:
         """Combine this ResidueGroupAnalyzer with another ResidueGroup or ResidueGroupAnalyzer.
@@ -177,6 +237,7 @@ class MDAResidueGroupAnalyzer:
         return self._rg.total_mass()
 
     @property
+    @_on_whole
     def sphericity(self) -> float:
         """Calculate the sphericity of the ResidueGroup.
 
@@ -186,10 +247,10 @@ class MDAResidueGroupAnalyzer:
             The sphericity of the ResidueGroup, a measure of how spherical the shape is.
             A value near zero represents a spherical shape.
         """
-        self.__make_whole()
         return 1 - self._rg.asphericity()
 
     @property
+    @_on_whole
     def dipole_moment(self) -> float:
         """Calculate the dipole moment of the ResidueGroup.
 
@@ -198,10 +259,10 @@ class MDAResidueGroupAnalyzer:
         float
             The dipole moment of the ResidueGroup in Debye (D).
         """
-        self.__make_whole()
         return self._rg.atoms.dipole_moment() * EA2D
 
     @property
+    @_on_whole
     def dipole(self) -> np.ndarray:
         """Calculate the dipole vector of the ResidueGroup.
 
@@ -210,10 +271,10 @@ class MDAResidueGroupAnalyzer:
         np.ndarray
             The dipole vector of the ResidueGroup in Debye (D).
         """
-        self.__make_whole()
         return self._rg.atoms.dipole_vector() * EA2D
 
     @property
+    @_on_whole
     def shape_parameter(self) -> float:
         """Calculate the shape parameter of the ResidueGroup.
 
@@ -222,10 +283,10 @@ class MDAResidueGroupAnalyzer:
         float
             The shape parameter of the ResidueGroup, a measure of its geometric anisotropy.
         """
-        self.__make_whole()
         return self._rg.shape_parameter()
 
     @property
+    @_on_whole
     def bsphere(self) -> tuple[float, np.ndarray]:
         """Calculate the bounding sphere of the ResidueGroup.
 
@@ -234,10 +295,10 @@ class MDAResidueGroupAnalyzer:
         tuple[float, np.ndarray,]
             The radius and center of the bounding sphere.
         """
-        self.__make_whole()  # TODO: transform make_whole in decorator
         return self._rg.bsphere()
 
     @property
+    @_on_whole
     def radius_of_gyration(self) -> float:
         """Calculate the radius of gyration of the ResidueGroup.
 
@@ -246,7 +307,6 @@ class MDAResidueGroupAnalyzer:
         float
             The radius of gyration of the ResidueGroup.
         """
-        self.__make_whole()
         return self._rg.radius_of_gyration()
 
     @property

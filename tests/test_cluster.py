@@ -163,6 +163,102 @@ class TestResidueGroupAnalyzer:
         np.testing.assert_allclose(np.abs(chain.dipole), [0, 0, expected], atol=1e-3)
 
 
+def read_geometry(analyzer: MDAResidueGroupAnalyzer) -> None:
+    """Read every property that needs whole positions."""
+    _ = (
+        analyzer.sphericity,
+        analyzer.dipole_moment,
+        analyzer.dipole,
+        analyzer.shape_parameter,
+        analyzer.bsphere,
+        analyzer.radius_of_gyration,
+    )
+
+
+class TestWholePositions:
+    """Geometric properties see whole groups without moving the shared Universe."""
+
+    def test_positions_getter_returns_a_copy(self, chain: Cluster):
+        # whole() saves `atoms.positions` as the originals to restore, which only
+        # works if MDAnalysis's getter copies (it indexes the timestep array with
+        # an index array). If an MDAnalysis upgrade returns a view, fail here
+        # instead of silently skipping the restore.
+        ts_positions = chain.uni.trajectory.ts.positions
+        positions = chain.ag.atoms.positions
+        before = ts_positions.copy()
+
+        positions += 100.0
+
+        assert not np.shares_memory(positions, ts_positions)
+        np.testing.assert_array_equal(ts_positions, before)
+
+    def test_properties_leave_the_universe_positions_untouched(self, chain: Cluster):
+        before = chain.uni.atoms.positions
+
+        read_geometry(chain)
+
+        np.testing.assert_array_equal(chain.uni.atoms.positions, before)
+
+    def test_overlapping_analyzer_does_not_change_the_cluster_geometry(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[[1, 2, 3, 4, 5, 6]]], 6)
+        cluster = MDAResidueGroupAnalyzer(uni, [1, 2, 3, 4, 5, 6])
+        rg = cluster.radius_of_gyration
+
+        # a nucleus-like subset whose first residue isn't the cluster's
+        read_geometry(MDAResidueGroupAnalyzer(uni, [4, 5, 6]))
+
+        assert cluster.radius_of_gyration == pytest.approx(rg)
+        fresh = MDAResidueGroupAnalyzer(uni, [1, 2, 3, 4, 5, 6])
+        assert fresh.radius_of_gyration == pytest.approx(rg)
+
+    def test_group_split_across_the_box_edge_is_made_whole(
+        self, make_universe: UniverseFactory
+    ):
+        reference = MDAResidueGroupAnalyzer(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
+        uni = make_universe([[[1, 2, 3]]], 3)
+        box = 20.0
+        # move the chain so its residues sit at y = 19, 21, 23, then wrap y into
+        # the box: the chain is split, one residue at y = 19 and two at y = 1, 3
+        shifted = uni.atoms.positions - [95.0, 81.0, 95.0]
+        shifted[:, 1] %= box
+        uni.dimensions = [box, box, box, 90.0, 90.0, 90.0]
+        uni.atoms.positions = shifted
+        split = MDAResidueGroupAnalyzer(uni, [1, 2, 3])
+
+        with split.whole() as atoms:
+            span = np.ptp(atoms.positions[:, 1])
+
+        assert span < box / 2
+        # float32 positions: wrapping and unwrapping costs a few ulps
+        assert split.radius_of_gyration == pytest.approx(
+            reference.radius_of_gyration, rel=1e-5
+        )
+        np.testing.assert_allclose(uni.atoms.positions, shifted)
+
+    def test_whole_restores_positions_on_error(self, chain: Cluster):
+        before = chain.uni.atoms.positions
+
+        with pytest.raises(RuntimeError), chain.whole():
+            raise RuntimeError
+
+        np.testing.assert_array_equal(chain.uni.atoms.positions, before)
+
+    def test_cache_follows_a_change_of_residues(self, make_universe: UniverseFactory):
+        uni = make_universe([[[1, 2], [3, 4]]], 4)
+        config = MolClsConfig(rules={"MOL": {"MOL": f"cm {CUTOFF}"}})
+        conntab = ConnectionTable(uni, config._rules, {"MOL": uni.atoms})
+        first, second = (Cluster(uni, sub) for sub in conntab.subconntables())
+        rg_before = first.radius_of_gyration
+
+        first.merge(second)
+
+        expected = MDAResidueGroupAnalyzer(uni, [1, 2, 3, 4]).radius_of_gyration
+        assert first.radius_of_gyration == pytest.approx(expected)
+        assert first.radius_of_gyration != pytest.approx(rg_before)
+
+
 class TestClusterGraph:
     def test_built_from_subconntable(self, chain: Cluster):
         assert chain.size == 3
