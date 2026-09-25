@@ -9,6 +9,7 @@ from collections.abc import Callable, Sequence
 import MDAnalysis as mda
 import numpy as np
 import pytest
+from loguru import logger
 from MDAnalysis.coordinates.memory import MemoryReader
 
 # Residues in the same group sit on a line, BOND_STEP apart (< CUTOFF, so each one
@@ -22,6 +23,20 @@ BOX = 2000.0
 
 type Groups = Sequence[Sequence[int]]
 type UniverseFactory = Callable[..., mda.Universe]
+
+
+@pytest.fixture
+def captured_logs():
+    # The package disables its logger by default (see `molclusters/__init__.py`);
+    # `start_logging()` re-enables it for a real run. A dedicated sink is used
+    # instead of capsys/capfd, since loguru's default handler binds its own
+    # stderr reference ahead of pytest's output capture.
+    messages: list[str] = []
+    logger.enable("molclusters")
+    handler_id = logger.add(messages.append, format="{message}")
+    yield messages
+    logger.remove(handler_id)
+    logger.disable("molclusters")
 
 
 def _frame_positions(groups: Groups, n_res: int) -> np.ndarray:

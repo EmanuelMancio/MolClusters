@@ -6,24 +6,9 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from loguru import logger
 from pydantic import ValidationError
 
 from molclusters.config import CMRule, HBRule, MolClsConfig, read_config
-
-
-@pytest.fixture
-def captured_logs():
-    # The package disables its logger by default (see `molclusters/__init__.py`);
-    # `start_logging()` re-enables it for a real run. A dedicated sink is used
-    # instead of capsys/capfd, since loguru's default handler binds its own
-    # stderr reference ahead of pytest's output capture.
-    messages: list[str] = []
-    logger.enable("molclusters")
-    handler_id = logger.add(messages.append, format="{message}")
-    yield messages
-    logger.remove(handler_id)
-    logger.disable("molclusters")
 
 
 class TestFollowSolute:

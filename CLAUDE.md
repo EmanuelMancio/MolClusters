@@ -29,7 +29,12 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
 - The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"
   rule (`capped_distance`/`self_capped_distance`); MDAnalysis silently ignores it under its
   auto-selected "nsgrid" method (typical when the cutoff is much smaller than the box), and "hb"
-  rules always run serially since `HydrogenBondAnalysis` doesn't expose a backend option.
+  rules always run serially since `HydrogenBondAnalysis` doesn't expose a backend option. Even
+  when the backend is actually used, benchmarking found it delivers zero speedup on the official
+  PyPI Windows wheel (confirmed on 2.10.0): its `c_distances_openmp` extension imports without
+  error but was compiled with OpenMP disabled (`MDAnalysis.lib.distances.USED_OPENMP is False`),
+  so it silently runs the same serial code. `ConnectionTable` warns (via `_warn_if_openmp_unavailable`)
+  when that's detected.
 
 ## Conventions
 

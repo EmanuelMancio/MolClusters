@@ -78,6 +78,30 @@ def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
         )
 
 
+def _warn_if_openmp_unavailable(backend: DistanceBackend) -> None:
+    """Warn if `backend` requests OpenMP but this MDAnalysis build can't provide it.
+
+    MDAnalysis registers an "OpenMP" backend as soon as its `c_distances_openmp`
+    extension imports successfully, even on a build where that extension was
+    compiled without OpenMP actually enabled (confirmed for the official PyPI
+    Windows wheel, MDAnalysis 2.10.0) -- selecting it then silently runs at the
+    same speed as "serial" instead of raising an error, which would otherwise go
+    unnoticed.
+
+    Parameters
+    ----------
+    backend : DistanceBackend
+        The backend requested for "cm" rule distance calculations.
+    """
+    if backend.lower() == "openmp" and not mda.lib.distances.USED_OPENMP:
+        logger.warning(
+            f"distance_backend={backend!r} was requested, but this MDAnalysis "
+            f"build ({mda.__version__}) was compiled without OpenMP support: "
+            "'cm' rule distance calculations will run at the same speed as "
+            "'serial'."
+        )
+
+
 class ConnectionTable:
     """Represents a connectivity table for molecular clusters.
 
@@ -103,8 +127,10 @@ class ConnectionTable:
         MDAnalysis silently ignores this for its "nsgrid" method, which it
         auto-selects whenever the cutoff is much smaller than the box (the common
         case for realistic systems), so switching this doesn't always change timing.
-        "hb" rules are unaffected, since HydrogenBondAnalysis doesn't expose a
-        backend option.
+        Even when it is used, "OpenMP" is a no-op on builds where MDAnalysis's
+        `c_distances_openmp` extension was compiled without OpenMP actually enabled
+        (see `_warn_if_openmp_unavailable`). "hb" rules are unaffected, since
+        HydrogenBondAnalysis doesn't expose a backend option.
     """
 
     __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs", "backend"]
@@ -237,6 +263,7 @@ class ConnectionTable:
         self.clst_args = cluster_args
         self.sels = selections
         self.backend = backend
+        _warn_if_openmp_unavailable(backend)
 
         self.cms: dict[str, np.ndarray] = {}
         self.hbs: SymmetricDict[str, HydrogenBondAnalysis] = SymmetricDict()

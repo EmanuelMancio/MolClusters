@@ -11,7 +11,11 @@ from MDAnalysis import Universe
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
 from molclusters.config import DistanceBackend, MolClsConfig
-from molclusters.conntable import ConnectionTable, _check_hb_private_api
+from molclusters.conntable import (
+    ConnectionTable,
+    _check_hb_private_api,
+    _warn_if_openmp_unavailable,
+)
 
 from .conftest import BOND_STEP, CUTOFF, UniverseFactory
 
@@ -105,6 +109,48 @@ class TestDistanceBackend:
 
         assert seen["backend"] == "OpenMP"
         assert sorted(table) == [1, 2]
+
+
+class TestOpenmpAvailabilityWarning:
+    def test_warns_when_openmp_was_compiled_without_it(
+        self, monkeypatch: pytest.MonkeyPatch, captured_logs: list[str]
+    ):
+        monkeypatch.setattr(mda.lib.distances, "USED_OPENMP", False)
+
+        _warn_if_openmp_unavailable("OpenMP")
+
+        assert any("OpenMP" in m and "serial" in m for m in captured_logs)
+
+    def test_no_warning_when_openmp_is_actually_available(
+        self, monkeypatch: pytest.MonkeyPatch, captured_logs: list[str]
+    ):
+        monkeypatch.setattr(mda.lib.distances, "USED_OPENMP", True)
+
+        _warn_if_openmp_unavailable("OpenMP")
+
+        assert captured_logs == []
+
+    def test_no_warning_for_serial_backend(
+        self, monkeypatch: pytest.MonkeyPatch, captured_logs: list[str]
+    ):
+        monkeypatch.setattr(mda.lib.distances, "USED_OPENMP", False)
+
+        _warn_if_openmp_unavailable("serial")
+
+        assert captured_logs == []
+
+    def test_connection_table_construction_triggers_the_warning(
+        self,
+        make_universe: UniverseFactory,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        monkeypatch.setattr(mda.lib.distances, "USED_OPENMP", False)
+        uni = make_universe([[[1, 2]]], 2)
+
+        build(uni, {"MOL": {"MOL": f"cm {CUTOFF}"}}, backend="OpenMP")
+
+        assert any("OpenMP" in m for m in captured_logs)
 
 
 class TestLookups:
