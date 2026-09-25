@@ -20,12 +20,14 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
 
 - LAMMPS topologies carry no residue names: the config's `lammps_resnames` (name -> LAMMPS
   molecule id or `"first-last"` id range) supplies them, applied in `main._apply_lammps_resnames`.
-- `MolClusters` keeps cluster identity stable across formation/merge/split events with a
-  two-step assignment in `__update_clusters`: each previous cluster picks its best connected group
-  (`__best_groups`: most molecules, then purest), then each group continues its largest
-  contributor (`__get_older_cluster`: then oldest id) or becomes a new cluster.
-- The analysis is frame-oriented: `MolClusters.run()` mutates in-memory cluster state frame by
-  frame and only writes results to disk once the full run finishes.
+- `ClusterTracker` (`tracker.py`) owns the clusters and their ids, with no analysis or file
+  output; `MolClusters` runs the analyses on top of it (`MolClusters.tracker`). The tracker keeps
+  cluster identity stable across formation/merge/split events with a two-step assignment in
+  `update`: each previous cluster picks its best connected group (`_best_groups`: most molecules,
+  then purest), then each group continues its largest contributor (`_get_older_cluster`: then
+  oldest id) or becomes a new cluster.
+- The analysis is frame-oriented: `MolClusters.run()` calls `tracker.update()` frame by frame,
+  mutating in-memory cluster state, and only writes results to disk once the full run finishes.
 - The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"
   rule (`capped_distance`/`self_capped_distance`); MDAnalysis silently ignores it under its
   auto-selected "nsgrid" method (typical when the cutoff is much smaller than the box), and "hb"

@@ -21,6 +21,12 @@ BOND_STEP = 2.0
 GROUP_STEP = 50.0
 BOX = 2000.0
 
+MOL_RULES = {"MOL": {"MOL": f"cm {CUTOFF}"}}
+ALL_PAIRS_RULES = {
+    "MOL": {"MOL": f"cm {CUTOFF}", "SOL": f"cm {CUTOFF}"},
+    "SOL": {"SOL": f"cm {CUTOFF}"},
+}
+
 type Groups = Sequence[Sequence[int]]
 type UniverseFactory = Callable[..., mda.Universe]
 

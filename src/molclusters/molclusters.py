@@ -10,6 +10,8 @@ Classes:
   cluster evolution, and nucleus analysis.
 - MolClustersData: A helper class for encoding and storing cluster data for output.
 
+The clusters themselves, and their ids, are tracked by `tracker.ClusterTracker`.
+
 Dependencies:
 -------------
 - MDAnalysis: For molecular dynamics trajectory and structure analysis.
@@ -33,14 +35,13 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from loguru import logger
-from MDAnalysis import core
 from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
 from .cluster import Cluster, MDAResidueGroupAnalyzer
 from .config import MolClsConfig
-from .conntable import ConnectionTable
 from .log import FILE_ONLY, format_duration
+from .tracker import ClusterTracker
 from .version import __version__
 
 # TODO: create analysis class to declutter MolClusters
@@ -100,14 +101,12 @@ class MolClusters:
         The MDAnalysis Universe object associated with the simulation.
     config : dict
         The configuration dictionary containing analysis settings.
-    sels : dict[str, core.groups.AtomGroup]
-        Atom groups for each residue type.
-    conntab : ConnectionTable
-        The connectivity table for molecular clusters.
+    tracker : ClusterTracker
+        Follows the clusters frame by frame, keeping their ids stable.
     clusters : dict[int, Cluster]
-        A dictionary of detected clusters, keyed by cluster ID.
+        The tracker's clusters of the current frame, keyed by cluster ID.
     mol_clt : dict[int, int]
-        A mapping of molecule IDs to their respective cluster IDs.
+        The tracker's mapping of molecule IDs to their respective cluster IDs.
     clusters_size_evo : np.ndarray
         An array tracking the evolution of cluster sizes over time.
     solutes : list[int]
@@ -121,10 +120,7 @@ class MolClusters:
     __slots__ = [
         "uni",
         "config",
-        "sels",
-        "conntab",
-        "clusters",
-        "mol_clt",
+        "tracker",
         "clusters_size_evo",
         "radius_evolution",
         "solutes",
@@ -164,26 +160,13 @@ class MolClusters:
         self.__check_resnames()
         logger.info(f"Effective configuration:\n{config.describe()}")
 
-        self.sels: dict[str, core.groups.AtomGroup] = {
-            res: self.uni.select_atoms(f"resname {res}")
-            for res in config._rules.all_keys()
-        }
-
-        self.conntab = ConnectionTable(
-            self.uni,
-            self.config._rules,
-            self.sels,
-            backend=self.config.distance_backend,
-        )
-        self.clusters: dict[int, Cluster] = {}
-        self.mol_clt: dict[int, int] = {}
+        # TODO: move start to run
+        self.tracker = ClusterTracker(self.uni, self.config)
 
         self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
         self.radius_evolution = {}
         self.gro_out = _AppendBuffer()
 
-        # TODO: move start to run
-        self.__start_clusters()
         self.__get_clusters_info(0)
         if self.config.nucleus is not None:
             self.nucleus_data = np.empty(
@@ -261,7 +244,7 @@ class MolClusters:
             The number of frames analysed.
         """
         rules = self.config._rules
-        counts = self.conntab.rule_connections
+        counts = self.tracker.conntab.rule_connections
         present = set(self.uni.residues.resnames)
 
         per_frame = ", ".join(
@@ -300,7 +283,7 @@ class MolClusters:
         sphericity = []
         shape = []
         charge = []
-        for cid, cls in self.clusters.items():
+        for cid, cls in self.tracker.clusters.items():
             possible_nucleus = []
             for rnm, rid in zip(cls.resnames, cls.resids, strict=True):
                 if rnm in self.config.nucleus:
@@ -355,7 +338,9 @@ class MolClusters:
     def __start_solute_solvent(self) -> None:
         """Initialize solute-solvent analysis."""
         self.solutes: list[int] = [
-            id for sel in self.config.solute for id in self.sels[sel].residues.resids
+            id
+            for sel in self.config.solute
+            for id in self.tracker.sels[sel].residues.resids
         ]
         self.solvents = self.config.solvent
 
@@ -374,7 +359,7 @@ class MolClusters:
         Generator[Cluster]
             A generator that yields clusters containing both solute and solvent residues.
         """
-        for cls in self.clusters.values():
+        for cls in self.tracker.clusters.values():
             res = set(cls.resnames)
             if (
                 len(res.intersection(self.solute_resnames)) > 0
@@ -433,214 +418,10 @@ class MolClusters:
         self.solute_data[frame][8] = np.nan if n_cls == 0 else np.average(sphericity)
         self.solute_data[frame][9] = np.nan if n_cls == 0 else np.average(shape)
 
-    def __start_clusters(self) -> None:
-        """Initialize clusters at the beginning of the analysis."""
-        for subconn in self.conntab.subconntables():
-            if self.config.is_ignored_composition(subconn.resnames):
-                continue
-
-            cls_id = self.__create_new_cluster(subconn)
-
-            for mol in subconn:
-                self.mol_clt[mol] = cls_id
-
-    # TODO: make a better name for this function
-    def __gen_origin_cluster_counter(
-        self, subconn: ConnectionTable._SubConnTable
-    ) -> Counter:
-        """Count where the molecules of a new connected group came from.
-
-        Each molecule of `subconn` (a connected group of the current frame) is
-        looked up in `mol_clt`, which still holds the *previous* frame's assignment,
-        so the result says how many of the connected group's molecules each
-        previous cluster contributed. Molecules that were free in the previous frame
-        are counted under id ``0`` (safe as a sentinel because cluster ids start
-        at 1).
-
-        For example, a connected group made of 4 molecules of cluster 7, 2 of
-        cluster 9 and 1 free molecule gives ``Counter({7: 4, 9: 2, 0: 1})``.
-
-        Parameters
-        ----------
-        subconn : ConnectionTable._SubConnTable
-            A connected group of the current frame.
-
-        Returns
-        -------
-        Counter
-            Previous-frame cluster id (``0`` for free molecules) -> number of the
-            connected group's molecules that came from it.
-        """
-        mols_origin_clusters = {mol: self.mol_clt.get(mol, 0) for mol in subconn}
-        return Counter(mols_origin_clusters.values())
-
-    @staticmethod
-    def __best_groups(
-        conn_info: list[tuple[ConnectionTable._SubConnTable, Counter]],
-    ) -> dict[int, int]:
-        """Find the connected group that best continues each previous cluster.
-
-        A previous cluster's best group is the one holding the most of its
-        molecules. On a tie, the smallest group wins, i.e. the purest one (the
-        largest share of its molecules came from the cluster), so a fragment made
-        only of the cluster's own molecules beats one mixed with newcomers. If the
-        groups are also the same size, the first one in `conn_info` wins.
-
-        A contribution of a single molecule is ignored: one molecule joining other
-        molecules doesn't carry the cluster's identity. A cluster with no
-        contribution of two or more molecules has no best group and dies.
-
-        Every group is looked at before any choice is made, so the result doesn't
-        depend on the order the groups are processed in.
-
-        Parameters
-        ----------
-        conn_info : list[tuple[ConnectionTable._SubConnTable, Counter]]
-            Every connected group of the current frame, largest first, each with its
-            origin counter (see `__gen_origin_cluster_counter`).
-
-        Returns
-        -------
-        dict[int, int]
-            Previous-frame cluster id -> index in `conn_info` of its best group.
-        """
-        best: dict[int, tuple[tuple[int, int], int]] = {}
-
-        for i, (subconn, origin_clusters) in enumerate(conn_info):
-            for cls_id, n in origin_clusters.items():
-                if not cls_id or n == 1:  # free molecules, or a single molecule
-                    continue
-
-                key = (n, -len(subconn))
-                if cls_id not in best or key > best[cls_id][0]:
-                    best[cls_id] = (key, i)
-
-        return {cls_id: i for cls_id, (_, i) in best.items()}
-
-    def __create_new_cluster(self, subconn: ConnectionTable._SubConnTable) -> int:
-        """Create a new cluster from a subconnection table.
-
-        Parameters
-        ----------
-        subconn : ConnectionTable._SubConnTable
-            The subconnection table from which to create the new cluster.
-
-        Returns
-        -------
-        int
-            The ID of the newly created cluster.
-        """
-        cluster = Cluster(self.uni, subconn)
-        id = cluster.id
-        self.clusters[id] = cluster
-
-        return id
-
-    @staticmethod
-    def __get_older_cluster(candidates: list[int], origin_clusters: Counter) -> int:
-        """Pick which candidate cluster keeps its id in a merge.
-
-        The candidate that contributed the most molecules wins, so a large cluster
-        absorbing a small one keeps its id even if it is younger. If several
-        candidates tie for the most molecules, the oldest wins. Cluster ids are
-        handed out in increasing order, so the oldest is the lowest id. The order of
-        `candidates` doesn't matter.
-
-        Parameters
-        ----------
-        candidates : list[int]
-            Non-empty list of the previous clusters whose best group (see
-            `__best_groups`) is this connected group.
-        origin_clusters : Counter
-            Origin counter of the connected group.
-
-        Returns
-        -------
-        int
-            Id of the cluster that continues as the connected group.
-        """
-        return max(candidates, key=lambda c: (origin_clusters[c], -c))
-
-    def __update_clusters(self) -> None:
-        """Reconcile the current frame's connected groups with the previous clusters.
-
-        This is the dominance algorithm, which keeps cluster ids stable while
-        clusters grow, shrink, split and merge.
-
-        A *connected group* (``subconn`` in the code, a
-        `ConnectionTable._SubConnTable`) is a set of molecules linked to each
-        other, directly or through other molecules, by the config's rules in the
-        current frame, and to nothing outside the set. Free (unlinked) molecules
-        form no connected group. A connected group has no id yet; a *cluster* is
-        what it becomes once this method gives it one, new or inherited from the
-        previous frame.
-
-        The connection table is rebuilt for the current frame, and the previous
-        clusters that the molecules of each connected group (ignored compositions
-        excluded) came from are counted (see `__gen_origin_cluster_counter`). Ids
-        are then assigned in two steps, each of which sees the whole frame:
-
-        1. Each previous cluster picks its best group: the one holding the most of
-           its molecules, the purest on a tie (see `__best_groups`).
-        2. Each connected group chosen by one or more previous clusters continues
-           the one that contributed the most molecules, the oldest on a tie (see
-           `__get_older_cluster`). A group chosen by nobody is a new cluster.
-
-        The usual events follow from these two rules:
-
-        - formation: a group of free molecules is chosen by nobody -> new;
-        - growth or shrinking: a group chosen by one cluster continues it;
-        - split: the cluster continues in its best fragment and the other fragments,
-          chosen by nobody, are new;
-        - merge: several clusters choose the same group, one continues and the
-          others die, even if they also left a remnant elsewhere;
-        - dissolution: a cluster that contributed at most one molecule to every
-          group has no best group and dies.
-
-        So a mixed dimer (one molecule from each origin) is always new, and each id
-        continues in at most one group. Previous clusters that no connected group
-        continues are dropped, along with the `mol_clt` entries of molecules that
-        are now free.
-        """
-        self.conntab.update()
-
-        modified_mols = set()
-        modified_clusters = set()
-
-        conn_info = [
-            (sub, self.__gen_origin_cluster_counter(sub))
-            for sub in self.conntab.subconntables()
-            if not self.config.is_ignored_composition(sub.resnames)
-        ]
-
-        candidates = defaultdict(list)
-        for cls_id, i in self.__best_groups(conn_info).items():
-            candidates[i].append(cls_id)
-
-        for i, (subconn, origin_clusters) in enumerate(conn_info):
-            if candidates[i]:
-                id = self.__get_older_cluster(candidates[i], origin_clusters)
-                self.clusters[id].update_from_conntable(subconn)
-            else:
-                id = self.__create_new_cluster(subconn)
-
-            for mol in subconn:
-                self.mol_clt[mol] = id
-
-            modified_clusters.add(id)
-            modified_mols.update(subconn)
-
-        for mol in set(self.mol_clt.keys()).difference(modified_mols):
-            self.mol_clt.pop(mol)
-
-        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)  # noqa: E501
-        for cls in set(self.clusters.keys()).difference(modified_clusters):
-            self.clusters.pop(cls)
-
     def __write_coordinates(self) -> None:
         """Write the coordinates of clusters to files."""
         solutes = set(self.solutes)
-        for cls in self.clusters.values():
+        for cls in self.tracker.clusters.values():
             sol_ids = solutes.intersection(cls.resids)
             if not sol_ids:
                 continue
@@ -708,7 +489,7 @@ class MolClusters:
             self.gro_out,
         ):
             for i, _ in enumerate(self.uni.trajectory[1:], start=1):
-                self.__update_clusters()
+                self.tracker.update()
                 self.__get_clusters_info(i)
                 if self.config.solute is not None:
                     self.__solute_solvent_analysis(i)
@@ -801,6 +582,16 @@ class MolClusters:
 
         logger.info(f"Results written to {path.Path.cwd()}: {', '.join(outputs)}")
 
+    @property
+    def clusters(self) -> dict[int, Cluster]:
+        """The clusters of the current frame, keyed by cluster ID (see `tracker`)."""
+        return self.tracker.clusters
+
+    @property
+    def mol_clt(self) -> dict[int, int]:
+        """Molecule ID -> cluster ID for the current frame (see `tracker`)."""
+        return self.tracker.mol_clt
+
     def find(self, mol: int) -> int | bool:
         """Find the cluster ID for a given molecule.
 
@@ -814,7 +605,7 @@ class MolClusters:
         int | bool
             The cluster ID if the molecule is found, or False if not found.
         """
-        return self.mol_clt.get(mol, False)
+        return self.tracker.find(mol)
 
     def __get_clusters_info(self, k: int) -> None:
         """Update cluster size evolution information for a given frame.
@@ -824,7 +615,7 @@ class MolClusters:
         k : int
             The frame index.
         """
-        sizes = [cls.size for cls in self.clusters.values()]
+        sizes = [cls.size for cls in self.tracker.clusters.values()]
         if len(sizes) == 0:
             avg, min_size, max_size = 0, 0, 0
         else:
@@ -835,7 +626,7 @@ class MolClusters:
         time = self.uni.coord.time
 
         self.clusters_size_evo[k][0] = time
-        self.clusters_size_evo[k][1] = len(self.clusters)
+        self.clusters_size_evo[k][1] = len(self.tracker.clusters)
         self.clusters_size_evo[k][2] = min_size
         self.clusters_size_evo[k][3] = avg
         self.clusters_size_evo[k][4] = max_size
@@ -845,7 +636,7 @@ class MolClusters:
         cols = 15
         i = 1
         with path.Path("clusters_index.ndx").open("w+", encoding="utf-8") as ndx:
-            for id, cluster in self.clusters.items():
+            for id, cluster in self.tracker.clusters.items():
                 ndx.write(f"[ CLS-{id} ]\n")
                 for mol in sorted(cluster):
                     for at in self.uni.residues[mol - 1].atoms:
@@ -901,10 +692,10 @@ class MolClustersData:
 
         data["Time"] = self.molcls.uni.coord.time
         data["Frame"] = self.molcls.uni.coord.frame
-        data["NClusters"] = len(self.molcls.clusters)
+        data["NClusters"] = len(self.molcls.tracker.clusters)
 
         molclusters_data = []
-        for cid, cls in self.molcls.clusters.items():
+        for cid, cls in self.molcls.tracker.clusters.items():
             cls_data = self.encode_cluster(cls)
             if self.molcls.config.nucleus is not None:
                 cls_data["Nucleus"] = []
