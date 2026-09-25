@@ -515,7 +515,8 @@ class ConnectionTable:
         _SubConnTable
             A sub-connectivity table.
         """
-        # sorts to guarantee that in case of separation the biggest cluster keeps the id
+        # largest first: clusters born in the same frame are numbered by size
+        # (largest gets the lowest id), and exact ties in MolClusters go to the first
         for s in sorted(self.__subgraphs(), key=lambda x: len(x), reverse=True):
             if len(s) == 1:
                 # TODO: find a way to not change how HB calculations are done to avoid this check

@@ -56,6 +56,14 @@ def id_of(molcls: MolClusters, members: set[int]) -> int:
     return matches[0]
 
 
+def assert_membership_is_consistent(molcls: MolClusters) -> None:
+    """Check that `mol_clt` maps exactly the clustered molecules to their cluster."""
+    clusters = snapshot(molcls)
+    assert set(molcls.mol_clt) == set().union(*clusters.values())
+    for cid, mols in clusters.items():
+        assert {molcls.find(m) for m in mols} == {cid}
+
+
 @pytest.fixture
 def analyze(make_universe: UniverseFactory) -> Analyze:
     """Build a MolClusters over synthetic frames (frame 0 is loaded on creation).
@@ -399,6 +407,118 @@ class TestClusterIdentity:
         step(molcls, 2)
 
         assert snapshot(molcls) == {cid: {1, 2, 3, 4, 5, 6}}
+
+    def test_three_way_split_keeps_the_id_in_the_largest_fragment(
+        self, analyze: Analyze
+    ):
+        molcls = analyze([[list(range(1, 10))], [[1, 2, 3, 4], [5, 6, 7], [8, 9]]], 9)
+        cid = id_of(molcls, set(range(1, 10)))
+
+        step(molcls, 1)
+
+        assert id_of(molcls, {1, 2, 3, 4}) == cid
+        trimer, dimer = id_of(molcls, {5, 6, 7}), id_of(molcls, {8, 9})
+        assert cid < trimer < dimer
+        assert_membership_is_consistent(molcls)
+
+    def test_clusters_born_in_the_same_frame_are_numbered_largest_first(
+        self, analyze: Analyze
+    ):
+        molcls = analyze([[], [[1, 2], [3, 4, 5, 6], [7, 8, 9]]], 9)
+
+        step(molcls, 1)
+
+        assert (
+            id_of(molcls, {3, 4, 5, 6})
+            < id_of(molcls, {7, 8, 9})
+            < id_of(molcls, {1, 2})
+        )
+
+    def test_reformed_cluster_gets_a_new_id(self, analyze: Analyze):
+        # no memory across a dissolution: the same molecules regrouping are a new
+        # cluster, younger than the one that dissolved
+        molcls = analyze([[[1, 2, 3]], [], [[1, 2, 3]]], 3)
+        cid = id_of(molcls, {1, 2, 3})
+
+        step(molcls, 1)
+        step(molcls, 2)
+
+        assert id_of(molcls, {1, 2, 3}) > cid
+
+    def test_split_and_merge_in_one_frame_keeps_both_ids(self, analyze: Analyze):
+        # a minority of A joins B while A's majority stays together
+        molcls = analyze(
+            [[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10]], [[1, 2, 3, 4], [5, 6, 7, 8, 9, 10]]],
+            10,
+        )
+        a, b = id_of(molcls, {1, 2, 3, 4, 5, 6}), id_of(molcls, {7, 8, 9, 10})
+
+        step(molcls, 1)
+
+        assert snapshot(molcls) == {a: {1, 2, 3, 4}, b: {5, 6, 7, 8, 9, 10}}
+        assert_membership_is_consistent(molcls)
+
+    def test_exchanging_molecules_keeps_both_ids(self, analyze: Analyze):
+        molcls = analyze(
+            [[[1, 2, 3, 4], [5, 6, 7, 8]], [[1, 2, 3, 8], [4, 5, 6, 7]]], 8
+        )
+        a, b = id_of(molcls, {1, 2, 3, 4}), id_of(molcls, {5, 6, 7, 8})
+
+        step(molcls, 1)
+
+        assert snapshot(molcls) == {a: {1, 2, 3, 8}, b: {4, 5, 6, 7}}
+        assert_membership_is_consistent(molcls)
+
+    def test_group_goes_to_a_cluster_that_chose_it_over_a_bigger_contributor(
+        self, analyze: Analyze
+    ):
+        # B gives 4 molecules to the first group but 5 to the second, so B continues
+        # in the second and doesn't compete for the first, which A (3) keeps
+        molcls = analyze(
+            [
+                [[1, 2, 3], list(range(4, 13))],
+                [[1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12]],
+            ],
+            12,
+        )
+        a, b = id_of(molcls, {1, 2, 3}), id_of(molcls, set(range(4, 13)))
+
+        step(molcls, 1)
+
+        assert snapshot(molcls) == {a: {1, 2, 3, 4, 5, 6, 7}, b: {8, 9, 10, 11, 12}}
+        assert_membership_is_consistent(molcls)
+
+    def test_cluster_absorbed_one_molecule_at_a_time_dies(self, analyze: Analyze):
+        # A's molecules join B and C one each (or go free), so A has no best group
+        molcls = analyze(
+            [[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 4, 5, 6], [2, 7, 8, 9]]], 9
+        )
+        a = id_of(molcls, {1, 2, 3})
+        b, c = id_of(molcls, {4, 5, 6}), id_of(molcls, {7, 8, 9})
+
+        step(molcls, 1)
+
+        assert snapshot(molcls) == {b: {1, 4, 5, 6}, c: {2, 7, 8, 9}}
+        assert a not in molcls.clusters
+        assert molcls.find(3) is False
+        assert_membership_is_consistent(molcls)
+
+    def test_merge_loser_remnant_is_a_new_cluster(self, analyze: Analyze):
+        molcls = analyze(
+            [
+                [list(range(1, 7)), list(range(7, 15))],
+                [[1, 2, 3, 4, *range(7, 15)], [5, 6, 20]],
+            ],
+            20,
+        )
+        a, b = id_of(molcls, set(range(1, 7))), id_of(molcls, set(range(7, 15)))
+
+        step(molcls, 1)
+
+        assert id_of(molcls, {1, 2, 3, 4, *range(7, 15)}) == b
+        assert id_of(molcls, {5, 6, 20}) > max(a, b)
+        assert a not in molcls.clusters
+        assert_membership_is_consistent(molcls)
 
     def test_ignored_composition_group_does_not_claim_the_id(self, analyze: Analyze):
         # the cluster's solvent shell {3, 4, 5} drifts off as a pure-solvent group,
