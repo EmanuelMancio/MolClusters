@@ -253,6 +253,12 @@ def main() -> None:
         logger.debug("Topology has no elements, guessing them from atom names.")
         uni.guess_TopologyAttrs(to_guess=["elements"])
 
+    if not hasattr(uni.atoms, "names"):
+        # e.g. LAMMPS topologies, which carry no atom names of their own. Without
+        # this, MDAnalysis' GRO writer would warn and write every atom as "X".
+        logger.debug("Topology has no atom names, using elements as names.")
+        uni.add_TopologyAttr("names", values=uni.atoms.elements)
+
     try:
         radiis = []
         for at in uni.atoms:
