@@ -392,6 +392,46 @@ class TestClusterIdentity:
         assert id_of(molcls, low) == cid
         assert id_of(molcls, high) > cid
 
+    @pytest.mark.parametrize(
+        ("cluster", "pieces", "n_res"),
+        [
+            pytest.param(
+                list(range(1, 10)),
+                [[7, 8, 9], [1, 2, 3], [4, 5, 6]],
+                9,
+                id="three-way",
+            ),
+            pytest.param(
+                list(range(1, 10)),
+                [[2, 5, 8], [3, 6, 9], [1, 4, 7]],
+                9,
+                id="three-way-interleaved",
+            ),
+            pytest.param(
+                list(range(1, 7)),
+                [[4, 5, 6, 10], [1, 2, 3, 11]],
+                11,
+                id="halves-with-newcomers",
+            ),
+        ],
+    )
+    def test_even_split_into_equal_pieces_keeps_the_id_with_the_lowest_resid(
+        self, analyze: Analyze, cluster: list[int], pieces: list[list[int]], n_res: int
+    ):
+        # same tie-break as above: every piece holds as many of the cluster's
+        # molecules and is the same size (so equally pure), and the piece holding
+        # resid 1 wins whatever its newcomers or listing order
+        molcls = analyze([[cluster], pieces], n_res)
+        cid = id_of(molcls, set(cluster))
+
+        step(molcls, 1)
+
+        ids = {min(p): id_of(molcls, set(p)) for p in pieces}
+        assert ids.pop(1) == cid
+        assert len(set(ids.values())) == len(ids)
+        assert all(i > cid for i in ids.values())
+        assert_membership_is_consistent(molcls)
+
     def test_one_frame_break_mints_a_transient_id(self, analyze: Analyze):
         # pins the current behaviour: no persistence window, so a contact broken for
         # a single frame creates an id that dies when the halves rejoin
