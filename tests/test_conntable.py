@@ -69,6 +69,14 @@ class TestCenterOfMassRule:
 
         assert sorted(table) == [2, 3]
 
+    def test_no_molecules_within_cutoff(self, make_universe: UniverseFactory):
+        uni = make_universe([[]], 3)
+
+        table = build(uni, {"MOL": {"MOL": f"cm {CUTOFF}"}})
+
+        assert len(list(table)) == 0
+        assert table.rule_connections["MOL", "MOL"] == 0
+
 
 class TestDistanceBackend:
     def test_defaults_to_serial(self, chain_table: ConnectionTable):
@@ -198,21 +206,69 @@ class TestHydrogenBondRule:
             assert 0 < data["distance"] <= self.D_A
             assert self.ANGLE <= data["angle"] <= 180
 
-    def test_matches_mdanalysis_public_run(self, table: ConnectionTable):
+    @pytest.fixture
+    def mixed_uni(self) -> Universe:
+        """met-mal with every other MAL renamed MAX.
+
+        Returns
+        -------
+        Universe
+            A system with H-bonding residues outside a MAL-MAL rule.
+        """
+        uni = Universe(str(DATA_DIR / "met-mal.tpr"), str(DATA_DIR / "start.pdb"))
+        resnames = uni.residues.resnames.copy()
+        resnames[np.flatnonzero(resnames == "MAL")[::2]] = "MAX"
+        uni.residues.resnames = resnames
+        return uni
+
+    def public_run_edges(self, uni: Universe) -> set[frozenset[int]]:
         hb = HydrogenBondAnalysis(
-            table.uni,
+            uni,
             between=["resname MAL", "resname MAL"],
             d_a_cutoff=self.D_A,
             d_h_a_angle_cutoff=self.ANGLE,
         )
         hb.run()
-        atoms = table.uni.atoms
-        expected = {
+        atoms = uni.atoms
+        return {
             frozenset((atoms[int(h)].resid, atoms[int(a)].resid))
             for h, a in hb.results.hbonds[:, [2, 3]]
         }
 
+    def test_matches_mdanalysis_public_run(self, table: ConnectionTable):
+        expected = self.public_run_edges(table.uni)
+
         assert {frozenset(e) for e in table.conntab.edges} == expected
+
+    def test_mixed_system_matches_mdanalysis_public_run(self, mixed_uni: Universe):
+        table = build(mixed_uni, {"MAL": {"MAL": f"hb d {self.D_A} a {self.ANGLE}"}})
+
+        expected = self.public_run_edges(mixed_uni)
+
+        assert expected, "the remaining MAL should still H-bond"
+        assert {frozenset(e) for e in table.conntab.edges} == expected
+
+    def test_only_searches_the_rules_residues(self, mixed_uni: Universe):
+        table = build(mixed_uni, {"MAL": {"MAL": f"hb d {self.D_A} a {self.ANGLE}"}})
+        hb = table.hbs["MAL", "MAL"]
+
+        # what MDAnalysis guesses over the whole system, minus the MAX residues
+        mal = mixed_uni.select_atoms("resname MAL")
+        hydrogens = mixed_uni.select_atoms(hb.guess_hydrogens()) & mal
+        acceptors = mixed_uni.select_atoms(hb.guess_acceptors()) & mal
+
+        assert hydrogens and acceptors
+        np.testing.assert_array_equal(hb._hydrogens.indices, hydrogens.indices)
+        np.testing.assert_array_equal(hb._acceptors.indices, acceptors.indices)
+        assert set(hb._donors.resnames) == {"MAL"}
+
+    def test_rule_without_hbonding_atoms_finds_nothing(self):
+        uni = Universe(str(DATA_DIR / "met-mal.tpr"), str(DATA_DIR / "start.pdb"))
+
+        table = build(uni, {"MOL": {"MOL": f"hb d {self.D_A} a {self.ANGLE}"}})
+
+        assert table.conntab.number_of_edges() == 0
+        assert table.rule_connections["MOL", "MOL"] == 0
 
     def test_update_is_repeatable(self, table: ConnectionTable):
         before = sorted(map(sorted, table.conntab.edges))

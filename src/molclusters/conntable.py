@@ -41,6 +41,13 @@ from .symdict import SymmetricDict
 # of whether the underlying mechanism still works.
 _HB_PRIVATE_API = ("_prepare", "_single_frame")
 
+# The criteria HydrogenBondAnalysis' guess_hydrogens()/guess_acceptors() apply by
+# default, as selections so that ConnectionTable can restrict them to a rule's two
+# residue types (see __start_hbonds). Donors need no selection of their own: they
+# are found through the hydrogens' bonds.
+_HB_HYDROGENS_SEL = "prop mass > 0.9 and prop mass < 1.1 and prop charge > 0.3"
+_HB_ACCEPTORS_SEL = "prop charge < -0.5"
+
 
 def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
     """Fail fast if MDAnalysis's private HydrogenBondAnalysis API has changed.
@@ -296,10 +303,16 @@ class ConnectionTable:
                 continue
 
             if (resi, resj) not in self.hbs:
+                # Left unset, MDAnalysis would guess hydrogens and acceptors over
+                # the whole system and search all of them every frame, only to
+                # discard the pairs outside `between` afterwards.
+                pair_sel = f"resname {resi} {resj}"
                 # TODO: activate supported backend
                 hb = HydrogenBondAnalysis(
                     self.uni,
                     between=[f"resname {resi}", f"resname {resj}"],
+                    hydrogens_sel=f"({pair_sel}) and {_HB_HYDROGENS_SEL}",
+                    acceptors_sel=f"({pair_sel}) and {_HB_ACCEPTORS_SEL}",
                     d_a_cutoff=self.clst_args[resi, resj].dist,
                     d_h_a_angle_cutoff=self.clst_args[resi, resj].ang,
                     update_selections=False,
@@ -310,108 +323,107 @@ class ConnectionTable:
 
                 self.hbs[resi, resj] = hb
 
-    # TODO: break into two methods for cm and hb
-    def __get_connections_and_attributes(
-        self,
-        resi: str,
-        resj: str,
-        box: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Private method to compute connections and their attributes between two residues.
-
-        This method calculates the connections and associated attributes (e.g., distances, angles)
-        between two residues (`resi` and `resj`) based on the provided cutoff criteria or hydrogen
-        bonding information. The method supports both center-of-mass (CM) distance calculations
-        and hydrogen bond (HB) analysis.
+    def __cm_connections(
+        self, resi: str, resj: str, box: np.ndarray
+    ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+        """Find the molecules connected by a center-of-mass ("cm") rule.
 
         Parameters
         ----------
-            resi (str): The identifier for the first residue.
-            resj (str): The identifier for the second residue.
-            box (np.ndarray): The simulation box dimensions, used for periodic boundary conditions.
+        resi : str
+            The rule's first residue name.
+        resj : str
+            The rule's second residue name.
+        box : np.ndarray
+            The simulation box dimensions, used for periodic boundary conditions.
 
         Returns
         -------
-            tuple[np.ndarray, np.ndarray]:
-                - A 2D numpy array of connections, where each row represents a pair of residue IDs.
-                - A list of dictionaries containing attributes for each connection, such as distance
-                  and angle (if applicable).
-
-        Notes
-        -----
-            - If the connection type is "cm" (center-of-mass), the method computes distances between
-              the centers of mass of the residues.
-            - If the connection type is "hb" (hydrogen bond), the method computes hydrogen bond
-              distances and angles using precomputed hydrogen bond data.
-            - The method updates internal state variables (e.g., `self.hbs`) to track progress
-              through the hydrogen bond data.
-            - Warnings are suppressed when no hydrogen bonds are found during the computation.
+        tuple[np.ndarray, dict[str, np.ndarray]]
+            An ``(n, 2)`` array of connected resids, and each connection's
+            ``"distance"``.
         """
-        if self.clst_args[resi, resj].type == "cm":
-            cm1: np.ndarray = self.cms[resi]
-            cutoff = self.clst_args[resi, resj].dist
-            if resi != resj:
-                cm2: np.ndarray = self.cms[resj]
-                connections, distances = mda.lib.distances.capped_distance(
-                    cm1, cm2, cutoff, box=box, backend=self.backend
-                )
-            else:
-                connections, distances = mda.lib.distances.self_capped_distance(
-                    cm1, cutoff, box=box, backend=self.backend
-                )
-
-            for k, (moli, molj) in enumerate(connections):
-                connections[k, 0] = self.sels[resi].residues[moli].resid  # noqa: B909
-                connections[k, 1] = self.sels[resj].residues[molj].resid  # noqa: B909
-
-            attributes = [{"distance": dist} for dist in distances]
+        cutoff = self.clst_args[resi, resj].dist
+        if resi != resj:
+            pairs, distances = mda.lib.distances.capped_distance(
+                self.cms[resi], self.cms[resj], cutoff, box=box, backend=self.backend
+            )
         else:
-            # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats
-            # distance and angle calculations. Until then, this depends on the private
-            # API guarded by _check_hb_private_api (see its docstring for why).
-            hb = self.hbs[resi, resj]
-            hb._ts = self.uni.trajectory.ts
+            pairs, distances = mda.lib.distances.self_capped_distance(
+                self.cms[resi], cutoff, box=box, backend=self.backend
+            )
 
-            # a frame without hydrogen bonds is normal here, not worth a warning
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message="No hydrogen bonds were found"
-                )
-                hb._single_frame()
+        # pairs index each selection's residues, not the resids they carry
+        connections = np.column_stack(
+            (
+                self.sels[resi].residues.resids[pairs[:, 0]],
+                self.sels[resj].residues.resids[pairs[:, 1]],
+            )
+        )
+        return connections, {"distance": distances}
 
-            distances = hb.results.hbonds[-2]
-            angles = hb.results.hbonds[-1]
+    def __hb_connections(
+        self, resi: str, resj: str
+    ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+        """Find the molecules connected by a hydrogen bond ("hb") rule.
 
-            attributes = [
-                {"distance": dist, "angle": ang}
-                for dist, ang in zip(distances, angles, strict=True)
-            ]
+        Parameters
+        ----------
+        resi : str
+            The rule's first residue name.
+        resj : str
+            The rule's second residue name.
 
-            connections = np.empty((0, 2), int)
-            for h_ati, a_ati in zip(
-                hb.results.hbonds[2], hb.results.hbonds[3], strict=True
-            ):
-                h_ati, a_ati = int(h_ati), int(a_ati)
-                moli = self.uni.atoms[h_ati].resid
-                molj = self.uni.atoms[a_ati].resid
-                connections = np.append(connections, [[moli, molj]], axis=0)
+        Returns
+        -------
+        tuple[np.ndarray, dict[str, np.ndarray]]
+            An ``(n, 2)`` array of connected (hydrogen, acceptor) resids, and each
+            connection's donor-acceptor ``"distance"`` and D-H-A ``"angle"``.
+        """
+        # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats
+        # distance and angle calculations. Until then, this depends on the private
+        # API guarded by _check_hb_private_api (see its docstring for why).
+        hb = self.hbs[resi, resj]
+        hb._ts = self.uni.trajectory.ts
 
-            hb._prepare()
+        # a frame without hydrogen bonds is normal here, not worth a warning
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="No hydrogen bonds were found")
+            hb._single_frame()
 
-        return connections, attributes
+        _, _, hydrogens, acceptors, distances, angles = hb.results.hbonds
+        hb._prepare()
+
+        atoms = self.uni.atoms
+        connections = np.column_stack(
+            (
+                atoms[np.asarray(hydrogens, dtype=np.intp)].resids,
+                atoms[np.asarray(acceptors, dtype=np.intp)].resids,
+            )
+        )
+        return connections, {
+            "distance": np.asarray(distances),
+            "angle": np.asarray(angles),
+        }
 
     def __construct_table(self) -> None:
         """Construct the connectivity table as a graph."""
         self.conntab = nx.Graph()
 
         for resi, resj in self.clst_args:
-            pairs, attribs = self.__get_connections_and_attributes(
-                resi, resj, self.uni.dimensions
-            )
+            if self.clst_args[resi, resj].type == "cm":
+                pairs, attribs = self.__cm_connections(resi, resj, self.uni.dimensions)
+            else:
+                pairs, attribs = self.__hb_connections(resi, resj)
             self.rule_connections[resi, resj] += len(pairs)
 
-            for k, (ri, rj) in enumerate(pairs):
-                self.conntab.add_edge(ri, rj, **attribs[k])
+            # a single bulk insert of plain Python values is much faster than an
+            # add_edge() call per connection
+            columns = (*pairs.T.tolist(), *(a.tolist() for a in attribs.values()))
+            self.conntab.add_edges_from(
+                (ri, rj, dict(zip(attribs, vals, strict=True)))
+                for ri, rj, *vals in zip(*columns, strict=True)
+            )
 
     def update(self) -> None:
         """Update the connectivity table."""
