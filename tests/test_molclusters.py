@@ -189,7 +189,7 @@ class TestClusterIdentity:
         molcls = analyze([[[1, 2]]], 2)
         origin = Counter({cid: 3 for cid in order})
 
-        older = molcls._MolClusters__get_older_cluster({True: order, False: []}, origin)
+        older = molcls._MolClusters__get_older_cluster(order, origin)
 
         assert older == 5
 
@@ -199,9 +199,7 @@ class TestClusterIdentity:
         molcls = analyze([[[1, 2]]], 2)
         origin = Counter({6: 4, 7: 4, 5: 2})
 
-        older = molcls._MolClusters__get_older_cluster(
-            {True: [6, 7, 5], False: []}, origin
-        )
+        older = molcls._MolClusters__get_older_cluster([6, 7, 5], origin)
 
         assert older == 6
 
@@ -311,13 +309,7 @@ class TestClusterIdentity:
         assert list(snapshot(molcls).values()) == [{1, 2, 3}]
         assert molcls.find(4) is False
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="dominance only scans later (smaller) groups and a merge loser is not "
-        "marked as used, so it keeps its id in a remnant only if the remnant's group "
-        "is processed after the merge group",
-    )
-    def test_merge_loser_fate_does_not_depend_on_group_order(self, analyze: Analyze):
+    def test_merge_loser_dies_whatever_the_group_order(self, analyze: Analyze):
         # A loses a merge to B in both cases, leaving a remnant elsewhere; only the
         # remnant's size relative to the merge group differs (free newcomers)
         a, b = list(range(1, 11)), list(range(11, 21))
@@ -339,7 +331,7 @@ class TestClusterIdentity:
             "remnant smaller": a_smaller in remnant_smaller.clusters,
             "remnant larger": a_larger in remnant_larger.clusters,
         }
-        assert len(set(survives.values())) == 1, f"A survives: {survives}"
+        assert not any(survives.values()), f"A survives: {survives}"
 
     @pytest.mark.parametrize(
         ("frames", "n_res", "pure"),
@@ -352,11 +344,6 @@ class TestClusterIdentity:
                 11,
                 {4, 5, 6},
                 id="trimer",
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    reason="the pure-fragment tie-break in __check_dominance only "
-                    "applies to dimers (len(subconn) == 2)",
-                ),
             ),
         ],
     )
