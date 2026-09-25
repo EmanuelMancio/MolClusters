@@ -34,3 +34,9 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   them to drive semver bumps and `CHANGELOG.md` generation.
 - Every file needs a REUSE/SPDX license header (see `REUSE.toml`, `LICENSES/`), enforced by
   pre-commit's `reuse-lint-file` hook.
+- A change to clustering, id assignment, or any other computed output is a breaking change
+  (`type(scope)!:` + `BREAKING CHANGE:` footer, even when `type` is `fix`) only if it changes a
+  result that was previously *valid/expected* — e.g. the dominance algorithm changing which
+  plausible cluster-id assignment you get. Correcting output that was simply wrong (a bug nobody
+  would have expected or relied on, e.g. deriving correct atom names for LAMMPS topologies) is a
+  normal `fix`, even though the stored values change.
