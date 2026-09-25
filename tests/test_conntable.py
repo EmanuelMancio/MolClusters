@@ -4,12 +4,13 @@
 
 from pathlib import Path
 
+import MDAnalysis as mda
 import numpy as np
 import pytest
 from MDAnalysis import Universe
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
-from molclusters.config import MolClsConfig
+from molclusters.config import DistanceBackend, MolClsConfig
 from molclusters.conntable import ConnectionTable, _check_hb_private_api
 
 from .conftest import BOND_STEP, CUTOFF, UniverseFactory
@@ -17,10 +18,12 @@ from .conftest import BOND_STEP, CUTOFF, UniverseFactory
 DATA_DIR = (Path(__file__).parent / "data" / "met-mal").resolve()
 
 
-def build(uni: Universe, rules: dict) -> ConnectionTable:
-    config = MolClsConfig(rules=rules)
+def build(
+    uni: Universe, rules: dict, backend: DistanceBackend = "serial"
+) -> ConnectionTable:
+    config = MolClsConfig(rules=rules, distance_backend=backend)
     sels = {res: uni.select_atoms(f"resname {res}") for res in config._rules.all_keys()}
-    return ConnectionTable(uni, config._rules, sels)
+    return ConnectionTable(uni, config._rules, sels, backend=config.distance_backend)
 
 
 @pytest.fixture
@@ -61,6 +64,47 @@ class TestCenterOfMassRule:
         table.update()
 
         assert sorted(table) == [2, 3]
+
+
+class TestDistanceBackend:
+    def test_defaults_to_serial(self, chain_table: ConnectionTable):
+        assert chain_table.backend == "serial"
+
+    def test_backend_is_forwarded_to_self_capped_distance(
+        self, make_universe: UniverseFactory, monkeypatch: pytest.MonkeyPatch
+    ):
+        uni = make_universe([[[1, 2, 3]]], 3)
+        seen = {}
+        original = mda.lib.distances.self_capped_distance
+
+        def spy(*args: object, **kwargs: object) -> object:
+            seen["backend"] = kwargs.get("backend")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(mda.lib.distances, "self_capped_distance", spy)
+
+        table = build(uni, {"MOL": {"MOL": f"cm {CUTOFF}"}}, backend="OpenMP")
+
+        assert seen["backend"] == "OpenMP"
+        assert sorted(table) == [1, 2, 3]
+
+    def test_backend_is_forwarded_to_capped_distance(
+        self, make_universe: UniverseFactory, monkeypatch: pytest.MonkeyPatch
+    ):
+        uni = make_universe([[[1, 2]]], 2, ["MOL", "SOL"])
+        seen = {}
+        original = mda.lib.distances.capped_distance
+
+        def spy(*args: object, **kwargs: object) -> object:
+            seen["backend"] = kwargs.get("backend")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(mda.lib.distances, "capped_distance", spy)
+
+        table = build(uni, {"MOL": {"SOL": f"cm {CUTOFF}"}}, backend="OpenMP")
+
+        assert seen["backend"] == "OpenMP"
+        assert sorted(table) == [1, 2]
 
 
 class TestLookups:

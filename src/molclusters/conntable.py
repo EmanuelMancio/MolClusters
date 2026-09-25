@@ -27,7 +27,7 @@ from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
-from .config import Rule
+from .config import DistanceBackend, Rule
 from .symdict import SymmetricDict
 
 # ConnectionTable drives HydrogenBondAnalysis one frame at a time via these
@@ -98,9 +98,16 @@ class ConnectionTable:
         The center of mass for each residue type.
     hbs : SymmetricDict[str, HydrogenBondAnalysis]
         The hydrogen bond analysis objects for residue pairs.
+    backend : DistanceBackend
+        The MDAnalysis acceleration backend used for "cm" rule distance calculations.
+        MDAnalysis silently ignores this for its "nsgrid" method, which it
+        auto-selects whenever the cutoff is much smaller than the box (the common
+        case for realistic systems), so switching this doesn't always change timing.
+        "hb" rules are unaffected, since HydrogenBondAnalysis doesn't expose a
+        backend option.
     """
 
-    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs"]
+    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs", "backend"]
 
     class _SubConnTable:
         """Represents a subgraph of the main connectivity table.
@@ -210,6 +217,7 @@ class ConnectionTable:
         universe: mda.Universe,
         cluster_args: SymmetricDict[str, Rule],
         selections: dict[str, core.groups.AtomGroup],
+        backend: DistanceBackend = "serial",
     ) -> None:
         """Initialize the ConnectionTable.
 
@@ -221,10 +229,14 @@ class ConnectionTable:
             The clustering arguments specifying connectivity rules.
         selections : dict[str, core.groups.AtomGroup]
             The atom groups for each residue type.
+        backend : DistanceBackend
+            The MDAnalysis acceleration backend for "cm" rule distance calculations
+            (see the class docstring's `backend` attribute for its caveats).
         """
         self.uni = universe
         self.clst_args = cluster_args
         self.sels = selections
+        self.backend = backend
 
         self.cms: dict[str, np.ndarray] = {}
         self.hbs: SymmetricDict[str, HydrogenBondAnalysis] = SymmetricDict()
@@ -300,11 +312,11 @@ class ConnectionTable:
             if resi != resj:
                 cm2: np.ndarray = self.cms[resj]
                 connections, distances = mda.lib.distances.capped_distance(
-                    cm1, cm2, cutoff, box=box
+                    cm1, cm2, cutoff, box=box, backend=self.backend
                 )
             else:
                 connections, distances = mda.lib.distances.self_capped_distance(
-                    cm1, cutoff, box=box
+                    cm1, cutoff, box=box, backend=self.backend
                 )
 
             for k, (moli, molj) in enumerate(connections):

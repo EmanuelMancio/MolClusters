@@ -26,6 +26,10 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   contributor (`__get_older_cluster`: then oldest id) or becomes a new cluster.
 - The analysis is frame-oriented: `MolClusters.run()` mutates in-memory cluster state frame by
   frame and only writes results to disk once the full run finishes.
+- The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"
+  rule (`capped_distance`/`self_capped_distance`); MDAnalysis silently ignores it under its
+  auto-selected "nsgrid" method (typical when the cutoff is much smaller than the box), and "hb"
+  rules always run serially since `HydrogenBondAnalysis` doesn't expose a backend option.
 
 ## Conventions
 

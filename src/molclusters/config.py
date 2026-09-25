@@ -10,7 +10,7 @@ import tomllib
 from collections.abc import Iterable
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 import yaml
 from loguru import logger
@@ -33,6 +33,14 @@ class RuleType(StrEnum):
 # numbers, so `inf`/`nan` must be rejected explicitly rather than relying on a
 # hand-rolled number regex).
 _Distance = Annotated[float, Field(gt=0.0, allow_inf_nan=False)]
+
+# The MDAnalysis acceleration backends usable by this project's pinned MDAnalysis
+# version without extra optional dependencies (excludes "distopia", which needs the
+# separate `distopia` package). Restricting to a Literal here validates the value
+# eagerly at config-read time; left to MDAnalysis itself, an invalid backend can go
+# unnoticed indefinitely, since it's only checked when a distance call actually falls
+# back to its "bruteforce"/"pkdtree" methods (see `ConnectionTable`'s docstring).
+DistanceBackend = Literal["serial", "OpenMP"]
 
 
 @dataclass
@@ -215,6 +223,11 @@ class MolClsConfig(BaseSettings):
     # each name used elsewhere in this file (rules, solute, ...) to the LAMMPS
     # molecule id(s) it stands for, e.g. {"SOL": "1-500", "NA": 501}.
     lammps_resnames: dict[str, _LammpsResidSpec | list[_LammpsResidSpec]] | None = None
+
+    # Acceleration backend for the "cm" rule's distance calculations (see
+    # `ConnectionTable`); "hb" rules always run serially, since HydrogenBondAnalysis
+    # doesn't expose a backend option.
+    distance_backend: DistanceBackend = "serial"
 
     # Sorted, non-overlapping (start, end, name) ranges built from `lammps_resnames`,
     # kept as ranges (not one dict entry per id) so a config spanning millions of

@@ -108,7 +108,12 @@ class MolClusters:
             for res in config._rules.all_keys()
         }
 
-        self.conntab = ConnectionTable(self.uni, self.config._rules, self.sels)
+        self.conntab = ConnectionTable(
+            self.uni,
+            self.config._rules,
+            self.sels,
+            backend=self.config.distance_backend,
+        )
         self.clusters: dict[int, Cluster] = {}
         self.mol_clt: dict[int, int] = {}
 

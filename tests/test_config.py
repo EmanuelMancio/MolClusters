@@ -276,6 +276,22 @@ class TestRules:
             MolClsConfig(rules={"solute": {"A": "cm 1.0"}})
 
 
+class TestDistanceBackend:
+    def test_defaults_to_serial(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}})
+
+        assert config.distance_backend == "serial"
+
+    def test_openmp_is_accepted(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}}, distance_backend="OpenMP")
+
+        assert config.distance_backend == "OpenMP"
+
+    def test_unknown_backend_raises(self):
+        with pytest.raises(ValidationError):
+            MolClsConfig(rules={"A": {"A": "cm 5.0"}}, distance_backend="cuda")
+
+
 class TestSoluteKeyword:
     def test_solute_cannot_be_named_solute(self):
         with pytest.raises(ValueError, match="cannot be solute"):
