@@ -14,7 +14,11 @@ from MDAnalysis import Universe
 
 import molclusters.main as cli
 from molclusters.config import MolClsConfig
-from molclusters.main import _apply_lammps_dump_elements, _apply_lammps_resnames
+from molclusters.main import (
+    _apply_lammps_dump_elements,
+    _apply_lammps_resnames,
+    _traj_format,
+)
 from molclusters.version import __version__
 
 from .conftest import CUTOFF, UniverseFactory
@@ -80,6 +84,19 @@ def write_dump(tmp_path: Path, columns: str, rows: list[str]) -> str:
         f"ITEM: ATOMS {columns}\n" + "\n".join(rows) + "\n"
     )
     return str(path)
+
+
+@pytest.mark.parametrize(
+    "traj",
+    ["a.lammpsdump", "a.lammpstrj", "a.dump", "a.lammpstrj.gz", "run.v2/a.DUMP"],
+)
+def test_traj_format_reads_lammps_dump_extensions(traj: str):
+    assert _traj_format(traj) == "LAMMPSDUMP"
+
+
+@pytest.mark.parametrize("traj", ["a.xtc", "a.trr", "a.data", "traj"])
+def test_traj_format_leaves_other_files_to_mdanalysis(traj: str):
+    assert _traj_format(traj) is None
 
 
 class TestApplyLammpsDumpElements:
@@ -203,7 +220,11 @@ class TestMain:
         cli_env("traj.xtc", "top.tpr", str(config_file))
 
         assert fake_universe["args"] == ("top.tpr", "traj.xtc")
-        assert fake_universe["kwargs"] == {"in_memory": False, "in_memory_step": 1}
+        assert fake_universe["kwargs"] == {
+            "format": None,
+            "in_memory": False,
+            "in_memory_step": 1,
+        }
 
         uni = fake_universe["uni"]
         assert uni.atoms[0].element == "C"
@@ -229,7 +250,11 @@ class TestMain:
             "--traj-memory", "--in-memory-step", "2",
         )  # fmt: skip
 
-        assert fake_universe["kwargs"] == {"in_memory": True, "in_memory_step": 2}
+        assert fake_universe["kwargs"] == {
+            "format": None,
+            "in_memory": True,
+            "in_memory_step": 2,
+        }
 
     def test_in_memory_step_requires_traj_memory(
         self, cli_env: RunCli, config_file: Path, capsys: pytest.CaptureFixture
@@ -262,16 +287,19 @@ class TestMain:
 
         assert (tmp_path / "molclusters.json").exists()
 
+    @pytest.mark.parametrize("ext", ["lammpsdump", "lammpstrj", "dump"])
     def test_runs_on_a_lammps_data_topology_with_a_dump(
-        self, cli_env: RunCli, tmp_path: Path
+        self, cli_env: RunCli, tmp_path: Path, ext: str
     ):
         # DATA files have neither elements nor atom names: they come from the dump
+        dump = tmp_path / f"traj.{ext}"
+        dump.write_text(Path(LAMMPS_DUMP).read_text())
         config = tmp_path / "input.yaml"
         config.write_text(
             "rules:\n  SOL:\n    SOL: cm 5.0\nlammps_resnames:\n  SOL: 1-2\n"
         )
 
-        cli_env(LAMMPS_DUMP, LAMMPS_DATA, str(config))
+        cli_env(str(dump), LAMMPS_DATA, str(config))
 
         assert (tmp_path / "molclusters.json").exists()
 

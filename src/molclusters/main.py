@@ -101,6 +101,32 @@ def _apply_lammps_resnames(uni: mda.Universe, config: MolClsConfig) -> None:
     logger.debug(f"Assigned resnames from 'lammps_resnames' to {len(names)} residues.")
 
 
+# File extensions (compressed or not) read as LAMMPS dump trajectories. MDAnalysis
+# only recognizes '.lammpsdump' on its own.
+_LAMMPS_DUMP_EXTS = {"LAMMPSDUMP", "LAMMPSTRJ", "DUMP"}
+
+
+def _traj_format(traj: str) -> str | None:
+    """Pick the MDAnalysis format to read a trajectory file with.
+
+    Parameters
+    ----------
+    traj : str
+        The trajectory file.
+
+    Returns
+    -------
+    str | None
+        ``"LAMMPSDUMP"`` for a LAMMPS dump (see `_LAMMPS_DUMP_EXTS`), or None to
+        let MDAnalysis guess the format from the extension.
+    """
+    try:
+        ext = guess_format(traj)
+    except ValueError:  # no extension
+        return None
+    return "LAMMPSDUMP" if ext in _LAMMPS_DUMP_EXTS else None
+
+
 def _apply_lammps_dump_elements(uni: mda.Universe, traj: str) -> None:
     """Fill in elements on a topology from the `element` column of a LAMMPS dump.
 
@@ -124,12 +150,7 @@ def _apply_lammps_dump_elements(uni: mda.Universe, traj: str) -> None:
     ValueError
         If the dump's atom ids don't match the topology's.
     """
-    if hasattr(uni.atoms, "elements"):
-        return
-    try:
-        if guess_format(traj) != "LAMMPSDUMP":
-            return
-    except ValueError:
+    if hasattr(uni.atoms, "elements") or _traj_format(traj) != "LAMMPSDUMP":
         return
 
     with warnings.catch_warnings():
@@ -207,6 +228,7 @@ def main() -> None:
     uni = mda.Universe(
         args.top,
         args.traj,
+        format=_traj_format(args.traj),
         in_memory=args.traj_memory,
         in_memory_step=args.in_memory_step,
     )
