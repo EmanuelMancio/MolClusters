@@ -43,20 +43,23 @@ Example:
 """
 
 import argparse as arg
+import shlex
+import sys
 import warnings
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 import MDAnalysis as mda
 import numpy as np
 from loguru import logger
-from MDAnalysis.exceptions import NoDataError
 from MDAnalysis.guesser.tables import vdwradii
 from MDAnalysis.lib.util import guess_format
 from MDAnalysis.topology.LAMMPSParser import LammpsDumpParser
+from pydantic import ValidationError
 
 from .config import MolClsConfig, read_config
-from .log import start_logging
+from .log import FILE_ONLY, start_logging
 from .molclusters import MolClusters
 from .version import __version__
 
@@ -194,8 +197,31 @@ def _log_system(uni: mda.Universe) -> None:
 
     logger.info(
         f"System: {len(uni.atoms)} atoms in {len(uni.residues)} residues "
-        f"({composition}); {len(uni.trajectory)} frame(s)"
+        f"({composition})"
     )
+
+    # times as the reader reports them: the dt is inferred by MDAnalysis for some
+    # formats (it warns when it can't), so they're worth a check
+    traj = uni.trajectory
+    logger.info(
+        f"Trajectory: {len(traj)} frame(s) from {traj.ts.time:g} to "
+        f"{traj.ts.time + traj.totaltime:g} ps, every {traj.dt:g} ps"
+    )
+
+    box = uni.dimensions
+    if box is None or not np.any(box[:3]):
+        logger.warning(
+            "The trajectory has no box: distances are computed without periodic "
+            "boundary conditions."
+        )
+    else:
+        lengths = " x ".join(f"{x:.2f}" for x in box[:3])
+        angles = (
+            ""
+            if np.allclose(box[3:], 90)
+            else " (angles " + ", ".join(f"{x:.1f}" for x in box[3:]) + ")"
+        )
+        logger.info(f"Box (first frame): {lengths} angstrom{angles}")
 
 
 def main() -> None:
@@ -214,12 +240,8 @@ def main() -> None:
     - --log-level: Minimum level of the messages logged (default INFO).
     - --version: Displays the version of the MolClusters library.
 
-    Raises
-    ------
-    KeyError
-        If an atom in the topology does not have an associated element.
-    ValueError
-        If the topology has neither elements nor atom names to guess them from.
+    Errors during the analysis are logged (with their traceback in the log file
+    only) and end the program with exit code 1, or 130 when interrupted.
     """  # noqa: D401
     parser = arg.ArgumentParser()
 
@@ -251,11 +273,116 @@ def main() -> None:
     if not args.traj_memory and args.in_memory_step != 1:
         parser.error("--in-memory-step can only be used when --traj-memory is enabled.")
 
-    start_logging(
-        level=args.log_level,
-        filename=f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log",
+    log_file = Path(f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log")
+    start_logging(level=args.log_level, filename=log_file)
+    logger.info(
+        f"Running in {Path.cwd()}: {shlex.join(['molclusters', *sys.argv[1:]])}"
     )
 
+    try:
+        _analyse(args)
+    except KeyboardInterrupt:
+        logger.warning("Interrupted: the analysis stopped before writing its results")
+        sys.exit(130)
+    except Exception as err:
+        # the traceback is for bug reports; the terminal only needs what went wrong
+        logger.bind(**FILE_ONLY).opt(exception=err).error("Traceback:")
+        logger.error(
+            f"{_describe_error(err)}\n(Full traceback in {log_file.resolve()})"
+        )
+        sys.exit(1)
+
+
+def _describe_error(err: BaseException) -> str:
+    """Describe an error in one message, listing each error of an exception group.
+
+    Returns
+    -------
+    str
+        ``<type>: <message>``, one line per error for a group or a config
+        validation error.
+    """
+    if isinstance(err, BaseExceptionGroup):
+        lines = [f"{err.message}:"]
+        for sub in err.exceptions:
+            lines += ["  " + line for line in _describe_error(sub).splitlines()]
+        return "\n".join(lines)
+
+    if isinstance(err, ValidationError):
+        # pydantic's own text adds error types, the raw input and a docs link
+        lines = ["Invalid configuration:"]
+        for error in err.errors():
+            message = error["msg"].removeprefix("Value error, ")
+            loc = ".".join(str(part) for part in error["loc"])
+            lines.append(f"  {loc}: {message}" if loc else f"  {message}")
+        return "\n".join(lines)
+
+    # str(KeyError) quotes its message
+    message = err.args[0] if isinstance(err, KeyError) and err.args else err
+    return f"{type(err).__name__}: {message}"
+
+
+def _assign_radii(uni: mda.Universe) -> None:
+    """Assign van der Waals radii from elements, filling in empty ones from names.
+
+    Parameters
+    ----------
+    uni : mda.Universe
+        The Universe to update in place; it must have elements and atom names.
+
+    Raises
+    ------
+    KeyError
+        If some element has no van der Waals radius in MDAnalysis' table, or an
+        atom has no element at all.
+    """
+    radii = []
+    n_from_name = 0
+    unknown: dict[str, str] = {}  # element -> first atom that has it
+
+    for at in uni.atoms:
+        if at.element == "":
+            # Extract only the alphabetic part of the name
+            at.element = "".join(filter(str.isalpha, at.name))
+            n_from_name += 1
+        radius = vdwradii.get(at.element.upper())
+        if radius is None:
+            unknown.setdefault(at.element, str(at))
+        radii.append(radius)
+
+    if unknown:
+        details = "; ".join(
+            f"{element!r}, e.g. {atom}" if element else f"no element, e.g. {atom}"
+            for element, atom in unknown.items()
+        )
+        raise KeyError(
+            "No van der Waals radius is known for element(s) "
+            f"{sorted(unknown)} ({details}). Check the elements in the topology "
+            "(or, when it has none, the atom names they are guessed from)."
+        )
+
+    if n_from_name:
+        logger.info(
+            f"{n_from_name} atom(s) had an empty element, took it from the letters "
+            "of their atom names"
+        )
+
+    uni.add_TopologyAttr("radii", values=radii)
+
+
+def _analyse(args: arg.Namespace) -> None:
+    """Load the system described by the command-line arguments and analyse it.
+
+    Parameters
+    ----------
+    args : arg.Namespace
+        The parsed command-line arguments.
+
+    Raises
+    ------
+    ValueError
+        If the topology has neither elements nor atom names to guess them from.
+    """
     cls_args = read_config(args.inp)
 
     logger.info(f"Loading topology {args.top!r} and trajectory {args.traj!r}")
@@ -290,26 +417,7 @@ def main() -> None:
         logger.info("Topology has no atom names, using elements as names")
         uni.add_TopologyAttr("names", values=uni.atoms.elements)
 
-    try:
-        radiis = []
-        n_from_name = 0
-        for at in uni.atoms:
-            if at.element == "":
-                at.element = "".join(
-                    filter(str.isalpha, at.name)
-                )  # Extract only the alphabetic part of the name
-                n_from_name += 1
-            radiis.append(vdwradii[at.element.upper()])
-    except (KeyError, NoDataError) as err:
-        raise KeyError(f"Atom: {str(at)} does not have an element.") from err
-
-    if n_from_name:
-        logger.info(
-            f"{n_from_name} atom(s) had an empty element, took it from the letters "
-            "of their atom names"
-        )
-
-    uni.add_TopologyAttr("radii", values=radiis)
+    _assign_radii(uni)
 
     molclusters = MolClusters(uni, cls_args)
     molclusters.run()

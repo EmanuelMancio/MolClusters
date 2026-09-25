@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import runpy
+import shlex
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -11,12 +12,16 @@ from typing import Any
 import pandas as pd
 import pytest
 from MDAnalysis import Universe
+from pydantic import ValidationError
 
 import molclusters.main as cli
 from molclusters.config import MolClsConfig
 from molclusters.main import (
     _apply_lammps_dump_elements,
     _apply_lammps_resnames,
+    _assign_radii,
+    _describe_error,
+    _log_system,
     _traj_format,
 )
 from molclusters.version import __version__
@@ -281,13 +286,58 @@ class TestMain:
 
         assert levels == ["DEBUG"]
 
-    def test_unknown_element_is_reported(
-        self, cli_env: RunCli, fake_universe: FakeUniverse, config_file: Path
+    def test_errors_are_logged_and_exit(
+        self,
+        cli_env: RunCli,
+        fake_universe: FakeUniverse,
+        config_file: Path,
+        captured_logs: list[str],
     ):
         fake_universe["uni"].atoms[1].element = "Qq"
 
-        with pytest.raises(KeyError, match="does not have an element"):
+        with pytest.raises(SystemExit) as exit_info:
             cli_env("traj.xtc", "top.tpr", str(config_file))
+
+        assert exit_info.value.code == 1
+        # the traceback is logged on its own, then a readable summary
+        traceback, summary = captured_logs[-2:]
+        assert traceback.startswith("Traceback:")
+        assert summary.startswith("KeyError: No van der Waals radius")
+        assert "Full traceback in" in summary
+
+    def test_interrupt_is_logged(
+        self,
+        cli_env: RunCli,
+        config_file: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        def interrupt(*_: object, **__: object) -> None:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(cli.mda, "Universe", interrupt)
+
+        with pytest.raises(SystemExit) as exit_info:
+            cli_env("traj.xtc", "top.tpr", str(config_file))
+
+        assert exit_info.value.code == 130
+        assert captured_logs[-1].startswith("Interrupted")
+
+    def test_command_line_is_logged(
+        self,
+        cli_env: RunCli,
+        fake_universe: FakeUniverse,
+        config_file: Path,
+        captured_logs: list[str],
+        tmp_path: Path,
+    ):
+        cli_env("traj.xtc", "top.tpr", str(config_file), "--traj-memory")
+
+        (logged,) = [m for m in captured_logs if m.startswith("Running in")]
+        assert logged.rstrip() == (
+            f"Running in {tmp_path}: molclusters traj.xtc top.tpr "
+            f"{shlex.quote(str(config_file))} --traj-memory"
+        )
 
     def test_runs_on_a_tpr_topology(self, cli_env: RunCli, tmp_path: Path):
         # TPR files have no elements, and atom names such as 'CMB' or 'HM3' can't
@@ -320,7 +370,7 @@ class TestMain:
         assert (tmp_path / "molclusters.json").exists()
 
     def test_lammps_dump_without_elements_is_reported(
-        self, cli_env: RunCli, tmp_path: Path
+        self, cli_env: RunCli, tmp_path: Path, captured_logs: list[str]
     ):
         dump = write_dump(
             tmp_path, "id mol type x y z",
@@ -331,8 +381,109 @@ class TestMain:
             "rules:\n  SOL:\n    SOL: cm 5.0\nlammps_resnames:\n  SOL: 1-2\n"
         )
 
-        with pytest.raises(ValueError, match="'element' column"):
+        with pytest.raises(SystemExit):
             cli_env(dump, LAMMPS_DATA, str(config))
+
+        assert "'element' column" in captured_logs[-1]
+
+
+class TestDescribeError:
+    def test_names_the_error_type(self):
+        assert _describe_error(ValueError("bad value")) == "ValueError: bad value"
+
+    def test_key_error_message_is_not_quoted(self):
+        assert _describe_error(KeyError("no such key")) == "KeyError: no such key"
+
+    @pytest.mark.parametrize(
+        ("config", "expected"),
+        [
+            (
+                {"rules": {"MOL": {"MOL": "cm 3"}}, "distance_backend": "GPU"},
+                "\n  distance_backend: Input should be 'serial' or 'OpenMP'",
+            ),
+            (
+                {"rules": {"MOL": {"MOL": "cm abc"}}},
+                "\n  Invalid rule MOL:MOL ('cm abc'): Invalid number for 'cm'",
+            ),
+        ],
+    )
+    def test_lists_config_validation_errors_plainly(
+        self, config: dict[str, Any], expected: str
+    ):
+        with pytest.raises(ValidationError) as err_info:
+            MolClsConfig(**config)
+
+        described = _describe_error(err_info.value)
+
+        assert described.startswith("Invalid configuration:\n")
+        assert expected in described
+        assert "pydantic.dev" not in described
+
+    def test_lists_each_error_of_a_group(self):
+        err = ExceptionGroup(
+            "Errors in input file", [ValueError("first"), ValueError("second")]
+        )
+
+        assert _describe_error(err) == (
+            "Errors in input file:\n  ValueError: first\n  ValueError: second"
+        )
+
+
+class TestAssignRadii:
+    def test_takes_empty_elements_from_names(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        uni = make_universe([[]], 2, blank_elements=[0, 2])
+
+        _assign_radii(uni)
+
+        assert uni.atoms.elements.tolist() == ["C", "O", "C", "O"]
+        assert uni.atoms.radii.tolist() == [1.7, 1.52, 1.7, 1.52]
+        assert captured_logs[-1].startswith("2 atom(s) had an empty element")
+
+    def test_lists_every_unknown_element(self, make_universe: UniverseFactory):
+        uni = make_universe([[]], 2)
+        uni.atoms[1].element = "Qq"
+        uni.atoms[3].element = "Xx"
+
+        with pytest.raises(KeyError) as err_info:
+            _assign_radii(uni)
+
+        message = err_info.value.args[0]
+        assert "element(s) ['Qq', 'Xx']" in message
+        assert "'Qq', e.g. <Atom 2: O1" in message
+
+    def test_reports_atoms_left_without_element(self, make_universe: UniverseFactory):
+        uni = make_universe([[]], 1, blank_elements=[0])
+        uni.atoms[0].name = "1"  # no letters to take an element from
+
+        with pytest.raises(KeyError, match="no element, e.g. <Atom 1: 1"):
+            _assign_radii(uni)
+
+
+class TestLogSystem:
+    def test_logs_composition_times_and_box(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        uni = make_universe([[], [], []], 3, ["MOL", "SOL", "SOL"])
+
+        _log_system(uni)
+
+        assert [m.rstrip() for m in captured_logs] == [
+            "System: 6 atoms in 3 residues (1 MOL, 2 SOL)",
+            "Trajectory: 3 frame(s) from 0 to 2 ps, every 1 ps",
+            "Box (first frame): 2000.00 x 2000.00 x 2000.00 angstrom",
+        ]
+
+    def test_warns_without_box(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        uni = make_universe([[]], 1)
+        uni.dimensions = None
+
+        _log_system(uni)
+
+        assert captured_logs[-1].startswith("The trajectory has no box")
 
 
 def test_version(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):

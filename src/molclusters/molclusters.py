@@ -21,7 +21,9 @@ Dependencies:
 
 import json
 import pathlib as path
+import re
 import tempfile
+import time
 from collections import Counter, defaultdict
 from functools import reduce
 from typing import Any, Generator
@@ -37,6 +39,7 @@ from tqdm import tqdm
 from .cluster import Cluster, MDAResidueGroupAnalyzer
 from .config import MolClsConfig
 from .conntable import ConnectionTable
+from .log import FILE_ONLY, format_duration
 from .version import __version__
 
 # TODO: create analysis class to declutter MolClusters
@@ -169,6 +172,71 @@ class MolClusters:
                     f"'{field}' names residue(s) {missing} that are not in the "
                     f"topology (residue names found: {sorted(present)})."
                 )
+
+    def __check_previous_outputs(self) -> None:
+        """Warn about output files left in the working directory by an earlier run.
+
+        The per-frame .gro files are appended to, so an earlier run's frames would
+        end up mixed with this one's; the other outputs are just overwritten.
+        """
+        cwd = path.Path.cwd()
+        names = ["evo.txt", "molclusters.json"]
+        patterns = []
+        if self.config.solute is not None:
+            names.append("solute_solvent.csv")
+            patterns += [r"cls-n\d+\.gro", r"cls-id\d+\.gro"]
+            if self.config._follow_solute:
+                patterns.append(r"solute-\d+\.gro")
+        if self.config.nucleus is not None:
+            names.append("nucleus_data.csv")
+
+        overwritten = [name for name in names if (cwd / name).exists()]
+        if overwritten:
+            logger.info(f"Overwriting results of an earlier run: {overwritten}")
+
+        appended = sorted(
+            file.name
+            for file in cwd.glob("*.gro")
+            if any(re.fullmatch(pattern, file.name) for pattern in patterns)
+        )
+        if appended:
+            shown = ", ".join(appended[:5]) + (", ..." if len(appended) > 5 else "")
+            logger.warning(
+                f"{len(appended)} .gro file(s) from an earlier run are in {cwd} "
+                f"({shown}): this run appends its frames to them, mixing both runs. "
+                "Move or delete them first to keep the runs apart."
+            )
+
+    def __log_rule_connections(self, n_frames: int) -> None:
+        """Log how many connections each rule found, warning about unused rules.
+
+        Parameters
+        ----------
+        n_frames : int
+            The number of frames analysed.
+        """
+        rules = self.config._rules
+        counts = self.conntab.rule_connections
+        present = set(self.uni.residues.resnames)
+
+        per_frame = ", ".join(
+            f"{mi} - {mj} ({rules[mi, mj]}) {counts[mi, mj] / n_frames:.1f}"
+            for mi, mj in sorted(rules)
+        )
+        logger.info(f"Connections per frame, by rule: {per_frame}")
+
+        # rules naming residues missing from the topology were warned about already
+        unused = [
+            f"{mi} - {mj} ({rules[mi, mj]})"
+            for mi, mj in sorted(rules)
+            if counts[mi, mj] == 0 and {mi, mj} <= present
+        ]
+        if unused:
+            logger.warning(
+                f"Rule(s) {', '.join(unused)} never connected any molecules in "
+                f"{n_frames} frame(s): check their cutoffs (distances in angstrom, "
+                "angles in degrees)."
+            )
 
     def __nucleus_analysis(self, frame: int) -> None:
         """Perform nucleus analysis for a given frame.
@@ -526,8 +594,10 @@ class MolClusters:
 
     def __write_coordinates(self) -> None:
         """Write the coordinates of clusters to files."""
+        solutes = set(self.solutes)
         for cls in self.clusters.values():
-            if not set(self.config.solute).intersection(set(cls.resnames)):
+            sol_ids = solutes.intersection(cls.resids)
+            if not sol_ids:
                 continue
 
             with tempfile.TemporaryDirectory() as tmp_dir:
@@ -557,11 +627,7 @@ class MolClusters:
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
             if self.config._follow_solute:
-                sol_id: set[int] = set(cls.resids).intersection(set(self.solutes))
-                if len(sol_id) == 0:
-                    logger.error(f"Cluster {cls.id}: expected a solute, found none")
-                    continue
-                elif len(sol_id) > 1:
+                if len(sol_ids) > 1:
                     # TODO: make more feature-rich follow procedure
                     logger.debug(
                         f"Cluster {cls.id}: more than one solute, will not follow"
@@ -569,7 +635,7 @@ class MolClusters:
                     self.follow_skipped[cls.id] += 1
                     continue
 
-                sol_id = sol_id.pop()
+                (sol_id,) = sol_ids
 
                 with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
                     out.write("".join(dt))
@@ -582,16 +648,18 @@ class MolClusters:
         and exports the results to files.
         """
         n_frames = len(self.uni.trajectory)
+        self.__check_previous_outputs()
         logger.info(f"Tracking clusters over {n_frames} frame(s)")
         self.follow_skipped: Counter[int] = Counter()
+        start = time.perf_counter()
+        # the bar only shows on the terminal, so the log files get a line every 10%
+        progress_step = max(1, n_frames // 10)
 
         if self.config.solute is not None:
             self.__start_solute_solvent()
             self.__solute_solvent_analysis(0)
 
-        with tqdm(
-            total=len(self.uni.trajectory[1:]), initial=1, mininterval=5, miniters=10
-        ) as pbar:
+        with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
             for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                 self.__update_clusters()
                 self.__get_clusters_info(i)
@@ -604,6 +672,20 @@ class MolClusters:
 
                 self.data_holder.parse_frame()
                 pbar.update()
+
+                done = i + 1
+                if done % progress_step == 0 and done < n_frames:
+                    logger.bind(**FILE_ONLY).info(
+                        f"Frame {done}/{n_frames} ({done / n_frames:.0%}), "
+                        f"{format_duration(time.perf_counter() - start)} elapsed"
+                    )
+
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"Tracked {n_frames} frame(s) in {format_duration(elapsed)} "
+            f"({n_frames / max(elapsed, 1e-9):.1f} frames/s)"
+        )
+        self.__log_rule_connections(n_frames)
 
         if self.follow_skipped:
             logger.warning(

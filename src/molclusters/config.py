@@ -18,7 +18,6 @@ from pydantic import Field, PositiveInt, PrivateAttr, model_validator
 from pydantic.dataclasses import dataclass
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .log import _logger_wraps
 from .symdict import SymmetricDict
 
 
@@ -475,7 +474,6 @@ class MolClsConfig(BaseSettings):
         return self
 
 
-@_logger_wraps(entry=False, exit=False)
 def read_config(path: Path | str) -> MolClsConfig:
     """
     Read a configuration file and return an MolClsConfig object.

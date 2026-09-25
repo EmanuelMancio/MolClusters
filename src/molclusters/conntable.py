@@ -18,6 +18,7 @@ Dependencies:
 """
 
 import warnings
+from collections import Counter
 from typing import Generator, Iterator, overload
 
 import MDAnalysis as mda
@@ -131,9 +132,21 @@ class ConnectionTable:
         `c_distances_openmp` extension was compiled without OpenMP actually enabled
         (see `_warn_if_openmp_unavailable`). "hb" rules are unaffected, since
         HydrogenBondAnalysis doesn't expose a backend option.
+    rule_connections : Counter[tuple[str, str]]
+        The connections each rule (keyed as in `clst_args`) has found, summed over
+        every frame the table was built for.
     """
 
-    __slots__ = ["uni", "clst_args", "sels", "conntab", "cms", "hbs", "backend"]
+    __slots__ = [
+        "uni",
+        "clst_args",
+        "sels",
+        "conntab",
+        "cms",
+        "hbs",
+        "backend",
+        "rule_connections",
+    ]
 
     class _SubConnTable:
         """Represents a subgraph of the main connectivity table.
@@ -266,6 +279,7 @@ class ConnectionTable:
         _warn_if_openmp_unavailable(backend)
 
         self.cms: dict[str, np.ndarray] = {}
+        self.rule_connections: Counter[tuple[str, str]] = Counter()
         self.hbs: SymmetricDict[str, HydrogenBondAnalysis] = SymmetricDict()
         self.__start_hbonds()
         self.update()
@@ -358,9 +372,11 @@ class ConnectionTable:
             hb = self.hbs[resi, resj]
             hb._ts = self.uni.trajectory.ts
 
-            # suppress warnings when there are no HBonds
+            # a frame without hydrogen bonds is normal here, not worth a warning
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+                warnings.filterwarnings(
+                    "ignore", message="No hydrogen bonds were found"
+                )
                 hb._single_frame()
 
             distances = hb.results.hbonds[-2]
@@ -392,6 +408,7 @@ class ConnectionTable:
             pairs, attribs = self.__get_connections_and_attributes(
                 resi, resj, self.uni.dimensions
             )
+            self.rule_connections[resi, resj] += len(pairs)
 
             for k, (ri, rj) in enumerate(pairs):
                 self.conntab.add_edge(ri, rj, **attribs[k])

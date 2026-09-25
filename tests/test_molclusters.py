@@ -732,6 +732,79 @@ class TestRun:
         assert "in 2 frame(s) of 1 cluster(s)" in warning
         assert any("Results written to" in m for m in captured_logs)
 
+    def test_progress_and_duration_are_logged(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        molcls = analyze([[[1, 2]]] * 20, 2)
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        progress = [m for m in captured_logs if m.startswith("Frame ")]
+        # every 10% of the 20 frames, except the last one
+        assert [m.split(" (")[0] for m in progress] == [
+            f"Frame {n}/20" for n in range(2, 20, 2)
+        ]
+        assert any(m.startswith("Tracked 20 frame(s) in ") for m in captured_logs)
+
+    def test_connections_are_summarized_by_rule(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        # MOL-MOL connects 1-2 in both frames; nothing ever connects to SOL
+        molcls = analyze(
+            [[[1, 2]], [[1, 2]]], 3, ["MOL", "MOL", "SOL"], rules=ALL_PAIRS_RULES
+        )
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        (summary,) = [m for m in captured_logs if m.startswith("Connections per")]
+        assert f"MOL - MOL (cm {CUTOFF}) 1.0" in summary
+        (warning,) = [m for m in captured_logs if m.startswith("Rule(s)")]
+        assert f"MOL - SOL (cm {CUTOFF}), SOL - SOL (cm {CUTOFF}) never" in warning
+
+    def test_outputs_of_an_earlier_run_are_reported(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        monkeypatch.chdir(tmp_path)
+        for name in ["evo.txt", "cls-n2.gro", "solute-1.gro", "cls-n2-mine.gro"]:
+            (tmp_path / name).write_text("")
+        molcls = analyze([[[1, 2]], [[1, 2]]], 2, solute=["MOL"])
+
+        molcls.run()
+
+        assert "Overwriting results of an earlier run: ['evo.txt']\n" in captured_logs
+        # solute-1.gro is only written when following solutes
+        (warning,) = [m for m in captured_logs if ".gro file(s) from an" in m]
+        assert warning.startswith("1 .gro file(s)")
+        assert "(cls-n2.gro)" in warning
+
+    def test_a_fresh_directory_reports_no_earlier_outputs(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        monkeypatch.chdir(tmp_path)
+        molcls = analyze([[[1, 2]], [[1, 2]]], 2, solute=["MOL"])
+
+        molcls.run()
+
+        assert not any("earlier run" in m for m in captured_logs)
+
     def test_nucleus_analysis_does_not_distort_the_cluster_geometry(
         self,
         analyze: Analyze,
@@ -774,6 +847,7 @@ class TestWriteCoordinates:
         assert solute_clusters, "fixture/rule setup should yield a solute cluster"
 
         monkeypatch.chdir(tmp_path)
+        molcls._MolClusters__start_solute_solvent()  # as run() does
         molcls._MolClusters__write_coordinates()
 
         size_files = list(tmp_path.glob("cls-n*.gro"))
