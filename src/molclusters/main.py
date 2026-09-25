@@ -42,11 +42,16 @@ Example:
 """
 
 import argparse as arg
+import warnings
 from datetime import datetime
 
 import MDAnalysis as mda
+import numpy as np
 from loguru import logger
+from MDAnalysis.exceptions import NoDataError
 from MDAnalysis.guesser.tables import vdwradii
+from MDAnalysis.lib.util import guess_format
+from MDAnalysis.topology.LAMMPSParser import LammpsDumpParser
 
 from .config import MolClsConfig, read_config
 from .log import start_logging
@@ -96,6 +101,58 @@ def _apply_lammps_resnames(uni: mda.Universe, config: MolClsConfig) -> None:
     logger.debug(f"Assigned resnames from 'lammps_resnames' to {len(names)} residues.")
 
 
+def _apply_lammps_dump_elements(uni: mda.Universe, traj: str) -> None:
+    """Fill in elements on a topology from the `element` column of a LAMMPS dump.
+
+    MDAnalysis' LAMMPS dump *trajectory* reader only reads coordinates, so when a
+    DATA topology (which has no elements or atom names) is paired with a dump
+    trajectory, the dump's `element` column (``dump_modify ... element ...``) is
+    lost and elements can't be guessed. This reads that column from the dump's
+    first frame and assigns it by atom id. A no-op when the topology already has
+    elements, when `traj` isn't a LAMMPS dump, or when the dump has no `element`
+    column.
+
+    Parameters
+    ----------
+    uni : mda.Universe
+        The Universe to update in place.
+    traj : str
+        The trajectory file the Universe was built from.
+
+    Raises
+    ------
+    ValueError
+        If the dump's atom ids don't match the topology's.
+    """
+    if hasattr(uni.atoms, "elements"):
+        return
+    try:
+        if guess_format(traj) != "LAMMPSDUMP":
+            return
+    except ValueError:
+        return
+
+    with warnings.catch_warnings():
+        # only the elements are used, so the parser's mass/type fallbacks don't apply
+        warnings.filterwarnings(
+            "ignore", message="No mass column|Guessed all Masses|Set all atom types"
+        )
+        top = LammpsDumpParser(traj).parse()
+    if not hasattr(top, "elements"):
+        return
+
+    dump_ids = top.ids.values  # sorted by the parser
+    idx = np.searchsorted(dump_ids, uni.atoms.ids)
+    idx[idx == len(dump_ids)] = 0
+    if len(dump_ids) != len(uni.atoms) or np.any(dump_ids[idx] != uni.atoms.ids):
+        raise ValueError(
+            f"The atom ids in the LAMMPS dump {traj!r} don't match the topology's."
+        )
+
+    uni.add_TopologyAttr("elements", values=top.elements.values[idx])
+    logger.debug(f"Assigned elements from the LAMMPS dump {traj!r}.")
+
+
 def main() -> None:
     """Main entry point for the MolClusters analysis script.
 
@@ -115,6 +172,8 @@ def main() -> None:
     ------
     KeyError
         If an atom in the topology does not have an associated element.
+    ValueError
+        If the topology has neither elements nor atom names to guess them from.
     """  # noqa: D401
     parser = arg.ArgumentParser()
 
@@ -158,7 +217,16 @@ def main() -> None:
         cls_args.solvent = sorted(set(uni.residues.resnames) - set(cls_args.solute))
         logger.debug(f"Setting solvent to {cls_args.solvent}")
 
+    _apply_lammps_dump_elements(uni, args.traj)
+
     if not hasattr(uni.atoms, "elements"):
+        if not hasattr(uni.atoms, "names"):
+            # e.g. a LAMMPS DATA topology with a trajectory that has no element column
+            raise ValueError(
+                "The topology has neither elements nor atom names to guess them from. "
+                "For LAMMPS, write an 'element' column to the dump trajectory "
+                "(dump_modify ... element ...)."
+            )
         # e.g. TPR topologies carry types and masses but no elements
         logger.debug("Topology has no elements, guessing them from atom names.")
         uni.guess_TopologyAttrs(to_guess=["elements"])
@@ -171,7 +239,7 @@ def main() -> None:
                     filter(str.isalpha, at.name)
                 )  # Extract only the alphabetic part of the name
             radiis.append(vdwradii[at.element.upper()])
-    except KeyError as err:
+    except (KeyError, NoDataError) as err:
         raise KeyError(f"Atom: {str(at)} does not have an element.") from err
 
     uni.add_TopologyAttr("radii", values=radiis)

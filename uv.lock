@@ -985,7 +985,7 @@ dev = [
 requires-dist = [
     { name = "biopython", specifier = ">1.86" },
     { name = "loguru", specifier = ">=0.7.3,<0.8.0" },
-    { name = "mdanalysis", extras = ["analysis"], specifier = ">=2.9.0,<3.0.0" },
+    { name = "mdanalysis", extras = ["analysis"], specifier = ">=2.10.0,<3.0.0" },
     { name = "networkx", specifier = ">=3.4.2,<4.0.0" },
     { name = "numpy", specifier = ">=2.2.4,<3.0.0" },
     { name = "pandas", specifier = ">=2.2.3,<4.0.0" },

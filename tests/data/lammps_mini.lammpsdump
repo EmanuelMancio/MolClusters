@@ -1,0 +1,13 @@
+ITEM: TIMESTEP
+0
+ITEM: NUMBER OF ATOMS
+4
+ITEM: BOX BOUNDS pp pp pp
+0.0 20.0
+0.0 20.0
+0.0 20.0
+ITEM: ATOMS id mol type element x y z
+3 2 1 N 10.0 0.0 0.0
+1 1 1 O 0.0 0.0 0.0
+4 2 1 C 11.0 0.0 0.0
+2 1 1 H 1.0 0.0 0.0

@@ -13,7 +13,8 @@ path = [
     "tests/data/**/*.yml",
     "tests/data/**/*.tpr",
     "tests/data/**/*.pdb",
-    "tests/data/**/*.data"
+    "tests/data/**/*.data",
+    "tests/data/**/*.lammpsdump"
 ]
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"

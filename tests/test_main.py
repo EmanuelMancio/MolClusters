@@ -14,7 +14,7 @@ from MDAnalysis import Universe
 
 import molclusters.main as cli
 from molclusters.config import MolClsConfig
-from molclusters.main import _apply_lammps_resnames
+from molclusters.main import _apply_lammps_dump_elements, _apply_lammps_resnames
 from molclusters.version import __version__
 
 from .conftest import CUTOFF, UniverseFactory
@@ -65,6 +65,67 @@ class TestApplyLammpsResnames:
 
         with pytest.raises(ValueError, match="does not cover"):
             _apply_lammps_resnames(uni, config)
+
+
+LAMMPS_DATA = str(DATA_DIR / "lammps_mini.data")
+LAMMPS_DUMP = str(DATA_DIR / "lammps_mini.lammpsdump")
+
+
+def write_dump(tmp_path: Path, columns: str, rows: list[str]) -> str:
+    path = tmp_path / "traj.lammpsdump"
+    path.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n"
+        f"{len(rows)}\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0.0 20.0\n0.0 20.0\n0.0 20.0\n"
+        f"ITEM: ATOMS {columns}\n" + "\n".join(rows) + "\n"
+    )
+    return str(path)
+
+
+class TestApplyLammpsDumpElements:
+    def test_assigns_elements_by_atom_id(self):
+        # the dump lists the atoms out of id order
+        uni = Universe(LAMMPS_DATA, LAMMPS_DUMP)
+
+        _apply_lammps_dump_elements(uni, LAMMPS_DUMP)
+
+        assert list(uni.atoms.elements) == ["O", "H", "N", "C"]
+
+    def test_noop_when_trajectory_is_not_a_lammps_dump(self):
+        uni = Universe(LAMMPS_DATA)
+
+        _apply_lammps_dump_elements(uni, "traj.xtc")
+
+        assert not hasattr(uni.atoms, "elements")
+
+    def test_noop_when_dump_has_no_element_column(self, tmp_path: Path):
+        dump = write_dump(
+            tmp_path, "id mol type x y z",
+            ["1 1 1 0 0 0", "2 1 1 1 0 0", "3 2 1 10 0 0", "4 2 1 11 0 0"],
+        )  # fmt: skip
+        uni = Universe(LAMMPS_DATA, dump)
+
+        _apply_lammps_dump_elements(uni, dump)
+
+        assert not hasattr(uni.atoms, "elements")
+
+    def test_keeps_existing_elements(self, make_universe: UniverseFactory):
+        uni = make_universe([[]], 2)
+        elements = list(uni.atoms.elements)
+
+        _apply_lammps_dump_elements(uni, LAMMPS_DUMP)
+
+        assert list(uni.atoms.elements) == elements
+
+    def test_raises_when_atom_ids_do_not_match(self, tmp_path: Path):
+        dump = write_dump(
+            tmp_path, "id mol type element x y z",
+            ["1 1 1 O 0 0 0", "2 1 1 H 1 0 0", "3 2 1 N 10 0 0", "5 2 1 C 11 0 0"],
+        )  # fmt: skip
+        uni = Universe(LAMMPS_DATA)
+
+        with pytest.raises(ValueError, match="don't match"):
+            _apply_lammps_dump_elements(uni, dump)
 
 
 def write_config(tmp_path: Path, extra: str = "") -> Path:
@@ -200,6 +261,34 @@ class TestMain:
         )
 
         assert (tmp_path / "molclusters.json").exists()
+
+    def test_runs_on_a_lammps_data_topology_with_a_dump(
+        self, cli_env: RunCli, tmp_path: Path
+    ):
+        # DATA files have neither elements nor atom names: they come from the dump
+        config = tmp_path / "input.yaml"
+        config.write_text(
+            "rules:\n  SOL:\n    SOL: cm 5.0\nlammps_resnames:\n  SOL: 1-2\n"
+        )
+
+        cli_env(LAMMPS_DUMP, LAMMPS_DATA, str(config))
+
+        assert (tmp_path / "molclusters.json").exists()
+
+    def test_lammps_dump_without_elements_is_reported(
+        self, cli_env: RunCli, tmp_path: Path
+    ):
+        dump = write_dump(
+            tmp_path, "id mol type x y z",
+            ["1 1 1 0 0 0", "2 1 1 1 0 0", "3 2 1 10 0 0", "4 2 1 11 0 0"],
+        )  # fmt: skip
+        config = tmp_path / "input.yaml"
+        config.write_text(
+            "rules:\n  SOL:\n    SOL: cm 5.0\nlammps_resnames:\n  SOL: 1-2\n"
+        )
+
+        with pytest.raises(ValueError, match="'element' column"):
+            cli_env(dump, LAMMPS_DATA, str(config))
 
 
 def test_version(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
