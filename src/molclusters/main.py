@@ -34,6 +34,7 @@ Optional Arguments:
 -------------------
 - --traj-memory: Load the trajectory into memory.
 - --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
+- --log-level: Minimum level of the messages logged (default INFO).
 - --version: Displays the version of the MolClusters library.
 
 Example:
@@ -43,6 +44,7 @@ Example:
 
 import argparse as arg
 import warnings
+from collections import Counter
 from datetime import datetime
 
 import MDAnalysis as mda
@@ -98,7 +100,9 @@ def _apply_lammps_resnames(uni: mda.Universe, config: MolClsConfig) -> None:
     else:
         uni.add_TopologyAttr("resnames", values=names)
 
-    logger.debug(f"Assigned resnames from 'lammps_resnames' to {len(names)} residues.")
+    logger.info(
+        f"Assigned residue names from 'lammps_resnames' to {len(names)} residues"
+    )
 
 
 # File extensions (compressed or not) read as LAMMPS dump trajectories. MDAnalysis
@@ -171,7 +175,27 @@ def _apply_lammps_dump_elements(uni: mda.Universe, traj: str) -> None:
         )
 
     uni.add_TopologyAttr("elements", values=top.elements.values[idx])
-    logger.debug(f"Assigned elements from the LAMMPS dump {traj!r}.")
+    logger.info(f"Assigned elements from the LAMMPS dump {traj!r}")
+
+
+def _log_system(uni: mda.Universe) -> None:
+    """Log a summary of the loaded system, for the user to check against expectations.
+
+    Parameters
+    ----------
+    uni : mda.Universe
+        The loaded Universe.
+    """
+    if hasattr(uni.residues, "resnames"):
+        counts = Counter(uni.residues.resnames)
+        composition = ", ".join(f"{n} {name}" for name, n in counts.items())
+    else:
+        composition = "no residue names"
+
+    logger.info(
+        f"System: {len(uni.atoms)} atoms in {len(uni.residues)} residues "
+        f"({composition}); {len(uni.trajectory)} frame(s)"
+    )
 
 
 def main() -> None:
@@ -187,6 +211,7 @@ def main() -> None:
     - inp: The input YAML/JSON/TOML file containing analysis settings.
     - --traj-memory: Load the trajectory into memory.
     - --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
+    - --log-level: Minimum level of the messages logged (default INFO).
     - --version: Displays the version of the MolClusters library.
 
     Raises
@@ -212,6 +237,13 @@ def main() -> None:
         default=1,
         help="Step for in-memory trajectory loading. Default is 1.",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str.upper,
+        choices=["TRACE", "DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Minimum level of the messages logged. Default is INFO.",
+    )
     parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
@@ -219,12 +251,14 @@ def main() -> None:
     if not args.traj_memory and args.in_memory_step != 1:
         parser.error("--in-memory-step can only be used when --traj-memory is enabled.")
 
-    start_logging(filename=f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log")
+    start_logging(
+        level=args.log_level,
+        filename=f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log",
+    )
 
-    logger.info("Reading configuration")
     cls_args = read_config(args.inp)
 
-    logger.info("Starting Cluster Analysis")
+    logger.info(f"Loading topology {args.top!r} and trajectory {args.traj!r}")
     uni = mda.Universe(
         args.top,
         args.traj,
@@ -234,10 +268,7 @@ def main() -> None:
     )
 
     _apply_lammps_resnames(uni, cls_args)
-
-    if cls_args.solvent is None and cls_args.solute is not None:
-        cls_args.solvent = sorted(set(uni.residues.resnames) - set(cls_args.solute))
-        logger.debug(f"Setting solvent to {cls_args.solvent}")
+    _log_system(uni)
 
     _apply_lammps_dump_elements(uni, args.traj)
 
@@ -250,25 +281,33 @@ def main() -> None:
                 "(dump_modify ... element ...)."
             )
         # e.g. TPR topologies carry types and masses but no elements
-        logger.debug("Topology has no elements, guessing them from atom names.")
+        logger.info("Topology has no elements, guessing them from atom names")
         uni.guess_TopologyAttrs(to_guess=["elements"])
 
     if not hasattr(uni.atoms, "names"):
         # e.g. LAMMPS topologies, which carry no atom names of their own. Without
         # this, MDAnalysis' GRO writer would warn and write every atom as "X".
-        logger.debug("Topology has no atom names, using elements as names.")
+        logger.info("Topology has no atom names, using elements as names")
         uni.add_TopologyAttr("names", values=uni.atoms.elements)
 
     try:
         radiis = []
+        n_from_name = 0
         for at in uni.atoms:
             if at.element == "":
                 at.element = "".join(
                     filter(str.isalpha, at.name)
                 )  # Extract only the alphabetic part of the name
+                n_from_name += 1
             radiis.append(vdwradii[at.element.upper()])
     except (KeyError, NoDataError) as err:
         raise KeyError(f"Atom: {str(at)} does not have an element.") from err
+
+    if n_from_name:
+        logger.info(
+            f"{n_from_name} atom(s) had an empty element, took it from the letters "
+            "of their atom names"
+        )
 
     uni.add_TopologyAttr("radii", values=radiis)
 

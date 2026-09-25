@@ -265,6 +265,22 @@ class TestMain:
         assert exit_info.value.code == 2
         assert "--traj-memory" in capsys.readouterr().err
 
+    def test_log_level_is_forwarded(
+        self,
+        cli_env: RunCli,
+        fake_universe: FakeUniverse,
+        config_file: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        levels = []
+        monkeypatch.setattr(
+            cli, "start_logging", lambda level, **_: levels.append(level)
+        )
+
+        cli_env("traj.xtc", "top.tpr", str(config_file), "--log-level", "debug")
+
+        assert levels == ["DEBUG"]
+
     def test_unknown_element_is_reported(
         self, cli_env: RunCli, fake_universe: FakeUniverse, config_file: Path
     ):

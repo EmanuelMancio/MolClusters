@@ -37,6 +37,76 @@ class TestFollowSolute:
 
         assert config._follow_solute is False
 
+    def test_follow_solute_alone_does_not_warn(self, captured_logs: list[str]):
+        MolClsConfig(rules={"A": {"A": "cm 5.0"}}, solute=["A"], follow=["solute"])
+
+        assert captured_logs == []
+
+    @pytest.mark.parametrize(
+        ("follow", "unused"),
+        [
+            (["solute", 3], "[3]"),
+            # without the keyword, listing the solute by name follows nothing
+            (["A"], "['A']"),
+        ],
+    )
+    def test_entries_without_effect_warn(
+        self, captured_logs: list[str], follow: list, unused: str
+    ):
+        MolClsConfig(rules={"A": {"A": "cm 5.0"}}, solute=["A"], follow=follow)
+
+        (warning,) = captured_logs
+        assert f"'follow' entries {unused} have no effect" in warning
+
+
+class TestDescribe:
+    def test_shows_what_the_analysis_runs_with(self):
+        config = MolClsConfig(
+            rules={"B": {"A": "hb", "B": "cm 5"}},
+            solute=["A"],
+            solvent=["B"],
+            nucleus=["solute"],
+            follow=["solute"],
+            ignore_composition=[["B", "A"], ["B"]],
+            lammps_resnames={"A": "1-10", "B": [11, "12-20"]},
+            distance_backend="OpenMP",
+        )
+
+        assert config.describe().splitlines() == [
+            "rules (distances in angstrom, angles in degrees):",
+            "  A - B: hb d 3.5 a 150.0",
+            "  B - B: cm 5.0",
+            "solute: A",
+            "solvent: B",
+            "nucleus: A",
+            "follow: solute (one solute-<resid>.gro per solute)",
+            "ignore_composition: A + B; B",
+            "distance_backend: OpenMP (cm rules only)",
+            "lammps_resnames: A = 1-10, B = 11-20",
+        ]
+
+    def test_unset_options(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}})
+
+        assert config.describe().splitlines() == [
+            "rules (distances in angstrom, angles in degrees):",
+            "  A - A: cm 5.0",
+            "solute: none",
+            "solvent: none",
+            "nucleus: none",
+            "follow: none",
+            "ignore_composition: none",
+            "distance_backend: serial (cm rules only)",
+            "lammps_resnames: none",
+        ]
+
+    def test_every_option_is_described(self):
+        # a newly added config option must show up in the log too, even when unset
+        described = MolClsConfig(rules={"A": {"A": "cm 5.0"}}).describe()
+
+        for field in MolClsConfig.model_fields:
+            assert any(line.startswith(f"{field}") for line in described.splitlines())
+
 
 class TestLammpsResnames:
     def test_no_mapping_configured(self):
@@ -328,6 +398,15 @@ class TestReadConfigFormats:
 
         assert config.solute == ["SOL"]
         assert config._rules["SOL", "SOL"] == HBRule(dist=3.0)
+
+    def test_unknown_keys_warn(self, tmp_path: Path, captured_logs: list[str]):
+        path = tmp_path / "input.json"
+        path.write_text('{"rules": {"SOL": {"SOL": "cm 5.0"}}, "nucleous": ["SOL"]}')
+
+        read_config(path)
+
+        (warning,) = [m for m in captured_logs if m.startswith("Ignoring unknown")]
+        assert warning.startswith("Ignoring unknown config key(s) ['nucleous']")
 
     def test_unsupported_extension(self, tmp_path: Path):
         path = tmp_path / "input.ini"

@@ -11,8 +11,13 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from loguru import logger
+from tqdm import tqdm
 
 from .version import version
+
+# The terminal only needs what happened; the log files keep loguru's full format,
+# with the module, function and line of each message.
+_TERMINAL_FORMAT = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>"
 
 
 class STATUS(Enum):
@@ -44,12 +49,18 @@ def start_logging(
         filename = Path(filename)
 
         logger.remove(0)
-        logger.add(sys.stderr, level=level)
+        # written through tqdm so a message doesn't break an active progress bar
+        logger.add(
+            lambda msg: tqdm.write(msg, end="", file=sys.stderr),
+            level=level,
+            format=_TERMINAL_FORMAT,
+            colorize=sys.stderr.isatty(),
+        )
         logger.add(filename.with_suffix(".json"), serialize=True, level=level)
         logger.add(filename, level=level)
 
         logger.enable("molclusters")
-        logger.info(f"Package molclusters | Version {version} | Start logging.")
+        logger.info(f"MolClusters {version} | Logging to {filename.resolve()}")
 
         LOG_STATUS = STATUS.ON
 

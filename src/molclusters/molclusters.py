@@ -89,6 +89,7 @@ class MolClusters:
         "nucleus_data",
         "nucleus_holder",
         "data_holder",
+        "follow_skipped",
     ]
 
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
@@ -103,6 +104,19 @@ class MolClusters:
         """
         self.uni = universe
         self.config = config
+
+        if config.solvent is None and config.solute is not None:
+            config.solvent = sorted(
+                set(universe.residues.resnames) - set(config.solute)
+            )
+            logger.info(
+                "No 'solvent' configured: using every non-solute residue name in the "
+                f"topology: {config.solvent}"
+            )
+
+        self.__check_resnames()
+        logger.info(f"Effective configuration:\n{config.describe()}")
+
         self.sels: dict[str, core.groups.AtomGroup] = {
             res: self.uni.select_atoms(f"resname {res}")
             for res in config._rules.all_keys()
@@ -132,6 +146,29 @@ class MolClusters:
 
         self.data_holder = MolClustersData(self)
         self.data_holder.parse_frame()
+
+    def __check_resnames(self) -> None:
+        """Warn about residue names in the config that the topology doesn't have.
+
+        A misspelled or missing name selects no atoms, so everything built on it
+        would silently come out empty.
+        """
+        present = set(self.uni.residues.resnames)
+        comps = self.config.ignore_composition or []
+        fields = {
+            "rules": self.config._rules.all_keys(),
+            "solute": self.config.solute or [],
+            "solvent": self.config.solvent or [],
+            "nucleus": self.config.nucleus or [],
+            "ignore_composition": {name for comp in comps for name in comp},
+        }
+        for field, names in fields.items():
+            missing = sorted(set(names) - present)
+            if missing:
+                logger.warning(
+                    f"'{field}' names residue(s) {missing} that are not in the "
+                    f"topology (residue names found: {sorted(present)})."
+                )
 
     def __nucleus_analysis(self, frame: int) -> None:
         """Perform nucleus analysis for a given frame.
@@ -526,9 +563,10 @@ class MolClusters:
                     continue
                 elif len(sol_id) > 1:
                     # TODO: make more feature-rich follow procedure
-                    logger.warning(
+                    logger.debug(
                         f"Cluster {cls.id}: more than one solute, will not follow"
                     )
+                    self.follow_skipped[cls.id] += 1
                     continue
 
                 sol_id = sol_id.pop()
@@ -543,6 +581,10 @@ class MolClusters:
         This method performs cluster detection, solute-solvent analysis, nucleus analysis,
         and exports the results to files.
         """
+        n_frames = len(self.uni.trajectory)
+        logger.info(f"Tracking clusters over {n_frames} frame(s)")
+        self.follow_skipped: Counter[int] = Counter()
+
         if self.config.solute is not None:
             self.__start_solute_solvent()
             self.__solute_solvent_analysis(0)
@@ -562,6 +604,24 @@ class MolClusters:
 
                 self.data_holder.parse_frame()
                 pbar.update()
+
+        if self.follow_skipped:
+            logger.warning(
+                f"Solutes were not followed in {self.follow_skipped.total()} "
+                f"frame(s) of {len(self.follow_skipped)} cluster(s) holding more than "
+                "one solute: those frames are missing from the solute-<resid>.gro "
+                "files. The cluster ids are logged at DEBUG level (--log-level DEBUG)."
+            )
+            logger.debug(f"Frames not followed, by cluster id: {self.follow_skipped}")
+
+        n_clusters = self.clusters_size_evo[:, 1]
+        logger.info(
+            f"Found {n_clusters.mean():.1f} cluster(s) per frame on average "
+            f"({n_clusters.min():.0f}-{n_clusters.max():.0f}); the largest held "
+            f"{self.clusters_size_evo[:, 4].max():.0f} molecule(s)."
+        )
+
+        outputs = ["evo.txt", "molclusters.json"]
 
         np.savetxt(
             "evo.txt",
@@ -585,6 +645,9 @@ class MolClusters:
                 ],
             )
             self.solute_data.to_csv("solute_solvent.csv", index=False)
+            outputs += ["solute_solvent.csv", "cls-n<size>.gro", "cls-id<id>.gro"]
+            if self.config._follow_solute:
+                outputs.append("solute-<resid>.gro")
 
         if self.config.nucleus is not None:
             self.nucleus_data = pd.DataFrame(
@@ -602,9 +665,12 @@ class MolClusters:
                 ],
             )
             self.nucleus_data.to_csv("nucleus_data.csv", index=False)
+            outputs.append("nucleus_data.csv")
 
         with path.Path("molclusters.json").open("w+") as json_out:
             json.dump(self.data_holder.data, json_out, indent=2)
+
+        logger.info(f"Results written to {path.Path.cwd()}: {', '.join(outputs)}")
 
     def find(self, mol: int) -> int | bool:
         """Find the cluster ID for a given molecule.

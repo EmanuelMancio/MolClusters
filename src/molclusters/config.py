@@ -57,6 +57,16 @@ class CMRule(Rule):
     dist: _Distance
     type: RuleType = Field(RuleType.CM, frozen=True)
 
+    def __str__(self) -> str:
+        """Format the rule in the config file's own syntax.
+
+        Returns
+        -------
+        str
+            E.g. ``cm 5.0``.
+        """
+        return f"cm {self.dist}"
+
 
 @dataclass(kw_only=True)
 class HBRule(Rule):
@@ -65,6 +75,16 @@ class HBRule(Rule):
     dist: _Distance = 3.5
     ang: Annotated[float, Field(ge=0.0, le=180.0)] = 150.0
     type: RuleType = Field(RuleType.HB, frozen=True)
+
+    def __str__(self) -> str:
+        """Format the rule in the config file's own syntax, defaults filled in.
+
+        Returns
+        -------
+        str
+            E.g. ``hb d 3.5 a 150.0``.
+        """
+        return f"hb d {self.dist} a {self.ang}"
 
 
 _HB_FLAGS = {"d": "dist", "a": "ang"}
@@ -274,6 +294,53 @@ class MolClsConfig(BaseSettings):
         """
         return frozenset(resnames) in self._ignore_composition
 
+    def describe(self) -> str:
+        """
+        Describe the configuration the analysis actually runs with.
+
+        Unlike the raw config file, this shows the parsed rules with their
+        defaults filled in, the `solute` keyword expanded, and the LAMMPS molecule
+        id ranges merged, so a user can check what was understood.
+
+        Returns
+        -------
+        str
+            A multi-line, human-readable description.
+        """
+
+        def names(values: Iterable[str] | None) -> str:
+            return ", ".join(values) if values else "none"
+
+        lines = ["rules (distances in angstrom, angles in degrees):"]
+        lines += [
+            f"  {mi} - {mj}: {self._rules[mi, mj]}" for mi, mj in sorted(self._rules)
+        ]
+        lines.append(f"solute: {names(self.solute)}")
+        lines.append(f"solvent: {names(self.solvent)}")
+        lines.append(f"nucleus: {names(self.nucleus)}")
+        lines.append(
+            "follow: "
+            + (
+                "solute (one solute-<resid>.gro per solute)"
+                if self._follow_solute
+                else "none"
+            )
+        )
+
+        comps = self.ignore_composition or []
+        lines.append(
+            f"ignore_composition: {'; '.join(' + '.join(sorted(c)) for c in comps) or 'none'}"
+        )
+        lines.append(f"distance_backend: {self.distance_backend} (cm rules only)")
+
+        ranges = [
+            f"{name} = {start}" if start == end else f"{name} = {start}-{end}"
+            for start, end, name in self._lammps_resid_ranges
+        ]
+        lines.append(f"lammps_resnames: {', '.join(ranges) or 'none'}")
+
+        return "\n".join(lines)
+
     @model_validator(mode="after")
     def _build_rules(self) -> Self:
         for mi, neighbors in self.rules.items():
@@ -332,6 +399,20 @@ class MolClsConfig(BaseSettings):
 
         if errors:
             raise ExceptionGroup("Errors in input file", errors)
+
+        if self.follow is not None:
+            # only the `solute` keyword drives any output so far; after expansion
+            # the solute resnames are indistinguishable from ones listed by hand
+            unused = [
+                f
+                for f in self.follow
+                if not (self._follow_solute and f in (self.solute or []))
+            ]
+            if unused:
+                logger.warning(
+                    f"'follow' entries {unused} have no effect: only the 'solute' "
+                    "keyword is supported so far."
+                )
 
         return self
 
@@ -440,8 +521,14 @@ def read_config(path: Path | str) -> MolClsConfig:
                 f"Unsupported config type: {path}. Only JSON, YAML, and TOML supported."
             )
 
-    config = MolClsConfig(**data)
+    logger.debug(f"Config file contents: {data}")
 
-    logger.info(f"Configuration read:\n{config}")
+    # `extra="ignore"` would otherwise silently drop a misspelled key
+    unknown = sorted(data.keys() - MolClsConfig.model_fields.keys())
+    if unknown:
+        logger.warning(
+            f"Ignoring unknown config key(s) {unknown}; check them for typos. "
+            f"Known keys: {sorted(MolClsConfig.model_fields)}."
+        )
 
-    return config
+    return MolClsConfig(**data)

@@ -87,6 +87,35 @@ def analyze(make_universe: UniverseFactory) -> Analyze:
     return factory
 
 
+class TestConfigResolution:
+    def test_solvent_defaults_to_every_non_solute_resname(
+        self, analyze: Analyze, captured_logs: list[str]
+    ):
+        molcls = analyze(
+            [[]], 3, ["MOL", "SOL", "ION"], rules=ALL_PAIRS_RULES, solute=["MOL"]
+        )
+
+        assert molcls.config.solvent == ["ION", "SOL"]
+        assert any("No 'solvent' configured" in m for m in captured_logs)
+
+    def test_effective_configuration_is_logged(
+        self, analyze: Analyze, captured_logs: list[str]
+    ):
+        molcls = analyze([[]], 2, ["MOL", "SOL"], rules=ALL_PAIRS_RULES, solute=["MOL"])
+
+        (logged,) = [m for m in captured_logs if m.startswith("Effective config")]
+        assert molcls.config.describe() in logged
+        assert "solvent: SOL" in logged
+
+    def test_resnames_missing_from_the_topology_warn(
+        self, analyze: Analyze, captured_logs: list[str]
+    ):
+        analyze([[]], 2, ["MOL", "SOL"], solute=["MOL"], solvent=["WAT"])
+
+        (warning,) = [m for m in captured_logs if "not in the topology" in m]
+        assert warning.startswith("'solvent' names residue(s) ['WAT']")
+
+
 class TestClusterIdentity:
     """The dominance algorithm: which cluster keeps its id from one frame to the next."""
 
@@ -678,6 +707,30 @@ class TestRun:
         assert [p.name for p in full_run.glob("solute-*.gro")] == ["solute-1.gro"]
         frames = (full_run / "solute-1.gro").read_text().count("Cluster-")
         assert frames == 1
+
+    def test_skipped_solute_following_is_summarized_once(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        # {7,8} holds two solutes in frames 1 and 2, so it can't be followed
+        molcls = analyze(
+            RUN_FRAMES,
+            10,
+            RUN_RESNAMES,
+            rules=ALL_PAIRS_RULES,
+            solute=["MOL"],
+            follow=["solute"],
+        )
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        (warning,) = [m for m in captured_logs if m.startswith("Solutes were not")]
+        assert "in 2 frame(s) of 1 cluster(s)" in warning
+        assert any("Results written to" in m for m in captured_logs)
 
     def test_nucleus_analysis_does_not_distort_the_cluster_geometry(
         self,
