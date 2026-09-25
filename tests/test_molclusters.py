@@ -311,6 +311,126 @@ class TestClusterIdentity:
         assert list(snapshot(molcls).values()) == [{1, 2, 3}]
         assert molcls.find(4) is False
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="dominance only scans later (smaller) groups and a merge loser is not "
+        "marked as used, so it keeps its id in a remnant only if the remnant's group "
+        "is processed after the merge group",
+    )
+    def test_merge_loser_fate_does_not_depend_on_group_order(self, analyze: Analyze):
+        # A loses a merge to B in both cases, leaving a remnant elsewhere; only the
+        # remnant's size relative to the merge group differs (free newcomers)
+        a, b = list(range(1, 11)), list(range(11, 21))
+        remnant_smaller = analyze(
+            [[a, b], [list(range(1, 9)) + list(range(11, 20)), [9, 10, 30]]], 30
+        )
+        a_smaller = id_of(remnant_smaller, set(a))
+
+        a, b = list(range(1, 11)), list(range(11, 18))
+        remnant_larger = analyze(
+            [[a, b], [[1, 2, 3, 4, *range(30, 42)], list(range(5, 11)) + b]], 41
+        )
+        a_larger = id_of(remnant_larger, set(a))
+
+        step(remnant_smaller, 1)
+        step(remnant_larger, 1)
+
+        survives = {
+            "remnant smaller": a_smaller in remnant_smaller.clusters,
+            "remnant larger": a_larger in remnant_larger.clusters,
+        }
+        assert len(set(survives.values())) == 1, f"A survives: {survives}"
+
+    @pytest.mark.parametrize(
+        ("frames", "n_res", "pure"),
+        [
+            pytest.param(
+                [[[1, 2, 3, 4]], [[1, 2, 10], [3, 4]]], 10, {3, 4}, id="dimer"
+            ),
+            pytest.param(
+                [[[1, 2, 3, 4, 5, 6]], [[1, 2, 3, 10, 11], [4, 5, 6]]],
+                11,
+                {4, 5, 6},
+                id="trimer",
+                marks=pytest.mark.xfail(
+                    strict=True,
+                    reason="the pure-fragment tie-break in __check_dominance only "
+                    "applies to dimers (len(subconn) == 2)",
+                ),
+            ),
+        ],
+    )
+    def test_pure_fragment_wins_a_tie_whatever_its_size(
+        self, analyze: Analyze, frames: list[Groups], n_res: int, pure: set[int]
+    ):
+        # the cluster splits into two halves; one half picked up newcomers, the
+        # other is made only of the cluster's own molecules and must keep the id
+        molcls = analyze(frames, n_res)
+        cid = id_of(molcls, set(frames[0][0]))
+
+        step(molcls, 1)
+
+        assert id_of(molcls, pure) == cid
+
+    @pytest.mark.parametrize(
+        "halves",
+        [
+            [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]],
+            [[6, 7, 8, 9, 10], [1, 2, 3, 4, 5]],
+            [[2, 4, 6, 8, 10], [1, 3, 5, 7, 9]],
+        ],
+        ids=["low-first", "high-first", "interleaved"],
+    )
+    def test_even_split_keeps_the_id_in_the_half_with_the_lowest_resid(
+        self, analyze: Analyze, halves: list[list[int]]
+    ):
+        # pins the current tie-break: equal-size groups keep networkx's component
+        # order (resid order), so the half holding resid 1 wins. Arbitrary rather
+        # than physical; update if a spatial tie-break is adopted.
+        molcls = analyze([[list(range(1, 11))], halves], 10)
+        cid = id_of(molcls, set(range(1, 11)))
+
+        step(molcls, 1)
+
+        (low,) = [set(h) for h in halves if 1 in h]
+        (high,) = [set(h) for h in halves if 1 not in h]
+        assert id_of(molcls, low) == cid
+        assert id_of(molcls, high) > cid
+
+    def test_one_frame_break_mints_a_transient_id(self, analyze: Analyze):
+        # pins the current behaviour: no persistence window, so a contact broken for
+        # a single frame creates an id that dies when the halves rejoin
+        molcls = analyze(
+            [[[1, 2, 3, 4, 5, 6]], [[1, 2, 3], [4, 5, 6]], [[1, 2, 3, 4, 5, 6]]], 6
+        )
+        cid = id_of(molcls, {1, 2, 3, 4, 5, 6})
+
+        step(molcls, 1)
+        transient = id_of(molcls, {4, 5, 6})
+        assert transient > cid
+
+        step(molcls, 2)
+
+        assert snapshot(molcls) == {cid: {1, 2, 3, 4, 5, 6}}
+
+    def test_ignored_composition_group_does_not_claim_the_id(self, analyze: Analyze):
+        # the cluster's solvent shell {3, 4, 5} drifts off as a pure-solvent group,
+        # which is ignored; it holds more of the cluster than {1, 2, 6}, but ignored
+        # groups are invisible to the dominance check, so the id stays with the solute
+        resnames = ["MOL"] + ["SOL"] * 4 + ["MOL"]
+        molcls = analyze(
+            [[[1, 2, 3, 4, 5]], [[1, 2, 6], [3, 4, 5]]],
+            6,
+            resnames,
+            rules=ALL_PAIRS_RULES,
+            ignore_composition=[["SOL"]],
+        )
+        cid = id_of(molcls, {1, 2, 3, 4, 5})
+
+        step(molcls, 1)
+
+        assert snapshot(molcls) == {cid: {1, 2, 6}}
+
 
 # resids 1-3 and 7-8 are solute (MOL), 4-6 and 9-10 solvent (SOL); {9, 10} is a
 # pure-solvent cluster throughout, which every solute analysis must ignore
