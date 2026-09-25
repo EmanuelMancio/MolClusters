@@ -243,7 +243,13 @@ def main() -> None:
     Errors during the analysis are logged (with their traceback in the log file
     only) and end the program with exit code 1, or 130 when interrupted.
     """  # noqa: D401
-    parser = arg.ArgumentParser()
+    parser = arg.ArgumentParser(
+        prog="molclusters",
+        description=(
+            f"MolClusters {__version__}: analyze the formation and lifetime of "
+            "molecular clusters in a molecular dynamics trajectory."
+        ),
+    )
 
     parser.add_argument("traj", type=str, help="Trajectory File.")
     parser.add_argument("top", type=str, help="Topology file.")
