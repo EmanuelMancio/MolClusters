@@ -262,6 +262,25 @@ class TestHydrogenBondRule:
         np.testing.assert_array_equal(hb._acceptors.indices, acceptors.indices)
         assert set(hb._donors.resnames) == {"MAL"}
 
+    def test_rule_sets_the_hydrogen_and_acceptor_criteria(self, mixed_uni: Universe):
+        spec = f"hb d {self.D_A} a {self.ANGLE} hmin 1.0 hmax 1.2 hq 0.46 aq -0.4"
+        hb = build(mixed_uni, {"MAL": {"MAL": spec}}).hbs["MAL", "MAL"]
+
+        mal = mixed_uni.select_atoms("resname MAL")
+        hydrogens = (
+            mixed_uni.select_atoms(
+                hb.guess_hydrogens(min_mass=1.0, max_mass=1.2, min_charge=0.46)
+            )
+            & mal
+        )
+        acceptors = mixed_uni.select_atoms(hb.guess_acceptors(max_charge=-0.4)) & mal
+
+        # these thresholds drop HMA and add OMC/OMD (the defaults' OM2/OM9 stay)
+        assert len(hydrogens) == 2 * mal.n_residues
+        assert len(acceptors) == 4 * mal.n_residues
+        np.testing.assert_array_equal(hb._hydrogens.indices, hydrogens.indices)
+        np.testing.assert_array_equal(hb._acceptors.indices, acceptors.indices)
+
     def test_rule_without_hbonding_atoms_finds_nothing(self):
         uni = Universe(str(DATA_DIR / "met-mal.tpr"), str(DATA_DIR / "start.pdb"))
 

@@ -74,7 +74,7 @@ class TestDescribe:
 
         assert config.describe().splitlines() == [
             "rules (distances in angstrom, angles in degrees):",
-            "  A - B: hb d 3.5 a 150.0",
+            "  A - B: hb d 3.5 a 150.0 hmin 0.9 hmax 1.1 hq 0.3 aq -0.5",
             "  B - B: cm 5.0",
             "solute: A",
             "solvent: B",
@@ -299,6 +299,15 @@ class TestRules:
 
         assert rule == HBRule(dist=3.0, ang=120.0)
 
+    def test_hb_rule_charge_and_mass_flags(self):
+        spec = "hb aq -0.4 hq 0.2 hmax 2.1 hmin 0.5"
+        rule = MolClsConfig(rules={"A": {"A": spec}})._rules["A", "A"]
+
+        assert rule == HBRule(
+            h_mass_min=0.5, h_mass_max=2.1, h_charge_min=0.2, a_charge_max=-0.4
+        )
+        assert str(rule) == "hb d 3.5 a 150.0 hmin 0.5 hmax 2.1 hq 0.2 aq -0.4"
+
     @pytest.mark.parametrize(
         ("spec", "message"),
         [
@@ -311,13 +320,18 @@ class TestRules:
             ("hb d 3 d 4", "only be used once"),
             ("hb x 3", "only supports flags"),
             ("hb a wide", "Invalid number for 'a'"),
+            ("hb hq big", "Invalid number for 'hq'"),
+            ("hb hmin 1.1", "hmin < hmax"),
+            ("hb hmin 2 hmax 1", "hmin < hmax"),
         ],
     )
     def test_invalid_rules_raise(self, spec: str, message: str):
         with pytest.raises(ValidationError, match=message):
             MolClsConfig(rules={"A": {"B": spec}})
 
-    @pytest.mark.parametrize("spec", ["hb a 200", "hb d -1", "cm 0"])
+    @pytest.mark.parametrize(
+        "spec", ["hb a 200", "hb d -1", "cm 0", "hb hmin -1", "hb aq nan", "hb hq inf"]
+    )
     def test_out_of_range_values_raise(self, spec: str):
         with pytest.raises(ValidationError):
             MolClsConfig(rules={"A": {"B": spec}})

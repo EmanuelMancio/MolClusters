@@ -33,6 +33,11 @@ class RuleType(StrEnum):
 # hand-rolled number regex).
 _Distance = Annotated[float, Field(gt=0.0, allow_inf_nan=False)]
 
+# The atomic mass (in u) and partial charge (in e) thresholds of an 'hb' rule's
+# hydrogen/acceptor criteria.
+_Mass = Annotated[float, Field(ge=0.0, allow_inf_nan=False)]
+_Charge = Annotated[float, Field(allow_inf_nan=False)]
+
 # The MDAnalysis acceleration backends usable by this project's pinned MDAnalysis
 # version without extra optional dependencies (excludes "distopia", which needs the
 # separate `distopia` package). Restricting to a Literal here validates the value
@@ -69,11 +74,31 @@ class CMRule(Rule):
 
 @dataclass(kw_only=True)
 class HBRule(Rule):
-    """Rule class for `hb` rule."""
+    """Rule class for `hb` rule.
+
+    Besides the donor-acceptor distance and D-H-A angle cutoffs, it holds the
+    criteria that pick out the rule's hydrogens (mass strictly between
+    `h_mass_min` and `h_mass_max`, charge above `h_charge_min`) and acceptors
+    (charge below `a_charge_max`). The defaults are MDAnalysis'
+    `HydrogenBondAnalysis.guess_hydrogens()`/`guess_acceptors()` ones.
+    """
 
     dist: _Distance = 3.5
     ang: Annotated[float, Field(ge=0.0, le=180.0)] = 150.0
+    h_mass_min: _Mass = 0.9
+    h_mass_max: _Mass = 1.1
+    h_charge_min: _Charge = 0.3
+    a_charge_max: _Charge = -0.5
     type: RuleType = Field(RuleType.HB, frozen=True)
+
+    @model_validator(mode="after")
+    def _check_mass_bounds(self) -> Self:
+        if self.h_mass_min >= self.h_mass_max:
+            raise ValueError(
+                f"Hydrogen mass bounds must satisfy hmin < hmax, got "
+                f"hmin {self.h_mass_min} and hmax {self.h_mass_max}."
+            )
+        return self
 
     def __str__(self) -> str:
         """Format the rule in the config file's own syntax, defaults filled in.
@@ -81,12 +106,25 @@ class HBRule(Rule):
         Returns
         -------
         str
-            E.g. ``hb d 3.5 a 150.0``.
+            E.g. ``hb d 3.5 a 150.0 hmin 0.9 hmax 1.1 hq 0.3 aq -0.5``.
         """
-        return f"hb d {self.dist} a {self.ang}"
+        return " ".join(
+            [
+                "hb",
+                *(f"{flag} {getattr(self, attr)}" for flag, attr in _HB_FLAGS.items()),
+            ]
+        )
 
 
-_HB_FLAGS = {"d": "dist", "a": "ang"}
+# each 'hb' rule flag, in the order `HBRule.__str__` writes them, and the field it sets
+_HB_FLAGS = {
+    "d": "dist",
+    "a": "ang",
+    "hmin": "h_mass_min",
+    "hmax": "h_mass_max",
+    "hq": "h_charge_min",
+    "aq": "a_charge_max",
+}
 
 
 def _to_float(raw: str, label: str) -> float:
@@ -99,6 +137,11 @@ def _to_float(raw: str, label: str) -> float:
 def _parse_rule(spec: str) -> Rule:
     """
     Parse a rule string such as ``"cm 5.0"`` or ``"hb d 3.5 a 150"`` into a `Rule`.
+
+    An 'hb' rule takes any of these ``<flag> <number>`` pairs, in any order, each
+    optional: ``d`` (donor-acceptor distance cutoff), ``a`` (D-H-A angle cutoff),
+    ``hmin``/``hmax`` (exclusive hydrogen mass bounds), ``hq`` (exclusive minimum
+    hydrogen charge) and ``aq`` (exclusive maximum acceptor charge).
 
     Parameters
     ----------
@@ -143,7 +186,7 @@ def _parse_rule(spec: str) -> Rule:
     unknown = flags.keys() - _HB_FLAGS.keys()
     if unknown:
         raise ValueError(
-            f"'hb' rule only supports flags 'd' and 'a', got {sorted(unknown)}."
+            f"'hb' rule only supports flags {list(_HB_FLAGS)}, got {sorted(unknown)}."
         )
 
     return HBRule(

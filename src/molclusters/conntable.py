@@ -28,7 +28,7 @@ from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
-from .config import DistanceBackend, Rule
+from .config import DistanceBackend, HBRule, Rule
 from .symdict import SymmetricDict
 
 # ConnectionTable drives HydrogenBondAnalysis one frame at a time via these
@@ -41,12 +41,31 @@ from .symdict import SymmetricDict
 # of whether the underlying mechanism still works.
 _HB_PRIVATE_API = ("_prepare", "_single_frame")
 
-# The criteria HydrogenBondAnalysis' guess_hydrogens()/guess_acceptors() apply by
-# default, as selections so that ConnectionTable can restrict them to a rule's two
-# residue types (see __start_hbonds). Donors need no selection of their own: they
-# are found through the hydrogens' bonds.
-_HB_HYDROGENS_SEL = "prop mass > 0.9 and prop mass < 1.1 and prop charge > 0.3"
-_HB_ACCEPTORS_SEL = "prop charge < -0.5"
+
+def _hb_selections(rule: HBRule) -> tuple[str, str]:
+    """Write an 'hb' rule's hydrogen and acceptor criteria as atom selections.
+
+    These are the same criteria HydrogenBondAnalysis' guess_hydrogens()/
+    guess_acceptors() apply, written as selections so that ConnectionTable can
+    restrict them to a rule's two residue types (see __start_hbonds). Donors need
+    no selection of their own: they are found through the hydrogens' bonds.
+
+    Parameters
+    ----------
+    rule : HBRule
+        The rule whose thresholds to use.
+
+    Returns
+    -------
+    tuple[str, str]
+        The hydrogens' and the acceptors' selection strings.
+    """
+    hydrogens = (
+        f"prop mass > {rule.h_mass_min} and prop mass < {rule.h_mass_max} "
+        f"and prop charge > {rule.h_charge_min}"
+    )
+    acceptors = f"prop charge < {rule.a_charge_max}"
+    return hydrogens, acceptors
 
 
 def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
@@ -299,7 +318,8 @@ class ConnectionTable:
     def __start_hbonds(self) -> None:
         """Initialize hydrogen bond analysis for residue pairs."""
         for resi, resj in self.clst_args:
-            if self.clst_args[resi, resj].type == "cm":
+            rule = self.clst_args[resi, resj]
+            if not isinstance(rule, HBRule):
                 continue
 
             if (resi, resj) not in self.hbs:
@@ -307,14 +327,15 @@ class ConnectionTable:
                 # the whole system and search all of them every frame, only to
                 # discard the pairs outside `between` afterwards.
                 pair_sel = f"resname {resi} {resj}"
+                hydrogens_sel, acceptors_sel = _hb_selections(rule)
                 # TODO: activate supported backend
                 hb = HydrogenBondAnalysis(
                     self.uni,
                     between=[f"resname {resi}", f"resname {resj}"],
-                    hydrogens_sel=f"({pair_sel}) and {_HB_HYDROGENS_SEL}",
-                    acceptors_sel=f"({pair_sel}) and {_HB_ACCEPTORS_SEL}",
-                    d_a_cutoff=self.clst_args[resi, resj].dist,
-                    d_h_a_angle_cutoff=self.clst_args[resi, resj].ang,
+                    hydrogens_sel=f"({pair_sel}) and {hydrogens_sel}",
+                    acceptors_sel=f"({pair_sel}) and {acceptors_sel}",
+                    d_a_cutoff=rule.dist,
+                    d_h_a_angle_cutoff=rule.ang,
                     update_selections=False,
                 )
                 _check_hb_private_api(hb)
