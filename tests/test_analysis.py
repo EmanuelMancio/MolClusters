@@ -123,7 +123,7 @@ class TestRunAndFrame:
 
         (cid,) = frame.clusters
         assert frame.find(2) == cid
-        assert frame.find(4) is False
+        assert frame.find(4) is None
 
     def test_frame_clusters_are_read_only(self, make_universe: UniverseFactory):
         uni = make_universe([[[1, 2, 3]]], 4)

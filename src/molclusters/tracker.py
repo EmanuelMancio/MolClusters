@@ -284,7 +284,7 @@ class ClusterTracker:
         for cls in set(self.clusters.keys()).difference(modified_clusters):
             self.clusters.pop(cls)
 
-    def find(self, mol: int) -> int | bool:
+    def find(self, mol: int) -> int | None:
         """Find the cluster ID for a given molecule.
 
         Parameters
@@ -294,7 +294,7 @@ class ClusterTracker:
 
         Returns
         -------
-        int | bool
-            The cluster ID if the molecule is found, or False if not found.
+        int | None
+            The cluster ID, or None if the molecule is in no cluster.
         """
-        return self.mol_clt.get(mol, False)
+        return self.mol_clt.get(mol)

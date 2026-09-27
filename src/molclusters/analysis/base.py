@@ -214,7 +214,7 @@ class Frame:
         """
         return MappingProxyType(self._tracker.clusters)
 
-    def find(self, mol: int) -> int | bool:
+    def find(self, mol: int) -> int | None:
         """Find the id of the cluster a molecule belongs to.
 
         Parameters
@@ -224,8 +224,8 @@ class Frame:
 
         Returns
         -------
-        int | bool
-            The cluster id, or False if the molecule is in no cluster.
+        int | None
+            The cluster id, or None if the molecule is in no cluster.
         """
         return self._tracker.find(mol)
 

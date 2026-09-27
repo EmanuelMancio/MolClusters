@@ -85,7 +85,7 @@ class TestClusterIdentity:
 
         assert sorted(snapshot(tracker).values(), key=len) == [{4, 5}, {1, 2, 3}]
         assert tracker.find(1) == id_of(tracker, {1, 2, 3})
-        assert tracker.find(6) is False
+        assert tracker.find(6) is None
 
     def test_unchanged_cluster_keeps_its_id(self, track: Track):
         tracker = track([[[1, 2, 3]], [[1, 2, 3]]], 4)
@@ -111,7 +111,7 @@ class TestClusterIdentity:
         step(tracker, 1)
 
         assert snapshot(tracker) == {cid: {1, 2, 3}}
-        assert tracker.find(4) is False
+        assert tracker.find(4) is None
 
     def test_formation_creates_a_new_cluster(self, track: Track):
         tracker = track([[], [[1, 2]]], 3)
@@ -299,7 +299,7 @@ class TestClusterIdentity:
         step(tracker, 1)
 
         assert list(snapshot(tracker).values()) == [{1, 2, 3}]
-        assert tracker.find(4) is False
+        assert tracker.find(4) is None
 
     def test_merge_loser_dies_whatever_the_group_order(self, track: Track):
         # A loses a merge to B in both cases, leaving a remnant elsewhere; only the
@@ -520,7 +520,7 @@ class TestClusterIdentity:
 
         assert snapshot(tracker) == {b: {1, 4, 5, 6}, c: {2, 7, 8, 9}}
         assert a not in tracker.clusters
-        assert tracker.find(3) is False
+        assert tracker.find(3) is None
         assert_membership_is_consistent(tracker)
 
     def test_merge_loser_remnant_is_a_new_cluster(self, track: Track):
