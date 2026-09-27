@@ -239,6 +239,28 @@ class TestMain:
         assert df["NSolv"].tolist() == [1, 1]
         assert (tmp_path / "molclusters.json").exists()
 
+    def test_output_dir_holds_the_results_and_the_log(
+        self,
+        cli_env: RunCli,
+        fake_universe: FakeUniverse,
+        config_file: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        log_files = []
+        monkeypatch.setattr(
+            cli, "start_logging", lambda filename, **_: log_files.append(filename)
+        )
+
+        cli_env("traj.xtc", "top.tpr", str(config_file), "--output-dir", "out/run1")
+
+        out = tmp_path / "out" / "run1"
+        assert (out / "solute_solvent.csv").exists()
+        assert (out / "molclusters.json").exists()
+        assert not (tmp_path / "molclusters.json").exists()
+        (log_file,) = log_files
+        assert log_file.parent == Path("out/run1")
+
     def test_solvent_defaults_to_every_non_solute_resname(
         self, cli_env: RunCli, fake_universe: FakeUniverse, tmp_path: Path
     ):

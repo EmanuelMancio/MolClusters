@@ -217,6 +217,28 @@ class TestRun:
         assert "in 3 frame(s) of 1 cluster(s)" in warning
         assert any("Results written to" in m for m in captured_logs)
 
+    def test_results_go_to_the_output_dir(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        molcls = analyze([[[1, 2]], [[1, 2]]], 2)
+        monkeypatch.chdir(tmp_path)
+        out = tmp_path / "results" / "run1"
+
+        molcls.run(output_dir="results/run1")
+        molcls.run(output_dir=out)
+
+        assert sorted(p.name for p in out.iterdir()) == ["evo.txt", "molclusters.json"]
+        assert not (tmp_path / "evo.txt").exists()
+        # the earlier-run check looks there too
+        overwriting = [m for m in captured_logs if m.startswith("Overwriting")]
+        assert len(overwriting) == 1
+        (summary, _) = [m for m in captured_logs if m.startswith("Results written")]
+        assert summary.startswith(f"Results written to {out}: ")
+
     def test_the_tracker_is_created_by_run(
         self, analyze: Analyze, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):

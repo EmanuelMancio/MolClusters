@@ -35,6 +35,7 @@ Optional Arguments:
 - --traj-memory: Load the trajectory into memory.
 - --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
 - --log-level: Minimum level of the messages logged (default INFO).
+- --output-dir: Directory for the results and the log (default: current directory).
 - --version: Displays the version of the MolClusters library.
 
 Example:
@@ -238,6 +239,7 @@ def main() -> None:
     - --traj-memory: Load the trajectory into memory.
     - --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
     - --log-level: Minimum level of the messages logged (default INFO).
+    - --output-dir: Directory for the results and the log (default: current directory).
     - --version: Displays the version of the MolClusters library.
 
     Errors during the analysis are logged (with their traceback in the log file
@@ -272,6 +274,15 @@ def main() -> None:
         default="INFO",
         help="Minimum level of the messages logged. Default is INFO.",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(),
+        help=(
+            "Directory to write the results and the log to, created if missing. "
+            "Default is the current directory."
+        ),
+    )
     parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
@@ -279,7 +290,10 @@ def main() -> None:
     if not args.traj_memory and args.in_memory_step != 1:
         parser.error("--in-memory-step can only be used when --traj-memory is enabled.")
 
-    log_file = Path(f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    log_file = (
+        args.output_dir / f"molclusters_{datetime.now().strftime('%Y%m%d_%H%M')}.log"
+    )
     start_logging(level=args.log_level, filename=log_file)
     logger.info(
         f"Running in {Path.cwd()}: {shlex.join(['molclusters', *sys.argv[1:]])}"
@@ -429,4 +443,4 @@ def _analyse(args: arg.Namespace) -> None:
     _assign_radii(uni)
 
     molclusters = MolClusters(uni, cls_args)
-    molclusters.run()
+    molclusters.run(output_dir=args.output_dir)

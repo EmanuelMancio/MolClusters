@@ -180,30 +180,36 @@ class MolClusters:
                     f"topology (residue names found: {sorted(present)})."
                 )
 
-    def __check_previous_outputs(self) -> None:
-        """Warn about output files left in the working directory by an earlier run.
+    def __check_previous_outputs(self, directory: path.Path) -> None:
+        """Warn about output files left in the output directory by an earlier run.
 
         The files appended to (e.g. the per-frame .gro files) would end up mixing an
         earlier run's results with this one's; the other outputs are just overwritten.
+
+        Parameters
+        ----------
+        directory : path.Path
+            The directory this run writes to.
         """
-        cwd = path.Path.cwd()
         outputs = self.__declared_outputs()
 
         overwritten = [
-            out.name for out in outputs if not out.append and (cwd / out.name).exists()
+            out.name
+            for out in outputs
+            if not out.append and (directory / out.name).exists()
         ]
         if overwritten:
             logger.info(f"Overwriting results of an earlier run: {overwritten}")
 
         appended = sorted(
             file.name
-            for file in cwd.iterdir()
+            for file in directory.iterdir()
             if any(out.append and out.matches(file.name) for out in outputs)
         )
         if appended:
             shown = ", ".join(appended[:5]) + (", ..." if len(appended) > 5 else "")
             logger.warning(
-                f"{len(appended)} file(s) from an earlier run are in {cwd} "
+                f"{len(appended)} file(s) from an earlier run are in {directory} "
                 f"({shown}): this run appends to them, mixing both runs. "
                 "Move or delete them first to keep the runs apart."
             )
@@ -250,15 +256,26 @@ class MolClusters:
             )
 
     # TODO: break into single_step function to better use in MDRHConstant
-    def run(self) -> None:
+    def run(self, output_dir: path.Path | str | None = None) -> None:
         """Track the clusters over the whole trajectory and run the analyses on them.
 
         Every run starts over from the first frame with a new tracker (cluster ids
         start from 1 again), and the analyses start over in `prepare`, so running
         again gives the same results.
+
+        Parameters
+        ----------
+        output_dir : path.Path | str | None
+            The directory to write the results to, created if missing; the current
+            directory when None.
         """
+        directory = (
+            path.Path.cwd() if output_dir is None else path.Path(output_dir).absolute()
+        )
+        directory.mkdir(parents=True, exist_ok=True)
+
         n_frames = len(self.uni.trajectory)
-        self.__check_previous_outputs()
+        self.__check_previous_outputs(directory)
         logger.info(f"Tracking clusters over {n_frames} frame(s)")
         start = time.perf_counter()
         # the bar only shows on the terminal, so the log files get a line every 10%
@@ -267,7 +284,7 @@ class MolClusters:
         self.uni.trajectory[0]
         self.tracker = ClusterTracker(self.uni, self.config)
 
-        self.output = RunOutput(path.Path.cwd())
+        self.output = RunOutput(directory)
         run = Run(self.uni, self.config, n_frames, self.output, self.analyses)
 
         # the appended files are buffered, so write what was already rendered even
