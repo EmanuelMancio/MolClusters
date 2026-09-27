@@ -21,11 +21,9 @@ Dependencies:
 - tqdm: For progress tracking during analysis.
 """
 
-import io
 import json
 import pathlib as path
 import time
-from collections import Counter
 from collections.abc import Iterable
 from functools import reduce
 from typing import Any
@@ -35,10 +33,16 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from loguru import logger
-from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
-from .analysis import Frame, FrameAnalysis, Run, SizeEvolution, SoluteSolvent
+from .analysis import (
+    ClusterCoordinates,
+    Frame,
+    FrameAnalysis,
+    Run,
+    SizeEvolution,
+    SoluteSolvent,
+)
 from .cluster import Cluster, MolGroup
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
@@ -74,8 +78,6 @@ class MolClusters:
     clusters_size_evo : np.ndarray
         An array tracking the evolution of cluster sizes over time (see
         `size_evolution`).
-    solutes : list[int]
-        A list of solute molecule IDs.
     """
 
     __slots__ = [
@@ -85,11 +87,9 @@ class MolClusters:
         "analyses",
         "size_evolution",
         "radius_evolution",
-        "solutes",
         "nucleus_data",
         "nucleus_holder",
         "data_holder",
-        "follow_skipped",
         "output",
     ]
 
@@ -149,7 +149,10 @@ class MolClusters:
         self.size_evolution = SizeEvolution()
         builtins: list[FrameAnalysis] = [self.size_evolution]
         if config.solute is not None:
-            builtins.append(SoluteSolvent(config.solute, config.solvent))
+            builtins += [
+                SoluteSolvent(config.solute, config.solvent),
+                ClusterCoordinates(config.solute, follow=config._follow_solute),
+            ]
         self.analyses: list[FrameAnalysis] = [*builtins, *extra]
 
         self.radius_evolution = {}
@@ -226,13 +229,6 @@ class MolClusters:
         """
         outputs = [out for analysis in self.analyses for out in analysis.outputs]
         outputs.append(OutputFile("molclusters.json"))
-        if self.config.solute is not None:
-            outputs += [
-                OutputFile("cls-n<size>.gro", append=True),
-                OutputFile("cls-id<id>.gro", append=True),
-            ]
-            if self.config._follow_solute:
-                outputs.append(OutputFile("solute-<resid>.gro", append=True))
         if self.config.nucleus is not None:
             outputs.append(OutputFile("nucleus_data.csv"))
         return outputs
@@ -337,59 +333,6 @@ class MolClusters:
             np.nan if len(n_nucleus) == 0 else np.average(shape)
         )
 
-    def __find_solutes(self) -> None:
-        """Find the resids of the solute molecules, for `__write_coordinates`."""
-        self.solutes: list[int] = [
-            id
-            for sel in self.config.solute
-            for id in self.tracker.sels[sel].residues.resids
-        ]
-
-    def __write_coordinates(self) -> None:
-        """Write the coordinates of clusters to files."""
-        solutes = set(self.solutes)
-        for cls in self.tracker.clusters.values():
-            sol_ids = solutes.intersection(cls.resids)
-            if not sol_ids:
-                continue
-
-            # the GRO writer only writes whole files, so render the frame in memory
-            # (NamedStream keeps the buffer open when the writer closes it) and
-            # append it to each output below
-            buf = io.StringIO()
-            with (
-                mda.Writer(NamedStream(buf, "cluster.gro"), multiframe=False) as w,
-                cls.whole() as atoms,
-            ):
-                w.write(atoms.sort())
-
-            # replace the writer's fixed "Written by MDAnalysis" title line
-            _, body = buf.getvalue().split("\n", 1)
-            frame = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n{body}"
-
-            # pooled by size: an ensemble of what an N-mer looks like, across all
-            # clusters that were ever that size, independent of cluster identity
-            self.output.append(f"cls-n{cls.size}.gro", frame)
-
-            # pooled by identity: this specific cluster's own trajectory, tracked
-            # across frames via the dominance algorithm regardless of size changes
-            self.output.append(f"cls-id{cls.id}.gro", frame)
-
-            # TODO: change to support merges
-            # FIXME: with changes in config this needs to be updated
-            if self.config._follow_solute:
-                if len(sol_ids) > 1:
-                    # TODO: make more feature-rich follow procedure
-                    logger.debug(
-                        f"Cluster {cls.id}: more than one solute, will not follow"
-                    )
-                    self.follow_skipped[cls.id] += 1
-                    continue
-
-                (sol_id,) = sol_ids
-
-                self.output.append(f"solute-{sol_id}.gro", frame)
-
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
         """Run the molecular cluster analysis.
@@ -400,7 +343,6 @@ class MolClusters:
         n_frames = len(self.uni.trajectory)
         self.__check_previous_outputs()
         logger.info(f"Tracking clusters over {n_frames} frame(s)")
-        self.follow_skipped: Counter[int] = Counter()
         start = time.perf_counter()
         # the bar only shows on the terminal, so the log files get a line every 10%
         progress_step = max(1, n_frames // 10)
@@ -414,16 +356,10 @@ class MolClusters:
             run.prepare_analyses()
             run.analyse_frame(Frame(0, self.tracker))
 
-            if self.config.solute is not None:
-                self.__find_solutes()
-
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                     self.tracker.update()
                     run.analyse_frame(Frame(i, self.tracker))
-                    if self.config.solute is not None:
-                        self.__write_coordinates()
-
                     if self.config.nucleus is not None:
                         self.__nucleus_analysis(i)
 
@@ -443,15 +379,6 @@ class MolClusters:
             f"({n_frames / max(elapsed, 1e-9):.1f} frames/s)"
         )
         self.__log_rule_connections(n_frames)
-
-        if self.follow_skipped:
-            logger.warning(
-                f"Solutes were not followed in {self.follow_skipped.total()} "
-                f"frame(s) of {len(self.follow_skipped)} cluster(s) holding more than "
-                "one solute: those frames are missing from the solute-<resid>.gro "
-                "files. The cluster ids are logged at DEBUG level (--log-level DEBUG)."
-            )
-            logger.debug(f"Frames not followed, by cluster id: {self.follow_skipped}")
 
         run.finish_analyses()
         self.output.flush()  # in case an analysis appended to a file in `finish`

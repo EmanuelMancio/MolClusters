@@ -15,7 +15,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from types import MappingProxyType
-from typing import ClassVar
 
 import MDAnalysis as mda
 
@@ -42,9 +41,11 @@ class FrameAnalysis(ABC):
     outputs : tuple[OutputFile, ...]
         The files the analysis writes, to warn about results of an earlier run
         they would overwrite or be appended to, and to report them at the end.
+        Usually a class attribute; an analysis whose files depend on its options
+        sets it in ``__init__`` instead, since it's read before `prepare`.
     """
 
-    outputs: ClassVar[tuple[OutputFile, ...]] = ()
+    outputs: tuple[OutputFile, ...] = ()
 
     def prepare(self, run: "Run") -> None:  # noqa: B027 (optional hook)
         """Get ready for a run. Does nothing unless overridden.

@@ -38,8 +38,9 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   built-ins (there is no registry yet); `Run` dispatches every hook and notes which analysis raised
   an error (`_blame`), and the CLI prints those notes. Built-ins take their options as
   constructor arguments, and `MolClusters.__init__` builds them from the config. So far
-  `SizeEvolution` (evo.txt) and `SoluteSolvent` (solute_solvent.csv) have moved; coordinates,
-  nucleus and the JSON report are still methods of `MolClusters`.
+  `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv) and `ClusterCoordinates`
+  (cls-n/cls-id/solute-*.gro) have moved; nucleus and the JSON report are still methods of
+  `MolClusters`.
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
   properties computed on the group made whole across PBC (`whole()`, cached per frame; never
   moves the shared Universe for good). `Cluster(MolGroup)` adds the id, a frozen `graph`,

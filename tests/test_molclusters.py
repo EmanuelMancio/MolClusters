@@ -10,13 +10,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from MDAnalysis import Universe
 
 from molclusters.analysis import Frame, FrameAnalysis, Run, SizeEvolution
 from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
-from molclusters.output import OutputFile, RunOutput
+from molclusters.output import OutputFile
 
 from .conftest import ALL_PAIRS_RULES, CUTOFF, MOL_RULES, Groups, UniverseFactory
 
@@ -293,33 +292,6 @@ class TestRun:
             (cluster,) = frame["Clusters"]
             assert cluster["Radius"] == pytest.approx(pristine.radius_of_gyration)
             assert cluster["Shape"] == pytest.approx(pristine.shape_parameter)
-
-
-class TestWriteCoordinates:
-    def test_writes_both_size_and_id_grouped_files(self, tmp_path: Path):
-        uni = Universe(str(DATA_DIR / "met-mal.tpr"), str(DATA_DIR / "start.pdb"))
-        config = MolClsConfig(rules={"MOL": {"MOL": "cm 15.0"}}, solute=["MOL"])
-        molcls = MolClusters(uni, config)
-
-        solute_clusters = [
-            cls
-            for cls in molcls.clusters.values()
-            if set(config.solute).intersection(cls.resnames)
-        ]
-        assert solute_clusters, "fixture/rule setup should yield a solute cluster"
-
-        molcls.output = RunOutput(tmp_path)  # as run() does
-        molcls._MolClusters__find_solutes()
-        molcls._MolClusters__write_coordinates()
-        molcls.output.flush()  # as run() does when it's done
-
-        size_files = list(tmp_path.glob("cls-n*.gro"))
-        id_files = list(tmp_path.glob("cls-id*.gro"))
-
-        assert size_files, "expected a size-grouped .gro output"
-        assert len(id_files) == len(solute_clusters), (
-            "expected one id-grouped .gro output per solute cluster"
-        )
 
 
 class LargestCluster(FrameAnalysis):

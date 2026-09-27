@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from molclusters.analysis import (
+    ClusterCoordinates,
     Frame,
     FrameAnalysis,
     Run,
@@ -234,6 +235,102 @@ class TestSoluteSolvent:
 
     def test_declares_the_table(self):
         assert [out.name for out in SoluteSolvent.outputs] == ["solute_solvent.csv"]
+
+
+class TestClusterCoordinates:
+    # {1, 2} holds one solute (1); {3, 4} holds two (3, 4), and gains a SOL in
+    # frame 2. Frame 0 isn't written (a known gap).
+    FRAMES = [[[1, 2], [3, 4]], [[1, 2], [3, 4]], [[1, 2], [3, 4, 5]]]
+    RESNAMES = ["MOL", "SOL", "MOL", "MOL", "SOL"]
+
+    def run(
+        self, make_universe: UniverseFactory, directory: Path, *, follow: bool
+    ) -> tuple[ClusterCoordinates, int, int]:
+        """Run the analysis.
+
+        Returns
+        -------
+        tuple[ClusterCoordinates, int, int]
+            The analysis, and the ids of the clusters of resids 1 and 3.
+        """
+        analysis, recorder = ClusterCoordinates(["MOL"], follow=follow), Recorder()
+        run_analyses(
+            [recorder, analysis],
+            make_universe,
+            self.FRAMES,
+            5,
+            directory,
+            self.RESNAMES,
+            ALL_PAIRS_RULES,
+        )
+        (_, _, clusters) = recorder.seen[-1]
+        (one,) = [cid for cid, mols in clusters.items() if 1 in mols]
+        (three,) = [cid for cid, mols in clusters.items() if 3 in mols]
+        return analysis, one, three
+
+    @staticmethod
+    def frames_in(file: Path) -> list[str]:
+        return [
+            line
+            for line in file.read_text().splitlines()
+            if line.startswith("Cluster-")
+        ]
+
+    def test_writes_each_frame_by_size_and_by_id(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        _, one, three = self.run(make_universe, tmp_path, follow=False)
+
+        assert sorted(p.name for p in tmp_path.iterdir()) == [
+            "cls-id1.gro",
+            "cls-id2.gro",
+            "cls-n2.gro",
+            "cls-n3.gro",
+        ]
+        assert self.frames_in(tmp_path / f"cls-id{three}.gro") == [
+            f"Cluster-{three} - Time = 1.0",
+            f"Cluster-{three} - Time = 2.0",
+        ]
+        assert sorted(self.frames_in(tmp_path / "cls-n2.gro")) == sorted(
+            [
+                f"Cluster-{one} - Time = 1.0",
+                f"Cluster-{three} - Time = 1.0",
+                f"Cluster-{one} - Time = 2.0",
+            ]
+        )
+        assert self.frames_in(tmp_path / "cls-n3.gro") == [
+            f"Cluster-{three} - Time = 2.0"
+        ]
+
+    def test_follows_clusters_with_one_solute_and_warns_about_the_others(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        captured_logs: list[str],
+    ):
+        analysis, one, three = self.run(make_universe, tmp_path, follow=True)
+
+        assert self.frames_in(tmp_path / "solute-1.gro") == [
+            f"Cluster-{one} - Time = 1.0",
+            f"Cluster-{one} - Time = 2.0",
+        ]
+        assert not list(tmp_path.glob("solute-[34].gro"))
+        assert analysis.follow_skipped == {three: 2}
+        (warning,) = [m for m in captured_logs if "were not followed" in m]
+        assert warning.startswith("Solutes were not followed in 2 frame(s) of 1 ")
+
+    @pytest.mark.parametrize(
+        ("follow", "names"),
+        [
+            (False, ["cls-n<size>.gro", "cls-id<id>.gro"]),
+            (True, ["cls-n<size>.gro", "cls-id<id>.gro", "solute-<resid>.gro"]),
+        ],
+    )
+    def test_declares_its_files(self, follow: bool, names: list[str]):
+        outputs = ClusterCoordinates(["MOL"], follow=follow).outputs
+
+        assert [out.name for out in outputs] == names
+        assert all(out.append for out in outputs)
 
 
 class TestErrors:
