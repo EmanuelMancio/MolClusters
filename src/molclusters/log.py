@@ -11,7 +11,7 @@ import sys
 import warnings
 from collections.abc import Callable
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Literal, TextIO
 
 import MDAnalysis as mda
@@ -79,11 +79,13 @@ def _short_path(filename: str) -> str:
     str
         The path after the last ``site-packages``, or just the file name.
     """
-    parts = Path(filename).parts
+    # PureWindowsPath splits on both "/" and "\", whatever the OS
+    path = PureWindowsPath(filename)
+    parts = path.parts
     if "site-packages" in parts:
         start = len(parts) - parts[::-1].index("site-packages")
         return "/".join(parts[start:])
-    return Path(filename).name
+    return path.name
 
 
 def _showwarning(
