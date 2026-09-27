@@ -82,7 +82,6 @@ class MolClusters:
         "tracker",
         "analyses",
         "size_evolution",
-        "radius_evolution",
         "nucleus",
         "output",
     ]
@@ -152,8 +151,6 @@ class MolClusters:
             builtins.append(self.nucleus)
         builtins.append(JsonReport())
         self.analyses: list[FrameAnalysis] = [*builtins, *extra]
-
-        self.radius_evolution = {}
 
     def __check_resnames(self) -> None:
         """Warn about residue names in the config that the topology doesn't have.
@@ -325,23 +322,3 @@ class MolClusters:
     def clusters_size_evo(self) -> np.ndarray:
         """The number and sizes of the clusters, frame by frame (see `size_evolution`)."""
         return self.size_evolution.data
-
-    def __print_clusters_index(self) -> None:
-        """Write ndx file with cluster index."""
-        cols = 15
-        i = 1
-        with path.Path("clusters_index.ndx").open("w+", encoding="utf-8") as ndx:
-            for id, cluster in self.tracker.clusters.items():
-                ndx.write(f"[ CLS-{id} ]\n")
-                for mol in sorted(cluster):
-                    for at in self.uni.residues[mol - 1].atoms:
-                        if i % cols != 0:
-                            ndx.write(f"{at.id + 1}\t")
-                        else:
-                            ndx.write(f"{at.id + 1}\n")
-
-                        i += 1
-
-                ndx.write("\n")
-
-                # TODO: (low priority) Make the skipped lines work
