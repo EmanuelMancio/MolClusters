@@ -19,10 +19,10 @@ Dependencies:
 - tqdm: For progress tracking during analysis.
 """
 
+import io
 import json
 import pathlib as path
 import re
-import tempfile
 import time
 from collections import Counter, defaultdict
 from functools import reduce
@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 from MDAnalysis import core
+from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
 from .cluster import Cluster, MDAResidueGroupAnalyzer
@@ -600,29 +601,29 @@ class MolClusters:
             if not sol_ids:
                 continue
 
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                tmp_path = path.Path(tmp_dir) / "cluster.gro"
+            # the GRO writer only writes whole files, so render the frame in memory
+            # (NamedStream keeps the buffer open when the writer closes it) and
+            # append it to each output below
+            buf = io.StringIO()
+            with (
+                mda.Writer(NamedStream(buf, "cluster.gro"), multiframe=False) as w,
+                cls.whole() as atoms,
+            ):
+                w.write(atoms.sort())
 
-                with (
-                    mda.Writer(str(tmp_path), multiframe=False) as w,
-                    cls.whole() as atoms,
-                ):
-                    w.write(atoms.sort())
-
-                with tmp_path.open() as tmp:
-                    dt = tmp.readlines()
-
-            dt[0] = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n"
+            # replace the writer's fixed "Written by MDAnalysis" title line
+            _, body = buf.getvalue().split("\n", 1)
+            frame = f"Cluster-{cls.id} - Time = {self.uni.coord.time}\n{body}"
 
             # pooled by size: an ensemble of what an N-mer looks like, across all
             # clusters that were ever that size, independent of cluster identity
             with path.Path(f"cls-n{cls.size}.gro").open("a+") as out:
-                out.write("".join(dt))
+                out.write(frame)
 
             # pooled by identity: this specific cluster's own trajectory, tracked
             # across frames via the dominance algorithm regardless of size changes
             with path.Path(f"cls-id{cls.id}.gro").open("a+") as out:
-                out.write("".join(dt))
+                out.write(frame)
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
@@ -638,7 +639,7 @@ class MolClusters:
                 (sol_id,) = sol_ids
 
                 with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
-                    out.write("".join(dt))
+                    out.write(frame)
 
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
