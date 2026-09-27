@@ -9,6 +9,10 @@ Classes:
     - ConnectionTable: Represents a connectivity table for molecular clusters, allowing operations
       such as retrieving connections, subgraphs, and constructing connectivity graphs.
 
+Functions:
+----------
+    - check_resids: Checks that the residues are numbered 1 to N, as MolClusters needs.
+
 Dependencies:
 -------------
     - MDAnalysis: For molecular dynamics trajectory and structure analysis.
@@ -102,6 +106,38 @@ def _check_hb_private_api(hb: HydrogenBondAnalysis) -> None:
             f"HydrogenBondAnalysis no longer exposes {missing} — this "
             "MDAnalysis version is incompatible with ConnectionTable's 'hb' "
             "rule support (see conntable.py)."
+        )
+
+
+def check_resids(universe: mda.Universe) -> None:
+    """Check that the residues are numbered 1, 2, ..., N in topology order.
+
+    MolClusters identifies molecules by resid (in the connection graphs, the
+    clusters and the outputs) and finds their residues back by position, as
+    ``resid - 1``. Any other numbering (an offset, gaps, repeats) would silently
+    put molecules in the wrong clusters and compute their properties on the
+    wrong atoms.
+
+    Parameters
+    ----------
+    universe : mda.Universe
+        The Universe to check.
+
+    Raises
+    ------
+    ValueError
+        If a residue's resid isn't its position in the topology plus one.
+    """
+    resids = universe.residues.resids
+    wrong = np.flatnonzero(resids != np.arange(1, len(resids) + 1))
+    if wrong.size:
+        first = int(wrong[0])
+        raise ValueError(
+            "MolClusters identifies molecules by residue id, and needs the residues "
+            f"numbered 1 to {len(resids)} in topology order, but residue {first + 1} "
+            f"has resid {resids[first]} ({wrong.size} residue(s) are numbered "
+            "otherwise). Renumber the residues in the topology, or from Python with "
+            "`universe.residues.resids = numpy.arange(1, len(universe.residues) + 1)`."
         )
 
 
@@ -298,6 +334,7 @@ class ConnectionTable:
             The MDAnalysis acceleration backend for "cm" rule distance calculations
             (see the class docstring's `backend` attribute for its caveats).
         """
+        check_resids(universe)
         self.uni = universe
         self.clst_args = cluster_args
         self.sels = selections

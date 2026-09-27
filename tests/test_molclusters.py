@@ -88,6 +88,15 @@ class TestConfigResolution:
         assert molcls.config.describe() in logged
         assert "solvent: SOL" in logged
 
+    def test_residues_not_numbered_one_to_n_are_refused_upfront(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[[1, 2]]], 2)
+        uni.residues.resids = [0, 1]
+
+        with pytest.raises(ValueError, match="residue 1 has resid 0"):
+            MolClusters(uni, MolClsConfig(rules=MOL_RULES))
+
     def test_resnames_missing_from_the_topology_warn(
         self, analyze: Analyze, captured_logs: list[str]
     ):

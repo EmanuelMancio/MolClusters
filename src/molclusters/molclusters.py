@@ -38,6 +38,7 @@ from .analysis import (
     SoluteSolvent,
 )
 from .config import MolClsConfig
+from .conntable import check_resids
 from .log import FILE_ONLY, format_duration
 from .output import OutputFile, RunOutput
 from .tracker import ClusterTracker
@@ -83,6 +84,9 @@ class MolClusters:
     ) -> None:
         """Initialize the MolClusters object.
 
+        The residues must be numbered 1 to N in topology order; otherwise a
+        ValueError says so (see `conntable.check_resids`).
+
         Parameters
         ----------
         universe : mda.Universe
@@ -98,6 +102,7 @@ class MolClusters:
         TypeError
             If one of `analyses` isn't a `FrameAnalysis` instance.
         """
+        check_resids(universe)
         extra = list(analyses)
         for analysis in extra:
             if not isinstance(analysis, FrameAnalysis):

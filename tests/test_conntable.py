@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
+import re
 from pathlib import Path
 
 import MDAnalysis as mda
@@ -15,6 +16,7 @@ from molclusters.conntable import (
     ConnectionTable,
     _check_hb_private_api,
     _warn_if_openmp_unavailable,
+    check_resids,
 )
 
 from .conftest import BOND_STEP, CUTOFF, UniverseFactory
@@ -300,3 +302,32 @@ class TestHydrogenBondRule:
 def test_missing_private_hb_api_fails_fast():
     with pytest.raises(RuntimeError, match="_prepare"):
         _check_hb_private_api(object())
+
+
+class TestCheckResids:
+    def test_residues_numbered_one_to_n_pass(self, make_universe: UniverseFactory):
+        check_resids(make_universe([[]], 3))
+
+    @pytest.mark.parametrize(
+        ("resids", "message"),
+        [
+            ([0, 1, 2], "residue 1 has resid 0 (3 residue(s)"),  # an offset
+            ([1, 2, 5], "residue 3 has resid 5 (1 residue(s)"),  # a gap
+            ([1, 1, 3], "residue 2 has resid 1 (1 residue(s)"),  # a repeat
+        ],
+    )
+    def test_other_numberings_are_refused(
+        self, make_universe: UniverseFactory, resids: list[int], message: str
+    ):
+        uni = make_universe([[]], 3)
+        uni.residues.resids = resids
+
+        with pytest.raises(ValueError, match=re.escape(message)):
+            check_resids(uni)
+
+    def test_the_table_checks_them(self, make_universe: UniverseFactory):
+        uni = make_universe([[[1, 2]]], 2)
+        uni.residues.resids = [5, 6]
+
+        with pytest.raises(ValueError, match="numbered 1 to 2"):
+            build(uni, {"MOL": {"MOL": f"cm {CUTOFF}"}})

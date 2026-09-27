@@ -91,8 +91,9 @@ class MolGroup:
         universe : mda.Universe
             The MDAnalysis Universe object associated with the group.
         residues : Union[Iterable[int], core.groups.ResidueGroup]
-            The residues of the group, either as an iterable with residue IDs (1-based)
-            or a ResidueGroup.
+            The residues of the group, either as an iterable with residue IDs or a
+            ResidueGroup. Residue IDs are taken as positions in the topology plus
+            one, so they must be numbered 1 to N (see `conntable.check_resids`).
         """
         self.uni = universe
 
