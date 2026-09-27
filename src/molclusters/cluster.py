@@ -106,6 +106,29 @@ def _on_whole[T](method: Callable[..., T]) -> Callable[..., T]:
     return wrapper
 
 
+def _per_frame[T](method: Callable[["MolGroup"], T]) -> Callable[["MolGroup"], T]:
+    """Compute `method` once per frame and residue set (see `MolGroup._frame_cache`).
+
+    Only for immutable values (numbers): a cached array could be modified in place
+    by a caller and be handed, changed, to the next one.
+
+    Returns
+    -------
+    Callable
+        The wrapped method.
+    """
+    name = method.__name__
+
+    @wraps(method)
+    def wrapper(self: "MolGroup") -> T:
+        cache = self._frame_cache()
+        if name not in cache:
+            cache[name] = method(self)
+        return cache[name]
+
+    return wrapper
+
+
 class MolGroup:
     """A group of molecules (residues) of a Universe, and its properties.
 
@@ -118,16 +141,13 @@ class MolGroup:
         The MDAnalysis Universe object associated with the group.
     _rg : MDAnalysis.core.groups.ResidueGroup
         The group's residues.
-    __whole_key : tuple[int, bytes] | None
-        Frame and residue indices that `__whole_positions` was computed for.
-    __whole_positions : np.ndarray | None
-        Cached whole positions of the group's atoms (see `whole`).
-    __whole_shift : np.ndarray | None
-        The translation `__whole_positions` applied to the group, besides whole
-        periodic images (see `center_of_mass`).
+    __cache_key : tuple[int, bytes] | None
+        Frame and residue indices that `__cache` holds values for.
+    __cache : dict[str, object]
+        Values computed for the current frame and residues (see `_frame_cache`).
     """
 
-    __slots__ = ["uni", "_rg", "__whole_key", "__whole_positions", "__whole_shift"]
+    __slots__ = ["uni", "_rg", "__cache_key", "__cache"]
 
     def __init__(
         self, universe: mda.Universe, residues: Iterable[int] | core.groups.ResidueGroup
@@ -150,9 +170,40 @@ class MolGroup:
         else:
             self._rg = core.groups.ResidueGroup(np.array(residues) - 1, self.uni)
 
-        self.__whole_key: tuple[int, bytes] | None = None
-        self.__whole_positions: np.ndarray | None = None
-        self.__whole_shift: np.ndarray | None = None
+        self.__cache_key: tuple[int, bytes] | None = None
+        self.__cache: dict[str, object] = {}
+
+    def _frame_cache(self) -> dict[str, object]:
+        """Get the values computed for the current frame and residue set.
+
+        Positions are taken to change only from one frame to the next, so values
+        computed from them (whole positions, and `_per_frame` properties) are
+        kept until the frame, or the group's residues, change. A frame whose
+        positions are modified in place keeps its earlier values.
+
+        Returns
+        -------
+        dict[str, object]
+            The cache, emptied if the frame or residues changed since last call.
+        """
+        key = (self.uni.trajectory.ts.frame, self._rg.ix.tobytes())
+        if self.__cache_key != key:
+            self.__cache = {}
+            self.__cache_key = key
+        return self.__cache
+
+    def __whole(self) -> tuple[np.ndarray, np.ndarray]:
+        """Get the group's whole positions and shift, computed once per frame.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            See `__compute_whole_positions`.
+        """
+        cache = self._frame_cache()
+        if "whole" not in cache:
+            cache["whole"] = self.__compute_whole_positions()
+        return cache["whole"]
 
     def __compute_whole_positions(self) -> tuple[np.ndarray, np.ndarray]:
         """Compute the group's atom positions with the group made whole.
@@ -307,24 +358,19 @@ class MolGroup:
         cluster) would otherwise move atoms under each other and corrupt each
         other's geometry.
 
-        The whole positions are cached per frame and residue set, so the unwrap
-        runs once per frame no matter how many properties are read.
+        The whole positions are cached per frame and residue set (see
+        `_frame_cache`), so the unwrap runs once per frame no matter how many
+        properties are read.
 
         Yields
         ------
         core.groups.AtomGroup
             The group's atoms, in whole positions.
         """
-        key = (self.uni.trajectory.ts.frame, self._rg.ix.tobytes())
-        if self.__whole_key != key:
-            self.__whole_positions, self.__whole_shift = (
-                self.__compute_whole_positions()
-            )
-            self.__whole_key = key
-
+        positions, _ = self.__whole()
         atoms = self._rg.atoms
         original = atoms.positions  # a copy
-        atoms.positions = self.__whole_positions
+        atoms.positions = positions
         try:
             yield atoms
         finally:
@@ -443,9 +489,11 @@ class MolGroup:
         """
         with self.whole() as atoms:
             center = atoms.center_of_mass()
-        return apply_PBC(center - self.__whole_shift, self.uni.dimensions)
+        _, shift = self.__whole()
+        return apply_PBC(center - shift, self.uni.dimensions)
 
     @property
+    @_per_frame
     @_on_whole
     def sphericity(self) -> float:
         """Calculate how spherical the group is, from its gyration tensor.
@@ -463,6 +511,7 @@ class MolGroup:
         return 1 - self._rg.asphericity()
 
     @property
+    @_per_frame
     @_on_whole
     def dipole_moment(self) -> float:
         """Calculate the dipole moment of the group, about its center of mass.
@@ -495,6 +544,7 @@ class MolGroup:
         return self._rg.atoms.dipole_vector() * EA2D
 
     @property
+    @_per_frame
     @_on_whole
     def shape_parameter(self) -> float:
         """Calculate the shape parameter of the group.
@@ -520,6 +570,7 @@ class MolGroup:
         return self._rg.bsphere()
 
     @property
+    @_per_frame
     @_on_whole
     def radius_of_gyration(self) -> float:
         """Calculate the radius of gyration of the group.
@@ -563,6 +614,7 @@ class MolGroup:
         return 0.5 * radii.mean()
 
     @property
+    @_per_frame
     def radius(self) -> float:
         """The radius of the group's equivalent sphere.
 

@@ -54,10 +54,14 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   later analyses), `JsonReport` (molclusters.json, a straight port of the old `MolClustersData`
   due for a rewrite so other analyses can add to it).
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
-  properties computed on the group made whole across PBC (`whole()`, cached per frame; never
+  properties computed on the group made whole across PBC (`whole()`; never
   moves the shared Universe for good; residues are placed along a spanning tree, a `Cluster`'s
   own graph or a plain group's minimum spanning tree, so groups wider than half the box stay
-  whole, and a cluster wrapping around the box is warned about once). Its `radius` (and so `diameter`, `volume`, `density`)
+  whole, and a cluster wrapping around the box is warned about once). The whole positions and
+  the scalar properties (`@_per_frame`: `radius`, Rg, sphericity, dipole moment, shape) are
+  computed once per frame and residue set (`_frame_cache`), since analyses read them repeatedly
+  (`diameter`/`volume`/`density` all go through `radius`); arrays aren't cached, as callers
+  could modify them in place. Its `radius` (and so `diameter`, `volume`, `density`)
   is an equivalent sphere's: sqrt(5/3)·Rg (a uniform sphere's) plus `radius_buffer`, half the
   atoms' mean van der Waals radius by element, for the atoms' size; `radius_of_gyration` is Rg
   itself. `Cluster(MolGroup)` adds the id, a frozen `graph`,

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from collections import Counter
+from contextlib import AbstractContextManager
 
 import networkx as nx
 import numpy as np
@@ -10,6 +11,7 @@ import pytest
 from MDAnalysis import Universe
 from MDAnalysis.lib.distances import apply_PBC
 
+from molclusters import cluster
 from molclusters.cluster import Cluster, MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.conntable import ConnectionTable
@@ -432,6 +434,53 @@ class TestWholePositions:
         expected = MolGroup(uni, [1, 2, 3, 4]).radius_of_gyration
         assert first.radius_of_gyration == pytest.approx(expected)
         assert first.radius_of_gyration != pytest.approx(rg_before)
+
+
+class TestFrameCache:
+    """Scalar properties are computed once per frame and residue set."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "radius",
+            "radius_of_gyration",
+            "sphericity",
+            "dipole_moment",
+            "shape_parameter",
+        ],
+    )
+    def test_value_is_computed_once_per_frame(
+        self, chain: Cluster, name: str, monkeypatch: pytest.MonkeyPatch
+    ):
+        entries = []
+        whole = MolGroup.whole
+
+        def counted(group: MolGroup) -> AbstractContextManager:
+            entries.append(group)
+            return whole(group)
+
+        monkeypatch.setattr(MolGroup, "whole", counted)
+
+        first = getattr(chain, name)
+
+        assert getattr(chain, name) == first
+        assert len(entries) == 1
+
+    def test_radius_is_computed_once_for_everything_built_on_it(
+        self, chain: Cluster, monkeypatch: pytest.MonkeyPatch
+    ):
+        lookups = []
+        vdw_radii = cluster._vdw_radii
+
+        def counted(universe: Universe) -> np.ndarray:
+            lookups.append(universe)
+            return vdw_radii(universe)
+
+        monkeypatch.setattr(cluster, "_vdw_radii", counted)
+
+        _ = chain.radius, chain.diameter, chain.volume, chain.density, chain.radius
+
+        assert len(lookups) == 1
 
 
 class TestClusterGraph:
