@@ -35,10 +35,11 @@ from typing import Callable, Iterable, Iterator, Self
 import MDAnalysis as mda
 import networkx as nx
 import numpy as np
+from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.exceptions import NoDataError
 from MDAnalysis.guesser.tables import vdwradii
-from MDAnalysis.lib.distances import apply_PBC
+from MDAnalysis.lib.distances import apply_PBC, distance_array, minimize_vectors
 
 from .conntable import ConnectionTable
 
@@ -157,9 +158,12 @@ class MolGroup:
         """Compute the group's atom positions with the group made whole.
 
         The group is translated so that its first residue sits at the box center,
-        then each residue is wrapped back into the box by its center of geometry,
-        which gathers the group around the center (assuming it spans less than half
-        the box). The Universe's positions are left exactly as they were.
+        and each residue is made whole and wrapped into the box by its center of
+        geometry, which gathers a group spanning less than half the box around the
+        center. A larger group would be torn apart that way, so the residues are
+        then placed one after another along a spanning tree of the group (see
+        `_placement_order`), each at the periodic image nearest its tree neighbour.
+        The Universe's positions are left exactly as they were.
 
         Returns
         -------
@@ -176,9 +180,119 @@ class MolGroup:
             shift = boxcenter - ref_mol_cm
             atoms.positions += shift
             atoms.unwrap(compound="residues", reference="cog", inplace=True)
-            return atoms.positions, shift
+            positions = atoms.positions
         finally:
             atoms.positions = original
+
+        if len(self._rg) > 1:
+            self.__place_residues(atoms, positions)
+        return positions, shift
+
+    def __place_residues(
+        self, atoms: core.groups.AtomGroup, positions: np.ndarray
+    ) -> None:
+        """Move each residue to the periodic image nearest its placed neighbour.
+
+        Changes `positions` in place, by whole box vectors per residue: none at all
+        for a group spanning less than half the box.
+
+        Parameters
+        ----------
+        atoms : core.groups.AtomGroup
+            The group's atoms.
+        positions : np.ndarray
+            Their positions, each residue whole and wrapped into the box.
+        """
+        box = self.uni.dimensions
+        if box is None or not np.any(box[:3]):
+            return
+        # each atom's residue, as its row in self._rg
+        by_ix = np.argsort(self._rg.ix)
+        rows = by_ix[np.searchsorted(self._rg.ix[by_ix], atoms.resindices)]
+        counts = np.bincount(rows, minlength=len(self._rg))
+        centers = (
+            np.stack(
+                [np.bincount(rows, positions[:, k], len(self._rg)) for k in range(3)],
+                axis=1,
+            )
+            / counts[:, None]
+        )
+
+        # in a rectangular box, residues spanning less than half of it along every
+        # axis are all each other's nearest images already: nothing to place, and
+        # nothing wrapping around the box (a connection torn by the wrapping into
+        # the box would stretch the span past half of it)
+        # (plain comparisons: np.allclose and np.ptp cost more than the rest here)
+        rectangular = (np.abs(box[3:] - 90.0) < 1e-3).all()
+        span = centers.max(axis=0) - centers.min(axis=0)
+        if rectangular and (span < box[:3] / 2).all():
+            return
+
+        order, parent = self._placement_order(centers, box)
+        steps = minimize_vectors(
+            (centers[order[1:]] - centers[parent[order[1:]]]).astype(np.float32), box
+        )
+        placed = centers.copy()
+        for row, step in zip(order[1:], steps, strict=True):
+            placed[row] = placed[parent[row]] + step
+
+        self._check_placement(placed, centers, box)
+        positions += (placed - centers)[rows].astype(positions.dtype)
+
+    def _placement_order(
+        self, centers: np.ndarray, box: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Choose the order and tree in which `whole` places the residues.
+
+        A minimum spanning tree of the residues' centers under periodic boundaries,
+        grown from the first residue (Prim's algorithm), so each residue is placed
+        next to its nearest already-placed one.
+
+        Parameters
+        ----------
+        centers : np.ndarray
+            Each residue's center of geometry, one row per residue of the group.
+        box : np.ndarray
+            The box dimensions.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            The rows in placement order (the first residue first), and each row's
+            parent row in the tree (-1 for the first residue).
+        """
+        n_res = len(centers)
+        distances = distance_array(centers, centers, box=box)
+        parent = np.full(n_res, -1)
+        placed = np.zeros(n_res, dtype=bool)
+        nearest = distances[0].copy()  # to the nearest placed residue
+        nearest_to = np.zeros(n_res, dtype=int)
+        order = [0]
+        placed[0] = True
+        for _ in range(n_res - 1):
+            row = int(np.argmin(np.where(placed, np.inf, nearest)))
+            placed[row] = True
+            parent[row] = nearest_to[row]
+            order.append(row)
+            closer = distances[row] < nearest
+            nearest[closer] = distances[row][closer]
+            nearest_to[closer] = row
+        return np.array(order), parent
+
+    def _check_placement(
+        self, placed: np.ndarray, centers: np.ndarray, box: np.ndarray
+    ) -> None:
+        """Check the placed residues, a hook for subclasses (see `Cluster`).
+
+        Parameters
+        ----------
+        placed : np.ndarray
+            Each residue's center where `whole` placed it.
+        centers : np.ndarray
+            Each residue's center before.
+        box : np.ndarray
+            The box dimensions.
+        """
 
     @contextmanager
     def whole(self) -> Iterator[core.groups.AtomGroup]:
@@ -569,9 +683,11 @@ class Cluster(MolGroup):
         The cluster's id.
     _birth_time : float
         The time of the frame the cluster was created at.
+    _wrap_reported : bool
+        Whether the cluster was already reported wrapping around the box.
     """
 
-    __slots__ = ["_graph", "_id", "_birth_time"]
+    __slots__ = ["_graph", "_id", "_birth_time", "_wrap_reported"]
 
     def __init__(
         self,
@@ -595,8 +711,76 @@ class Cluster(MolGroup):
         self._birth_time: float = universe.coord.time
         self._graph: nx.Graph = nx.freeze(nx.Graph(subconntab.graph))
         self._id = cluster_id
+        self._wrap_reported = False
 
         super().__init__(universe, self._graph)
+
+    def _placement_order(
+        self, centers: np.ndarray, box: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Place the residues along the cluster's connections (see `MolGroup`).
+
+        A breadth-first walk of the graph from its first molecule: every step is
+        a connection, much shorter than half the box.
+
+        Parameters
+        ----------
+        centers : np.ndarray
+            Each residue's center of geometry, in graph order (as ``self._rg``).
+        box : np.ndarray
+            The box dimensions.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            The rows in placement order, and each row's parent row (-1 for the
+            first molecule).
+        """
+        nodes = list(self._graph)
+        row = {node: i for i, node in enumerate(nodes)}
+        parent = np.full(len(nodes), -1)
+        order = [0]
+        for predecessor, node in nx.bfs_edges(self._graph, nodes[0]):
+            order.append(row[node])
+            parent[row[node]] = row[predecessor]
+        return np.array(order), parent
+
+    def _check_placement(
+        self, placed: np.ndarray, centers: np.ndarray, box: np.ndarray
+    ) -> None:
+        """Report a cluster connected to its own periodic image, once.
+
+        Placing the molecules along a spanning tree leaves out some connections;
+        each of those must then join its two molecules by the shortest vector
+        between them too. If one spans a box vector instead, the cluster wraps
+        around the box, an endless structure that can't be made whole.
+
+        Parameters
+        ----------
+        placed : np.ndarray
+            Each residue's center where `whole` placed it, in graph order.
+        centers : np.ndarray
+            Each residue's center before.
+        box : np.ndarray
+            The box dimensions.
+        """
+        if self._wrap_reported or self._graph.number_of_edges() == 0:
+            return
+
+        row = {node: i for i, node in enumerate(self._graph)}
+        ends = np.array([(row[u], row[v]) for u, v in self._graph.edges])
+        shortest = minimize_vectors(
+            (centers[ends[:, 1]] - centers[ends[:, 0]]).astype(np.float32), box
+        )
+        placed_apart = placed[ends[:, 1]] - placed[ends[:, 0]]
+        if np.any(np.linalg.norm(placed_apart - shortest, axis=1) > 1e-2):
+            self._wrap_reported = True
+            logger.warning(
+                f"cluster {self._id} wraps around the periodic box: it is connected "
+                "to its own periodic image, so it has no whole shape, and its radius, "
+                "volume, density, shape and dipole mean little while it does. "
+                "(Reported once per cluster.)"
+            )
 
     def _update(self, subconntab: ConnectionTable._SubConnTable) -> None:
         """Continue the cluster as a connected group of the current frame.

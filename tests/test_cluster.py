@@ -253,8 +253,101 @@ def split_across_the_box_edge(
     return reference, MolGroup(uni, [1, 2, 3]), shifted
 
 
+def chain_across_a_small_box(
+    make_universe: UniverseFactory, n_res: int, box: float = 20.0
+) -> tuple[MolGroup, Universe, np.ndarray]:
+    """A straight chain of `n_res` residues along y, BOND_STEP apart, in a small box.
+
+    The chain starts at y = 13 and is wrapped into a `box`-wide box, so from
+    ``n_res = 5`` on it is split by the box edge, and from ``n_res = 7`` it reaches
+    more than half a box from its first residue.
+
+    Returns
+    -------
+    tuple[MolGroup, Universe, np.ndarray]
+        The same chain whole in a huge box, the small-box Universe, and the shift
+        from the huge box's positions to the small box's before wrapping.
+    """
+    residues = list(range(1, n_res + 1))
+    reference = MolGroup(make_universe([[residues]], n_res), residues)
+    uni = make_universe([[residues]], n_res)
+    shift = np.array([-90.0, -87.0, -90.0])
+    uni.dimensions = [box, box, box, 90.0, 90.0, 90.0]
+    uni.atoms.positions = (uni.atoms.positions + shift) % box
+    return reference, uni, shift
+
+
 class TestWholePositions:
     """Geometric properties see whole groups without moving the shared Universe."""
+
+    @pytest.mark.parametrize("kind", [Cluster, MolGroup])
+    def test_group_reaching_past_half_the_box_is_made_whole(
+        self, make_universe: UniverseFactory, kind: type
+    ):
+        # 14 A long in a 20 A box: its far end is more than half a box from the
+        # first residue, and would be wrapped back onto the wrong side
+        reference, uni, shift = chain_across_a_small_box(make_universe, 8)
+        if kind is Cluster:
+            (connected,) = connected_groups(uni)
+            group = Cluster(uni, connected, cluster_id=1)
+        else:
+            group = MolGroup(uni, range(1, 9))
+
+        with group.whole() as atoms:
+            span = np.ptp(atoms.positions[:, 1])
+
+        assert span == pytest.approx(14.0, abs=1e-4)
+        assert group.radius_of_gyration == pytest.approx(
+            reference.radius_of_gyration, rel=1e-5
+        )
+        expected = apply_PBC(reference.atoms.center_of_mass() + shift, uni.dimensions)
+        np.testing.assert_allclose(group.center_of_mass, expected, atol=1e-3)
+
+    def test_cluster_wrapping_around_the_box_is_reported(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        # 10 residues 2 A apart in a 20 A box: the last connects back to the first
+        # through the box edge, so the cluster is an endless chain with no shape
+        _, uni, _ = chain_across_a_small_box(make_universe, 10)
+        (connected,) = connected_groups(uni)
+        cluster = Cluster(uni, connected, cluster_id=7)
+
+        _ = cluster.radius_of_gyration
+        _ = cluster.sphericity
+
+        warnings = [m for m in captured_logs if "wraps around" in m]
+        assert len(warnings) == 1
+        assert "cluster 7" in warnings[0]
+
+    def test_compact_clusters_are_not_reported(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        _, uni, _ = chain_across_a_small_box(make_universe, 8)
+        (connected,) = connected_groups(uni)
+
+        _ = Cluster(uni, connected, cluster_id=1).radius_of_gyration
+
+        assert not any("wraps around" in m for m in captured_logs)
+
+    def test_group_reaching_past_half_a_triclinic_box_is_made_whole(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        # 10 A long along y, in a 60-degree box whose height along y is 17.3 A
+        residues = [1, 2, 3, 4, 5, 6]
+        reference = MolGroup(make_universe([[residues]], 6), residues)
+        uni = make_universe([[residues]], 6)
+        dimensions = np.array([20.0, 20.0, 20.0, 90.0, 90.0, 60.0])
+        uni.dimensions = dimensions
+        uni.atoms.positions = apply_PBC(
+            uni.atoms.positions - [90.0, 87.0, 90.0], dimensions
+        )
+        (connected,) = connected_groups(uni)
+        cluster = Cluster(uni, connected, cluster_id=1)
+
+        assert cluster.radius_of_gyration == pytest.approx(
+            reference.radius_of_gyration, rel=1e-5
+        )
+        assert not any("wraps around" in m for m in captured_logs)
 
     def test_positions_getter_returns_a_copy(self, chain: Cluster):
         # whole() saves `atoms.positions` as the originals to restore, which only
