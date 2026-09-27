@@ -267,7 +267,7 @@ class ClusterTracker:
         for i, (subconn, origin_clusters) in enumerate(conn_info):
             if candidates[i]:
                 id = self._get_older_cluster(candidates[i], origin_clusters)
-                self.clusters[id].update_from_conntable(subconn)
+                self.clusters[id]._update(subconn)
             else:
                 id = self._create_new_cluster(subconn)
 

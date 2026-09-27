@@ -15,7 +15,7 @@ Attributes
 
 Modules
 -------
-    cluster: Submodule containing utilities for cluster analysis.
+    cluster: The `MolGroup` and `Cluster` classes that analyses read.
     molclusters: Core module defining the main `MolClusters` class.
     tracker: The `ClusterTracker`, which keeps cluster ids stable over a trajectory.
     analysis: The analyses run on the tracked clusters, and their `FrameAnalysis` base.
@@ -28,6 +28,7 @@ Exports
     FrameAnalysis: The base class of an analysis, to pass to `MolClusters`.
     Frame, Run: What an analysis sees of the current frame and of the run.
     OutputFile: The declaration of a file an analysis writes.
+    Cluster, MolGroup: A tracked cluster, and any group of molecules (e.g. a nucleus).
     start_logging: Function to set up molclusters logger.
 
 Example
@@ -43,6 +44,7 @@ logger.disable("molclusters")
 
 from . import cluster as cluster
 from .analysis import Frame, FrameAnalysis, Run
+from .cluster import Cluster, MolGroup
 from .log import start_logging
 from .molclusters import MolClusters
 from .output import OutputFile
@@ -59,4 +61,6 @@ __all__ = [
     "Frame",
     "Run",
     "OutputFile",
+    "Cluster",
+    "MolGroup",
 ]

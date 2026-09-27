@@ -13,7 +13,7 @@ import pytest
 from MDAnalysis import Universe
 
 from molclusters.analysis import Frame, FrameAnalysis, Run, SizeEvolution
-from molclusters.cluster import MDAResidueGroupAnalyzer
+from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
 from molclusters.output import OutputFile, RunOutput
@@ -283,9 +283,7 @@ class TestRun:
         frames = [[[1, 2, 3, 4]], [[1, 2, 3, 4]]]
         resnames = ["SOL", "SOL", "MOL", "MOL"]
         molcls = analyze(frames, 4, resnames, rules=ALL_PAIRS_RULES, nucleus=["MOL"])
-        pristine = MDAResidueGroupAnalyzer(
-            make_universe(frames, 4, resnames), [1, 2, 3, 4]
-        )
+        pristine = MolGroup(make_universe(frames, 4, resnames), [1, 2, 3, 4])
         monkeypatch.chdir(tmp_path)
 
         molcls.run()

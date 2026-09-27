@@ -22,7 +22,7 @@ import pandas as pd
 import pytest
 from MDAnalysis.coordinates.memory import MemoryReader
 
-from molclusters.cluster import EA2D, MDAResidueGroupAnalyzer
+from molclusters.cluster import EA2D, MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
 
@@ -137,7 +137,7 @@ def assert_row_matches(row: pd.Series, groups: list[dict], frame: object) -> Non
         )
 
 
-def analyzer_values(analyzer: MDAResidueGroupAnalyzer) -> dict:
+def analyzer_values(analyzer: MolGroup) -> dict:
     """Read every scalar property of `analyzer`, keyed as in molclusters.json.
 
     Returns
@@ -278,7 +278,7 @@ class TestAnalyzerProperties:
         uni.trajectory[frame]
         expected = reference(uni, whole[frame], group)
 
-        analyzer = MDAResidueGroupAnalyzer(uni, list(group))
+        analyzer = MolGroup(uni, list(group))
 
         assert_matches(analyzer_values(analyzer), expected, group)
         np.testing.assert_allclose(analyzer.dipole, expected["dipole"], atol=1e-3)
@@ -291,7 +291,7 @@ class TestAnalyzerProperties:
         uni.atoms.positions = whole[ON_CORNER] % BOX
         expected = reference(uni, whole[ON_CORNER], ALL)
 
-        analyzer = MDAResidueGroupAnalyzer(uni, list(ALL))
+        analyzer = MolGroup(uni, list(ALL))
 
         assert_matches(analyzer_values(analyzer), expected)
 
@@ -308,7 +308,7 @@ class TestAnalyzerProperties:
         uni, whole = system
         uni.trajectory[ON_CORNER]
         groups = [ALL, *NUCLEI, ALL_IONS]
-        analyzers = [MDAResidueGroupAnalyzer(uni, list(g)) for g in groups]
+        analyzers = [MolGroup(uni, list(g)) for g in groups]
 
         values = {i: analyzer_values(analyzers[i]) for i in order}
         # and once more after everything was read
@@ -319,7 +319,7 @@ class TestAnalyzerProperties:
 
     def test_values_follow_the_frame(self, system: System):
         uni, whole = system
-        analyzer = MDAResidueGroupAnalyzer(uni, list(ALL))
+        analyzer = MolGroup(uni, list(ALL))
 
         for frame in [CENTERED, ON_CORNER, CENTERED]:
             uni.trajectory[frame]

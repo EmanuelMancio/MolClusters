@@ -39,6 +39,12 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   an error (`_blame`), and the CLI prints those notes. So far only
   `SizeEvolution` (evo.txt) has moved; solute-solvent, coordinates, nucleus and the JSON report
   are still methods of `MolClusters`.
+- What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
+  properties computed on the group made whole across PBC (`whole()`, cached per frame; never
+  moves the shared Universe for good). `Cluster(MolGroup)` adds the id, a frozen `graph`,
+  `birth_time`/`age`, `neighbors` and `distance`. Clusters are read-only outside the tracker:
+  its only mutator is `Cluster._update`, which `ClusterTracker.update` calls to swap in the new
+  frame's frozen graph. The objects are live, so they describe the current frame only.
 - The analysis is frame-oriented: `MolClusters.run()` calls `tracker.update()` frame by frame,
   mutating in-memory cluster state, and only writes results to disk once the full run finishes.
 - The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"

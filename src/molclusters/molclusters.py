@@ -39,7 +39,7 @@ from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
 from .analysis import Frame, FrameAnalysis, Run, SizeEvolution
-from .cluster import Cluster, MDAResidueGroupAnalyzer
+from .cluster import Cluster, MolGroup
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
 from .output import OutputFile, RunOutput
@@ -282,7 +282,7 @@ class MolClusters:
         frame : int
             index of the current frame in the trajectory.
         """
-        self.nucleus_holder: dict[int, list[MDAResidueGroupAnalyzer]] = {}
+        self.nucleus_holder: dict[int, list[MolGroup]] = {}
         n_nucleus = []
         sizes = []
         radius = []
@@ -298,10 +298,10 @@ class MolClusters:
                     possible_nucleus.append(rid)
 
             self.nucleus_holder[cid] = []
-            subcomps = nx.induced_subgraph(cls.cluster, possible_nucleus)
+            subcomps = nx.induced_subgraph(cls.graph, possible_nucleus)
             n_nuc = 0
             for sg in nx.connected_components(subcomps):
-                tp = MDAResidueGroupAnalyzer(self.uni, list(sg))
+                tp = MolGroup(self.uni, list(sg))
 
                 n_nuc += 1
                 sizes.append(tp.size)
@@ -398,7 +398,7 @@ class MolClusters:
 
             n_solv = 0
             n_solt = 0
-            mol_pop = Counter(cls.resnames)
+            mol_pop = cls.composition
             for solvent in self.solvent_resnames:
                 n_solv += mol_pop.get(solvent, 0)
 
@@ -709,12 +709,12 @@ class MolClustersData:
         return data
 
     @staticmethod
-    def encode_nucleus(nuc: MDAResidueGroupAnalyzer) -> dict:
+    def encode_nucleus(nuc: MolGroup) -> dict:
         """Encode a nucleus into a dictionary.
 
         Parameters
         ----------
-        nuc : MDAResidueGroupAnalyzer
+        nuc : MolGroup
             The nucleus to encode.
 
         Returns
@@ -727,12 +727,12 @@ class MolClustersData:
         return data
 
     @staticmethod
-    def encode_properties(obj: Cluster | MDAResidueGroupAnalyzer, data: dict) -> None:
+    def encode_properties(obj: Cluster | MolGroup, data: dict) -> None:
         """Encode the properties of a cluster or nucleus.
 
         Parameters
         ----------
-        obj : Cluster | MDAResidueGroupAnalyzer
+        obj : Cluster | MolGroup
             The object to encode.
         data : dict
             The dictionary to store the encoded properties.
@@ -755,12 +755,12 @@ class MolClustersData:
         data["Shape"] = obj.shape_parameter
 
     @staticmethod
-    def encode_composition(obj: Cluster | MDAResidueGroupAnalyzer) -> list[dict]:
+    def encode_composition(obj: Cluster | MolGroup) -> list[dict]:
         """Encode the composition of a cluster or nucleus.
 
         Parameters
         ----------
-        obj : Cluster | MDAResidueGroupAnalyzer
+        obj : Cluster | MolGroup
             The object to encode.
 
         Returns
@@ -796,5 +796,5 @@ class MolClustersData:
         """
         return [
             (int(edge[0]), int(edge[1]), {k: float(v) for k, v in edge[2].items()})
-            for edge in obj.cluster.edges.data()
+            for edge in obj.graph.edges.data()
         ]

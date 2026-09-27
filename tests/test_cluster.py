@@ -2,46 +2,36 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
+from collections import Counter
+
+import networkx as nx
 import numpy as np
 import pytest
 from MDAnalysis import Universe
+from MDAnalysis.lib.distances import apply_PBC
 
-from molclusters.cluster import EA2D, Cluster, MDAResidueGroupAnalyzer
+from molclusters.cluster import EA2D, Cluster, MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.conntable import ConnectionTable
 
 from .conftest import BOND_STEP, CUTOFF, UniverseFactory
 
 
-@pytest.fixture
-def uni() -> Universe:
-    """Fresh Universe for the met-mal fixture data, isolated per test.
+def connected_groups(uni: Universe, cutoff: float = CUTOFF) -> list:
+    """The connected groups of the current frame under a ``cm cutoff`` MOL rule.
 
     Returns
     -------
-    Universe
-        A newly loaded Universe from the met-mal topology/structure files.
+    list
+        The frame's connected groups, largest first.
     """
-    return Universe(
-        "tests/data/met-mal/met-mal.tpr",
-        "tests/data/met-mal/start.pdb",
-    )
+    config = MolClsConfig(rules={"MOL": {"MOL": f"cm {cutoff}"}})
+    conntab = ConnectionTable(uni, config._rules, {"MOL": uni.atoms})
+    return list(conntab.subconntables())
 
 
 @pytest.fixture
-def empty_cluster(uni: Universe) -> Cluster:
-    """A fresh, empty Cluster, independent per test.
-
-    Returns
-    -------
-    Cluster
-        A newly constructed Cluster with no molecules.
-    """
-    return Cluster(uni)
-
-
-@pytest.fixture
-def populated_cluster(uni: Universe) -> Cluster:
+def populated_cluster() -> Cluster:
     """Build a real two-molecule Cluster via the same path production code uses.
 
     Returns
@@ -49,63 +39,12 @@ def populated_cluster(uni: Universe) -> Cluster:
     Cluster
         A cluster containing the two connected MOL residues from the fixture.
     """
+    uni = Universe("tests/data/met-mal/met-mal.tpr", "tests/data/met-mal/start.pdb")
     config = MolClsConfig(rules={"MOL": {"MOL": "cm 15.0"}})
     sels = {res: uni.select_atoms(f"resname {res}") for res in config._rules.all_keys()}
     conntab = ConnectionTable(uni, config._rules, sels)
 
-    return Cluster(uni, next(conntab.subconntables()))
-
-
-class TestCluster:
-    def test_cluster_creation(self, empty_cluster: Cluster):
-        assert empty_cluster is not None
-
-    def test_cluster_length(self, empty_cluster: Cluster):
-        assert len(empty_cluster) == 0
-
-    def test_id_increments_per_instance(self, uni: Universe):
-        first = Cluster(uni)
-        second = Cluster(uni)
-
-        assert second.id == first.id + 1
-
-    def test_given_id_is_used_and_leaves_the_counter_alone(self, uni: Universe):
-        first = Cluster(uni)
-        given = Cluster(uni, cluster_id=1000)
-        second = Cluster(uni)
-
-        assert given.id == 1000
-        assert second.id == first.id + 1
-
-    def test_add_con_exception(self, empty_cluster: Cluster):
-        with pytest.raises(ValueError):
-            empty_cluster.add_con(0, 2, 2.0)
-
-    def test_set_dist_exception_moli_not_in_cluster(self, empty_cluster: Cluster):
-        with pytest.raises(ValueError):
-            empty_cluster.set_dist(0, 1, 2.0)
-
-    def test_add_unsupported_operand(self, empty_cluster: Cluster):
-        with pytest.raises(TypeError):
-            empty_cluster + "not a residue group"
-
-    def test_print_cluster_np(self, empty_cluster: Cluster):
-        print(np.array(empty_cluster.cluster))
-
-
-class TestPopulatedCluster:
-    def test_distance_between_mols(self, populated_cluster: Cluster):
-        moli = next(iter(populated_cluster))
-        molj = next(iter(populated_cluster.neighbors(moli)))
-
-        expected = populated_cluster.cluster[moli][molj]["distance"]
-        assert populated_cluster.get_dist(moli, molj) == expected
-
-    def test_contains(self, populated_cluster: Cluster):
-        mol = next(iter(populated_cluster))
-
-        assert mol in populated_cluster
-        assert -1 not in populated_cluster
+    return Cluster(uni, next(conntab.subconntables()), cluster_id=1)
 
 
 @pytest.fixture
@@ -118,36 +57,87 @@ def chain(make_universe: UniverseFactory) -> Cluster:
         Cluster built from the synthetic system's only connected component.
     """
     uni = make_universe([[[1, 2, 3]]], 5)
-    config = MolClsConfig(rules={"MOL": {"MOL": f"cm {CUTOFF}"}})
-    sels = {"MOL": uni.select_atoms("resname MOL")}
-    conntab = ConnectionTable(uni, config._rules, sels)
+    (group,) = connected_groups(uni)
 
-    return Cluster(uni, next(conntab.subconntables()))
+    return Cluster(uni, group, cluster_id=1)
 
 
-def members(cls: MDAResidueGroupAnalyzer) -> list[int]:
-    return sorted(int(r) for r in cls.resids)
+def members(group: MolGroup) -> list[int]:
+    return sorted(int(r) for r in group.resids)
 
 
-class TestResidueGroupAnalyzer:
+class TestCluster:
+    def test_id_is_the_given_one(self, chain: Cluster):
+        assert chain.id == 1
+
+    def test_id_is_required(self, make_universe: UniverseFactory):
+        uni = make_universe([[[1, 2]]], 2)
+        (group,) = connected_groups(uni)
+
+        with pytest.raises(TypeError, match="cluster_id"):
+            Cluster(uni, group)  # type: ignore[call-arg]
+
+    def test_add_unsupported_operand(self, chain: Cluster):
+        with pytest.raises(TypeError):
+            chain + "not a residue group"
+
+    def test_adding_to_a_cluster_gives_a_plain_group(self, chain: Cluster):
+        combined = chain + chain.uni.residues[[3]]
+
+        assert type(combined) is MolGroup
+        assert members(combined) == [1, 2, 3, 4]
+
+
+class TestPopulatedCluster:
+    def test_distance_between_mols(self, populated_cluster: Cluster):
+        moli = next(iter(populated_cluster))
+        molj = next(iter(populated_cluster.neighbors(moli)))
+
+        expected = populated_cluster.graph[moli][molj]["distance"]
+        assert populated_cluster.distance(moli, molj) == expected
+
+    def test_contains(self, populated_cluster: Cluster):
+        mol = next(iter(populated_cluster))
+
+        assert mol in populated_cluster
+        assert -1 not in populated_cluster
+
+
+class TestMolGroup:
     def test_built_from_resids(self, make_universe: UniverseFactory):
         uni = make_universe([[]], 3)
 
-        analyzer = MDAResidueGroupAnalyzer(uni, [1, 3])
+        group = MolGroup(uni, [1, 3])
 
-        assert members(analyzer) == [1, 3]
-        assert analyzer.size == len(analyzer) == 2
-        assert list(analyzer.resnames) == ["MOL", "MOL"]
+        assert members(group) == [1, 3]
+        assert group.size == len(group) == 2
+        assert list(group.resnames) == ["MOL", "MOL"]
+        assert list(group) == [1, 3]
+        assert 3 in group
+        assert 2 not in group
 
-    def test_add_residue_group_and_analyzer(self, make_universe: UniverseFactory):
+    def test_residues_and_atoms(self, make_universe: UniverseFactory):
         uni = make_universe([[]], 3)
-        first = MDAResidueGroupAnalyzer(uni, [1])
 
-        with_group = first + uni.residues[[1]]
-        with_analyzer = first + MDAResidueGroupAnalyzer(uni, [3])
+        group = MolGroup(uni, [1, 3])
 
-        assert members(with_group) == [1, 2]
-        assert members(with_analyzer) == [1, 3]
+        assert group.residues == uni.residues[[0, 2]]
+        assert group.atoms == uni.residues[[0, 2]].atoms
+
+    def test_composition_counts_resnames(self, make_universe: UniverseFactory):
+        uni = make_universe([[]], 3)
+
+        assert MolGroup(uni, [1, 2, 3]).composition == Counter({"MOL": 3})
+
+    def test_add_residue_group_and_group(self, make_universe: UniverseFactory):
+        uni = make_universe([[]], 3)
+        first = MolGroup(uni, [1])
+
+        with_residues = first + uni.residues[[1]]
+        with_group = first + MolGroup(uni, [3])
+
+        assert members(with_residues) == [1, 2]
+        assert members(with_group) == [1, 3]
 
     def test_physical_properties_are_consistent(self, chain: Cluster):
         assert chain.mass == pytest.approx(3 * (12.011 + 15.999))
@@ -170,17 +160,45 @@ class TestResidueGroupAnalyzer:
         assert chain.dipole_moment == pytest.approx(expected, rel=1e-4)
         np.testing.assert_allclose(np.abs(chain.dipole), [0, 0, expected], atol=1e-3)
 
+    def test_center_of_mass_of_a_group_inside_the_box(self, chain: Cluster):
+        np.testing.assert_allclose(
+            chain.center_of_mass, chain.atoms.center_of_mass(), rtol=1e-6
+        )
 
-def read_geometry(analyzer: MDAResidueGroupAnalyzer) -> None:
+
+def read_geometry(group: MolGroup) -> None:
     """Read every property that needs whole positions."""
     _ = (
-        analyzer.sphericity,
-        analyzer.dipole_moment,
-        analyzer.dipole,
-        analyzer.shape_parameter,
-        analyzer.bsphere,
-        analyzer.radius_of_gyration,
+        group.sphericity,
+        group.dipole_moment,
+        group.dipole,
+        group.shape_parameter,
+        group.bsphere,
+        group.radius_of_gyration,
+        group.center_of_mass,
     )
+
+
+def split_across_the_box_edge(
+    make_universe: UniverseFactory,
+) -> tuple[MolGroup, MolGroup, np.ndarray]:
+    """The chain 1-2-3, whole in one Universe and split by the box edge in another.
+
+    Returns
+    -------
+    tuple[MolGroup, MolGroup, np.ndarray]
+        The whole chain, the split chain, and the split Universe's positions.
+    """
+    reference = MolGroup(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
+    uni = make_universe([[[1, 2, 3]]], 3)
+    box = 20.0
+    # move the chain so its residues sit at y = 19, 21, 23, then wrap y into
+    # the box: the chain is split, one residue at y = 19 and two at y = 1, 3
+    shifted = uni.atoms.positions - [95.0, 81.0, 95.0]
+    shifted[:, 1] %= box
+    uni.dimensions = [box, box, box, 90.0, 90.0, 90.0]
+    uni.atoms.positions = shifted
+    return reference, MolGroup(uni, [1, 2, 3]), shifted
 
 
 class TestWholePositions:
@@ -192,7 +210,7 @@ class TestWholePositions:
         # an index array). If an MDAnalysis upgrade returns a view, fail here
         # instead of silently skipping the restore.
         ts_positions = chain.uni.trajectory.ts.positions
-        positions = chain.ag.atoms.positions
+        positions = chain.atoms.positions
         before = ts_positions.copy()
 
         positions += 100.0
@@ -207,43 +225,48 @@ class TestWholePositions:
 
         np.testing.assert_array_equal(chain.uni.atoms.positions, before)
 
-    def test_overlapping_analyzer_does_not_change_the_cluster_geometry(
+    def test_overlapping_group_does_not_change_the_cluster_geometry(
         self, make_universe: UniverseFactory
     ):
         uni = make_universe([[[1, 2, 3, 4, 5, 6]]], 6)
-        cluster = MDAResidueGroupAnalyzer(uni, [1, 2, 3, 4, 5, 6])
+        cluster = MolGroup(uni, [1, 2, 3, 4, 5, 6])
         rg = cluster.radius_of_gyration
 
         # a nucleus-like subset whose first residue isn't the cluster's
-        read_geometry(MDAResidueGroupAnalyzer(uni, [4, 5, 6]))
+        read_geometry(MolGroup(uni, [4, 5, 6]))
 
         assert cluster.radius_of_gyration == pytest.approx(rg)
-        fresh = MDAResidueGroupAnalyzer(uni, [1, 2, 3, 4, 5, 6])
+        fresh = MolGroup(uni, [1, 2, 3, 4, 5, 6])
         assert fresh.radius_of_gyration == pytest.approx(rg)
 
     def test_group_split_across_the_box_edge_is_made_whole(
         self, make_universe: UniverseFactory
     ):
-        reference = MDAResidueGroupAnalyzer(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
-        uni = make_universe([[[1, 2, 3]]], 3)
-        box = 20.0
-        # move the chain so its residues sit at y = 19, 21, 23, then wrap y into
-        # the box: the chain is split, one residue at y = 19 and two at y = 1, 3
-        shifted = uni.atoms.positions - [95.0, 81.0, 95.0]
-        shifted[:, 1] %= box
-        uni.dimensions = [box, box, box, 90.0, 90.0, 90.0]
-        uni.atoms.positions = shifted
-        split = MDAResidueGroupAnalyzer(uni, [1, 2, 3])
+        reference, split, shifted = split_across_the_box_edge(make_universe)
 
         with split.whole() as atoms:
             span = np.ptp(atoms.positions[:, 1])
 
-        assert span < box / 2
+        assert span < 20.0 / 2
         # float32 positions: wrapping and unwrapping costs a few ulps
         assert split.radius_of_gyration == pytest.approx(
             reference.radius_of_gyration, rel=1e-5
         )
-        np.testing.assert_allclose(uni.atoms.positions, shifted)
+        np.testing.assert_allclose(split.uni.atoms.positions, shifted)
+
+    def test_center_of_mass_of_a_split_group_is_that_of_the_whole_group(
+        self, make_universe: UniverseFactory
+    ):
+        reference, split, _ = split_across_the_box_edge(make_universe)
+        # the whole chain's center of mass, moved like the chain and wrapped
+        expected = apply_PBC(
+            reference.atoms.center_of_mass() - [95.0, 81.0, 95.0],
+            split.uni.dimensions,
+        )
+
+        np.testing.assert_allclose(split.center_of_mass, expected, atol=1e-4)
+        # MDAnalysis's own puts it between the pieces, far from the chain
+        assert abs(split.atoms.center_of_mass()[1] - expected[1]) > 5.0
 
     def test_whole_restores_positions_on_error(self, chain: Cluster):
         before = chain.uni.atoms.positions
@@ -255,14 +278,13 @@ class TestWholePositions:
 
     def test_cache_follows_a_change_of_residues(self, make_universe: UniverseFactory):
         uni = make_universe([[[1, 2], [3, 4]]], 4)
-        config = MolClsConfig(rules={"MOL": {"MOL": f"cm {CUTOFF}"}})
-        conntab = ConnectionTable(uni, config._rules, {"MOL": uni.atoms})
-        first, second = (Cluster(uni, sub) for sub in conntab.subconntables())
+        first = Cluster(uni, connected_groups(uni)[0], cluster_id=1)
         rg_before = first.radius_of_gyration
 
-        first.merge(second)
+        (everything,) = connected_groups(uni, cutoff=60.0)
+        first._update(everything)
 
-        expected = MDAResidueGroupAnalyzer(uni, [1, 2, 3, 4]).radius_of_gyration
+        expected = MolGroup(uni, [1, 2, 3, 4]).radius_of_gyration
         assert first.radius_of_gyration == pytest.approx(expected)
         assert first.radius_of_gyration != pytest.approx(rg_before)
 
@@ -271,134 +293,61 @@ class TestClusterGraph:
     def test_built_from_subconntable(self, chain: Cluster):
         assert chain.size == 3
         assert members(chain) == [1, 2, 3]
-        assert set(chain[2]) == {1, 3}
-        assert chain.get_dist(1, 2) == pytest.approx(BOND_STEP, abs=1e-3)
+        assert sorted(chain) == [1, 2, 3]
+        assert set(chain.graph[2]) == {1, 3}
+        assert chain.distance(1, 2) == pytest.approx(BOND_STEP, abs=1e-3)
         assert "distance" in str(chain)
 
-    def test_center_of_mass_setter(self, chain: Cluster):
-        chain.cm = np.array([1.0, 2.0, 3.0])
+    def test_graph_is_frozen(self, chain: Cluster):
+        with pytest.raises(nx.NetworkXError, match="Frozen"):
+            chain.graph.add_edge(1, 5)
 
-        np.testing.assert_array_equal(chain.cm, [1.0, 2.0, 3.0])
+        assert members(chain) == [1, 2, 3]
 
-    def test_add_mol(self, chain: Cluster):
-        chain.add_mol(3, 4, "MOL", 2.5)
+    def test_update_replaces_the_graph_and_residues(self, chain: Cluster):
+        old_graph = chain.graph
+        (everything,) = connected_groups(chain.uni, cutoff=60.0)
 
-        assert members(chain) == [1, 2, 3, 4]
-        assert chain.get_dist(3, 4) == 2.5
-        assert chain.cluster[3][4]["weight"] == pytest.approx(np.exp(1 / 2.5))
+        chain._update(everything)
 
-    @pytest.mark.parametrize(("ref", "mol"), [(5, 4), (3, 2)])
-    def test_add_mol_rejects_bad_members(self, chain: Cluster, ref: int, mol: int):
-        with pytest.raises(ValueError):
-            chain.add_mol(ref, mol, "MOL", 2.0)
-
-    def test_add_con_rejects_zero_distance(self, chain: Cluster):
-        with pytest.raises(ValueError, match="zero"):
-            chain.add_con(1, 3, 0.0)
-
-    def test_add_con_rejects_second_mol_outside(self, chain: Cluster):
-        with pytest.raises(ValueError):
-            chain.add_con(1, 5, 2.0)
-
-    def test_remove_mol(self, chain: Cluster):
-        chain.remove_mol(3)
-
-        assert members(chain) == [1, 2]
-        with pytest.raises(ValueError):
-            chain.remove_mol(3)
-
-    def test_remove_con_and_cons(self, chain: Cluster):
-        chain.remove_con(1, 2)
-        assert chain.neighbors(2) == {3}
-
-        chain.remove_cons(2, [3])
-        assert chain.neighbors(2) == set()
-
-    @pytest.mark.parametrize(("moli", "molj"), [(5, 1), (1, 5)])
-    def test_remove_con_rejects_mols_outside(
-        self, chain: Cluster, moli: int, molj: int
-    ):
-        with pytest.raises(ValueError):
-            chain.remove_con(moli, molj)
+        assert members(chain) == [1, 2, 3, 4, 5]
+        assert sorted(chain.graph) == [1, 2, 3, 4, 5]
+        assert nx.is_frozen(chain.graph)
+        # a graph read before the update keeps describing the old frame
+        assert sorted(old_graph) == [1, 2, 3]
 
     def test_neighbors_up_to_a_level(self, chain: Cluster):
         assert chain.neighbors(1) == {2}
         assert chain.neighbors(1, level=2) == {2, 3}
 
     @pytest.mark.parametrize(("moli", "molj"), [(5, 1), (1, 5)])
-    def test_get_dist_rejects_mols_outside(self, chain: Cluster, moli: int, molj: int):
-        with pytest.raises(ValueError):
-            chain.get_dist(moli, molj)
+    def test_distance_rejects_mols_outside(self, chain: Cluster, moli: int, molj: int):
+        with pytest.raises(ValueError, match="not in the cluster"):
+            chain.distance(moli, molj)
 
-    def test_set_dist(self, chain: Cluster):
-        chain.set_dist(1, 2, 2.2)
+    def test_distance_rejects_unconnected_mols(self, chain: Cluster):
+        with pytest.raises(ValueError, match="not connected"):
+            chain.distance(1, 3)
 
-        assert chain.get_dist(1, 2) == 2.2
-
-    @pytest.mark.parametrize(("moli", "molj", "dist"), [(1, 5, 1.0), (1, 2, 0.0)])
-    def test_set_dist_rejects_invalid(
-        self, chain: Cluster, moli: int, molj: int, dist: float
-    ):
-        with pytest.raises(ValueError):
-            chain.set_dist(moli, molj, dist)
-
-    def test_separate_single_component_is_a_noop(self, chain: Cluster):
-        assert chain.separate() == []
-        assert members(chain) == [1, 2, 3]
-
-    def test_separate_keeps_largest_component(self, chain: Cluster):
-        chain.remove_con(2, 3)
-
-        (split,) = chain.separate()
-
-        assert members(chain) == [1, 2]
-        assert members(split) == [3]
-        assert split.id > chain.id
-
-    @pytest.fixture
-    def pair_of_clusters(self, make_universe: UniverseFactory) -> list[Cluster]:
-        uni = make_universe([[[1, 2], [3, 4]]], 4)
-        config = MolClsConfig(rules={"MOL": {"MOL": f"cm {CUTOFF}"}})
-        conntab = ConnectionTable(uni, config._rules, {"MOL": uni.atoms})
-
-        return [Cluster(uni, sub) for sub in conntab.subconntables()]
-
-    def test_merge_joins_the_graphs(self, pair_of_clusters: list[Cluster]):
-        first, second = pair_of_clusters
-
-        first.merge(second)
-
-        assert sorted(first) == [1, 2, 3, 4]
-        assert first.size == 4
-
-    def test_merge_updates_residue_group(self, pair_of_clusters: list[Cluster]):
-        first, second = pair_of_clusters
-
-        first.merge(second)
-
-        assert members(first) == [1, 2, 3, 4]
-
-    def test_update_from_conntable(self, chain: Cluster):
-        uni = chain.uni
-        config = MolClsConfig(rules={"MOL": {"MOL": "cm 60.0"}})
-        conntab = ConnectionTable(uni, config._rules, {"MOL": uni.atoms})
-
-        chain.update_from_conntable(next(conntab.subconntables()))
-
-        assert members(chain) == [1, 2, 3, 4, 5]
-
-    def test_age(self, make_universe: UniverseFactory):
-        uni = make_universe([[], []], 2)
-        cls = Cluster(uni)
+    def test_birth_time_and_age(self, make_universe: UniverseFactory):
+        uni = make_universe([[[1, 2]], [[1, 2]]], 2)
+        cls = Cluster(uni, connected_groups(uni)[0], cluster_id=1)
 
         uni.trajectory[1]
 
-        assert cls.get_age() == 1.0
+        assert cls.birth_time == 0.0
+        assert cls.age == 1.0
 
-    def test_equality_is_by_graph(self, chain: Cluster):
-        twin = Cluster(chain.uni)
-        twin.cluster = chain.cluster.copy()
+    def test_equality_and_hash_are_by_identity(self, chain: Cluster):
+        (group,) = connected_groups(chain.uni)
+        twin = Cluster(chain.uni, group, cluster_id=1)
+        seen = {chain}
 
-        assert twin == chain
-        assert chain != Cluster(chain.uni)
-        assert chain != "not a cluster"
+        assert twin != chain
+        assert twin not in seen
+
+        # the same object, whatever its later frames hold
+        (everything,) = connected_groups(chain.uni, cutoff=60.0)
+        chain._update(everything)
+        assert chain == chain
+        assert chain in seen
