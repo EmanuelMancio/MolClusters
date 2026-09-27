@@ -14,7 +14,7 @@ from loguru import logger
 from MDAnalysis.lib.util import NamedStream
 
 from ..cluster import Cluster
-from ..output import OutputFile, RunOutput
+from ..output import OutputFile
 from .base import Frame, FrameAnalysis, Run
 
 
@@ -65,7 +65,6 @@ class ClusterCoordinates(FrameAnalysis):
         self.folder = folder
         self.solute_ids: set[int] = set()
         self.follow_skipped: Counter[int] = Counter()
-        self._output: RunOutput | None = None
 
         self.outputs = (
             OutputFile(self._file("cls-n<size>.gro"), append=True),
@@ -90,7 +89,7 @@ class ClusterCoordinates(FrameAnalysis):
         return str(PurePosixPath(self.folder, name))
 
     def prepare(self, run: Run) -> None:
-        """Find the solute molecules, and keep where to write for `analyse`.
+        """Find the solute molecules.
 
         Parameters
         ----------
@@ -103,7 +102,6 @@ class ClusterCoordinates(FrameAnalysis):
             for resid in run.universe.select_atoms(f"resname {name}").residues.resids
         }
         self.follow_skipped = Counter()
-        self._output = run.output
 
     def analyse(self, frame: Frame) -> None:
         """Append the clusters of the current frame that hold a solute.
@@ -122,11 +120,11 @@ class ClusterCoordinates(FrameAnalysis):
 
             # pooled by size: an ensemble of what an N-mer looks like, across all
             # clusters that were ever that size, independent of cluster identity
-            self._output.append(self._file(f"cls-n{cls.size}.gro"), text)
+            frame.output.append(self._file(f"cls-n{cls.size}.gro"), text)
 
             # pooled by identity: this specific cluster's own trajectory, tracked
             # across frames via the dominance algorithm regardless of size changes
-            self._output.append(self._file(f"cls-id{cls.id}.gro"), text)
+            frame.output.append(self._file(f"cls-id{cls.id}.gro"), text)
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
@@ -141,7 +139,7 @@ class ClusterCoordinates(FrameAnalysis):
 
                 (sol_id,) = sol_ids
 
-                self._output.append(self._file(f"solute-{sol_id}.gro"), text)
+                frame.output.append(self._file(f"solute-{sol_id}.gro"), text)
 
     @staticmethod
     def _render(cls: Cluster, time: float) -> str:

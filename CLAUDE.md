@@ -30,7 +30,7 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   subclass per output: `prepare(run)`, `analyse(frame)` on every frame including
   frame 0, `finish(run)`, all called in list order from `MolClusters.run()`. They see the run
   through `Run` (universe, config, `output`, `analysis(Type)` lookup of earlier analyses) and each
-  frame through `Frame` (index, time, read-only clusters, `find`), never the tracker itself. All
+  frame through `Frame` (index, time, read-only clusters, `find`, `output`), never the tracker itself. All
   file writes go through `Run.output` (`output.py`'s `RunOutput`: `path(name)` for whole files,
   buffered `append` for per-frame ones; names may include folders, created on demand, all
   under the run's output directory, `--output-dir`), and each analysis declares its files in `outputs`

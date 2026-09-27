@@ -294,12 +294,12 @@ class MolClusters:
         # if the run is interrupted, as appending it frame by frame used to
         with self.output:
             run.prepare_analyses()
-            run.analyse_frame(Frame(0, self.tracker))
+            run.analyse_frame(Frame(0, self.tracker, self.output))
 
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                     self.tracker.update()
-                    run.analyse_frame(Frame(i, self.tracker))
+                    run.analyse_frame(Frame(i, self.tracker, self.output))
                     pbar.update()
 
                     done = i + 1

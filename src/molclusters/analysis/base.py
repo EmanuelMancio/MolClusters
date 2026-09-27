@@ -184,11 +184,14 @@ class Frame:
         The time of the frame, as the trajectory reports it.
     universe : mda.Universe
         The Universe, positioned at this frame.
+    output : RunOutput
+        Where the run's analyses write their files (the same as `Run.output`),
+        e.g. to append this frame to a file.
     """
 
-    __slots__ = ["index", "time", "universe", "_tracker"]
+    __slots__ = ["index", "time", "universe", "output", "_tracker"]
 
-    def __init__(self, index: int, tracker: ClusterTracker) -> None:
+    def __init__(self, index: int, tracker: ClusterTracker, output: RunOutput) -> None:
         """Initialize the current frame of a run.
 
         Parameters
@@ -197,10 +200,13 @@ class Frame:
             The index of the frame in the run.
         tracker : ClusterTracker
             The tracker, up to date with the frame.
+        output : RunOutput
+            Where the run's analyses write their files.
         """
         self.index = index
         self.time: float = tracker.uni.coord.time
         self.universe = tracker.uni
+        self.output = output
         self._tracker = tracker
 
     @property

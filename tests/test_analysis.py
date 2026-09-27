@@ -21,7 +21,7 @@ from molclusters.analysis import (
     SoluteSolvent,
 )
 from molclusters.config import MolClsConfig
-from molclusters.output import RunOutput
+from molclusters.output import OutputFile, RunOutput
 from molclusters.tracker import ClusterTracker
 
 from .conftest import ALL_PAIRS_RULES, MOL_RULES, Groups, UniverseFactory
@@ -53,7 +53,7 @@ def run_analyses(
         for i, _ in enumerate(uni.trajectory):
             if i:
                 tracker.update()
-            run.analyse_frame(Frame(i, tracker))
+            run.analyse_frame(Frame(i, tracker, run.output))
         run.finish_analyses()
     return run
 
@@ -115,22 +115,38 @@ class TestRunAndFrame:
         ]
 
     def test_frame_finds_the_cluster_of_a_molecule(
-        self, make_universe: UniverseFactory
+        self, make_universe: UniverseFactory, tmp_path: Path
     ):
         uni = make_universe([[[1, 2, 3]]], 4)
         tracker = ClusterTracker(uni, MolClsConfig(rules=MOL_RULES))
-        frame = Frame(0, tracker)
+        frame = Frame(0, tracker, RunOutput(tmp_path))
 
         (cid,) = frame.clusters
         assert frame.find(2) == cid
         assert frame.find(4) is None
 
-    def test_frame_clusters_are_read_only(self, make_universe: UniverseFactory):
+    def test_frame_clusters_are_read_only(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
         uni = make_universe([[[1, 2, 3]]], 4)
         tracker = ClusterTracker(uni, MolClsConfig(rules=MOL_RULES))
 
         with pytest.raises(TypeError):
-            Frame(0, tracker).clusters[99] = None
+            Frame(0, tracker, RunOutput(tmp_path)).clusters[99] = None
+
+    def test_frames_append_through_the_run_output(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        class Appender(FrameAnalysis):
+            outputs = (OutputFile("frames.txt", append=True),)
+
+            def analyse(self, frame: Frame) -> None:
+                frame.output.append("frames.txt", f"{frame.index}\n")
+
+        run = run_analyses([Appender()], make_universe, [[], [], []], 2, tmp_path)
+
+        assert (tmp_path / "frames.txt").read_text() == "0\n1\n2\n"
+        assert run.output.directory == tmp_path
 
     def test_preparing_finds_only_the_analyses_before(
         self, make_universe: UniverseFactory, tmp_path: Path
