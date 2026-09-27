@@ -71,6 +71,26 @@ class TestCenterOfMassRule:
 
         assert sorted(table) == [2, 3]
 
+    def test_molecule_split_across_the_box_still_connects(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[]], 2)
+        top = uni.dimensions[2]
+        # residue 1 sits at the top of the box with its O atom (1.2 A above its C)
+        # wrapped to the bottom; residue 2 is whole, just below it
+        uni.atoms.positions = [
+            [100.0, 100.0, top - 0.5],
+            [100.0, 100.0, 0.7],
+            [100.0, 102.0, top - 2.0],
+            [100.0, 102.0, top - 0.8],
+        ]
+
+        table = build(uni, {"MOL": {"MOL": f"cm {CUTOFF}"}})
+
+        # the whole residues' centers of mass are 2 A apart in y and 1.5 A in z
+        assert sorted(table) == [1, 2]
+        assert table[1, 2] == pytest.approx(2.5, abs=1e-3)
+
     def test_no_molecules_within_cutoff(self, make_universe: UniverseFactory):
         uni = make_universe([[]], 3)
 

@@ -56,6 +56,9 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   running again gives the same results (analyses start over in `prepare`). Results are read from
   the analyses, found with `MolClusters.analysis(Type)`; per-frame files are buffered, and the
   whole-run ones are written when the run finishes.
+- `ConnectionTable`'s "cm" rule compares each molecule's center of mass made whole by minimum
+  image around its first atom (`_whole_centers_of_mass`, no bonds needed): trajectories split
+  molecules across PBC, and a split molecule's plain COM can land half a box away.
 - The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"
   rule (`capped_distance`/`self_capped_distance`); MDAnalysis silently ignores it under its
   auto-selected "nsgrid" method (typical when the cutoff is much smaller than the box), and "hb"

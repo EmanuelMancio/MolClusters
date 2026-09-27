@@ -31,6 +31,7 @@ import numpy as np
 from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
+from MDAnalysis.lib.distances import apply_PBC, minimize_vectors
 
 from .config import DistanceBackend, HBRule, Rule
 from .symdict import SymmetricDict
@@ -139,6 +140,43 @@ def check_resids(universe: mda.Universe) -> None:
             "otherwise). Renumber the residues in the topology, or from Python with "
             "`universe.residues.resids = numpy.arange(1, len(universe.residues) + 1)`."
         )
+
+
+def _whole_centers_of_mass(atoms: core.groups.AtomGroup) -> np.ndarray:
+    """Calculate the center of mass of each residue, as if the residue were whole.
+
+    Trajectories often split molecules across periodic boundaries (raw GROMACS
+    output, wrapped LAMMPS dumps), and the plain center of mass of a split molecule
+    lands between its pieces, up to half a box away from the molecule. Each atom is
+    taken instead at its nearest image to its residue's first atom, which needs no
+    bonds and holds for any residue spanning less than half the box.
+
+    Parameters
+    ----------
+    atoms : core.groups.AtomGroup
+        Every atom of the residues, in residue order.
+
+    Returns
+    -------
+    np.ndarray
+        One center of mass per residue, wrapped into the primary unit cell.
+    """
+    box = atoms.dimensions
+    if box is None or not np.any(box[:3]):
+        return atoms.center_of_mass(compound="residues")
+
+    positions = atoms.positions
+    masses = atoms.masses
+    _, first, residue = np.unique(
+        atoms.resindices, return_index=True, return_inverse=True
+    )
+    anchors = positions[first]
+    offsets = minimize_vectors(positions - anchors[residue], box)
+    weighted = np.stack(
+        [np.bincount(residue, masses * offsets[:, k]) for k in range(3)], axis=1
+    )
+    centers = anchors + weighted / np.bincount(residue, masses)[:, None]
+    return apply_PBC(centers.astype(np.float32), box)
 
 
 def _warn_if_openmp_unavailable(backend: DistanceBackend) -> None:
@@ -348,9 +386,9 @@ class ConnectionTable:
         self.update()
 
     def __get_mass_centers(self) -> None:
-        """Calculate the center of mass for each residue type."""
+        """Calculate the whole center of mass of each molecule, per residue type."""
         for res in self.clst_args.all_keys():
-            self.cms[res] = self.sels[res].center_of_mass(compound="residues")
+            self.cms[res] = _whole_centers_of_mass(self.sels[res])
 
     def __start_hbonds(self) -> None:
         """Initialize hydrogen bond analysis for residue pairs."""
