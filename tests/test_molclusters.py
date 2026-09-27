@@ -35,7 +35,7 @@ type Analyze = Callable[..., MolClusters]
 
 @pytest.fixture
 def analyze(make_universe: UniverseFactory) -> Analyze:
-    """Build a MolClusters over synthetic frames (frame 0 is loaded on creation).
+    """Build a MolClusters over synthetic frames.
 
     Returns
     -------
@@ -216,6 +216,40 @@ class TestRun:
         (warning,) = [m for m in captured_logs if m.startswith("Solutes were not")]
         assert "in 3 frame(s) of 1 cluster(s)" in warning
         assert any("Results written to" in m for m in captured_logs)
+
+    def test_the_tracker_is_created_by_run(
+        self, analyze: Analyze, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        molcls = analyze([[[1, 2]], [[1, 2, 3]]], 3)
+        monkeypatch.chdir(tmp_path)
+        assert molcls.tracker is None
+
+        molcls.run()
+
+        assert [sorted(c) for c in molcls.tracker.clusters.values()] == [[1, 2, 3]]
+
+    def test_running_again_gives_the_same_results(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        molcls = analyze(
+            RUN_FRAMES, 10, RUN_RESNAMES, rules=ALL_PAIRS_RULES, nucleus=["MOL"]
+        )
+        monkeypatch.chdir(tmp_path)
+        files = ["evo.txt", "molclusters.json", "nucleus_data.csv"]
+
+        molcls.run()
+        first = {name: (tmp_path / name).read_text() for name in files}
+        molcls.uni.trajectory[1]  # wherever the trajectory was left
+        molcls.run()
+
+        assert {name: (tmp_path / name).read_text() for name in files} == first
+        connections = [m for m in captured_logs if m.startswith("Connections per")]
+        assert len(connections) == 2
+        assert connections[0] == connections[1]
 
     def test_progress_and_duration_are_logged(
         self,

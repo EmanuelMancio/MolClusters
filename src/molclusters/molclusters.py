@@ -58,8 +58,9 @@ class MolClusters:
         The MDAnalysis Universe object associated with the simulation.
     config : dict
         The configuration dictionary containing analysis settings.
-    tracker : ClusterTracker
-        Follows the clusters frame by frame, keeping their ids stable.
+    tracker : ClusterTracker | None
+        Follows the clusters frame by frame, keeping their ids stable; created by
+        `run` (None before), and left at the last frame.
     clusters : dict[int, Cluster]
         The tracker's clusters of the current frame, keyed by cluster ID.
     mol_clt : dict[int, int]
@@ -136,8 +137,7 @@ class MolClusters:
         self.__check_resnames()
         logger.info(f"Effective configuration:\n{config.describe()}")
 
-        # TODO: move start to run
-        self.tracker = ClusterTracker(self.uni, self.config)
+        self.tracker: ClusterTracker | None = None  # created by run()
 
         self.size_evolution = SizeEvolution()
         builtins: list[FrameAnalysis] = [self.size_evolution]
@@ -246,10 +246,11 @@ class MolClusters:
 
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
-        """Run the molecular cluster analysis.
+        """Track the clusters over the whole trajectory and run the analyses on them.
 
-        This method performs cluster detection, solute-solvent analysis, nucleus analysis,
-        and exports the results to files.
+        Every run starts over from the first frame with a new tracker (cluster ids
+        start from 1 again), and the analyses start over in `prepare`, so running
+        again gives the same results.
         """
         n_frames = len(self.uni.trajectory)
         self.__check_previous_outputs()
@@ -257,6 +258,9 @@ class MolClusters:
         start = time.perf_counter()
         # the bar only shows on the terminal, so the log files get a line every 10%
         progress_step = max(1, n_frames // 10)
+
+        self.uni.trajectory[0]
+        self.tracker = ClusterTracker(self.uni, self.config)
 
         self.output = RunOutput(path.Path.cwd())
         run = Run(self.uni, self.config, n_frames, self.output, self.analyses)

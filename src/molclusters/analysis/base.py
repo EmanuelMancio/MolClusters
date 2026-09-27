@@ -34,7 +34,8 @@ class FrameAnalysis(ABC):
 
     Only `analyse` must be implemented. An analysis keeps its results as its own
     attributes; one that writes files does so through `Run.output` and declares
-    them in `outputs`.
+    them in `outputs`. The same analysis may be run more than once, so it should
+    start its results over in `prepare`, not only in ``__init__``.
 
     Attributes
     ----------
@@ -48,7 +49,7 @@ class FrameAnalysis(ABC):
     outputs: tuple[OutputFile, ...] = ()
 
     def prepare(self, run: "Run") -> None:  # noqa: B027 (optional hook)
-        """Get ready for a run. Does nothing unless overridden.
+        """Get ready for a run, starting over any results. Does nothing unless overridden.
 
         Parameters
         ----------
