@@ -6,27 +6,22 @@
 
 Classes:
 --------
-- MolClusters: A class for managing and analyzing molecular clusters, including solute-solvent interactions,
-  cluster evolution, and nucleus analysis.
-- MolClustersData: A helper class for encoding and storing cluster data for output.
+- MolClusters: Runs the analyses the config enables (and any given ones) on the
+  clusters of every frame of a trajectory.
 
-The clusters themselves, and their ids, are tracked by `tracker.ClusterTracker`.
+The clusters themselves, and their ids, are tracked by `tracker.ClusterTracker`;
+the analyses are in the `analysis` package.
 
 Dependencies:
 -------------
 - MDAnalysis: For molecular dynamics trajectory and structure analysis.
-- NetworkX: For graph-based operations on molecular clusters.
 - NumPy: For numerical computations.
-- Pandas: For data manipulation and exporting results.
 - tqdm: For progress tracking during analysis.
 """
 
-import json
 import pathlib as path
 import time
 from collections.abc import Iterable
-from functools import reduce
-from typing import Any
 
 import MDAnalysis as mda
 import numpy as np
@@ -37,26 +32,25 @@ from .analysis import (
     ClusterCoordinates,
     Frame,
     FrameAnalysis,
+    JsonReport,
     Nucleus,
     Run,
     SizeEvolution,
     SoluteSolvent,
 )
-from .cluster import Cluster, MolGroup
+from .cluster import Cluster
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
 from .output import OutputFile, RunOutput
 from .tracker import ClusterTracker
-from .version import __version__
-
-# TODO: create analysis class to declutter MolClusters
 
 
 class MolClusters:
     """A class for analyzing molecular clusters in molecular dynamics simulations.
 
-    This class manages molecular clusters, performs solute-solvent analysis, tracks cluster evolution,
-    and performs nucleus analysis.
+    It tracks the clusters frame by frame and runs the analyses on them: the
+    built-ins the config enables (cluster sizes, solute-solvent, coordinates,
+    nuclei, the JSON report), then the ones given to it.
 
     Attributes
     ----------
@@ -74,6 +68,9 @@ class MolClusters:
         The analyses run on the clusters of every frame.
     size_evolution : SizeEvolution
         The number and sizes of the clusters over time (one of `analyses`).
+    nucleus : Nucleus | None
+        The nuclei inside the clusters, when the config enables them (one of
+        `analyses`).
     clusters_size_evo : np.ndarray
         An array tracking the evolution of cluster sizes over time (see
         `size_evolution`).
@@ -87,7 +84,6 @@ class MolClusters:
         "size_evolution",
         "radius_evolution",
         "nucleus",
-        "data_holder",
         "output",
     ]
 
@@ -154,11 +150,10 @@ class MolClusters:
         self.nucleus = None if config.nucleus is None else Nucleus(config.nucleus)
         if self.nucleus is not None:
             builtins.append(self.nucleus)
+        builtins.append(JsonReport())
         self.analyses: list[FrameAnalysis] = [*builtins, *extra]
 
         self.radius_evolution = {}
-
-        self.data_holder = MolClustersData(self)
 
     def __check_resnames(self) -> None:
         """Warn about residue names in the config that the topology doesn't have.
@@ -217,12 +212,9 @@ class MolClusters:
         Returns
         -------
         list[OutputFile]
-            The analyses' outputs, then those of the analyses not moved to
-            `FrameAnalysis` yet.
+            The analyses' outputs, in the order of the analyses.
         """
-        outputs = [out for analysis in self.analyses for out in analysis.outputs]
-        outputs.append(OutputFile("molclusters.json"))
-        return outputs
+        return [out for analysis in self.analyses for out in analysis.outputs]
 
     def __log_rule_connections(self, n_frames: int) -> None:
         """Log how many connections each rule found, warning about unused rules.
@@ -277,13 +269,11 @@ class MolClusters:
         with self.output:
             run.prepare_analyses()
             run.analyse_frame(Frame(0, self.tracker))
-            self.data_holder.parse_frame()
 
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                     self.tracker.update()
                     run.analyse_frame(Frame(i, self.tracker))
-                    self.data_holder.parse_frame()
                     pbar.update()
 
                     done = i + 1
@@ -302,9 +292,6 @@ class MolClusters:
 
         run.finish_analyses()
         self.output.flush()  # in case an analysis appended to a file in `finish`
-
-        with path.Path("molclusters.json").open("w+") as json_out:
-            json.dump(self.data_holder.data, json_out, indent=2)
 
         outputs = ", ".join(out.name for out in self.__declared_outputs())
         logger.info(f"Results written to {self.output.directory}: {outputs}")
@@ -358,172 +345,3 @@ class MolClusters:
                 ndx.write("\n")
 
                 # TODO: (low priority) Make the skipped lines work
-
-
-# TODO: use orjson for better encoding options
-class MolClustersData:
-    """A helper class for encoding and storing molecular cluster data.
-
-    Attributes
-    ----------
-    molcls : MolClusters
-        The parent MolClusters object.
-    data : dict
-        A dictionary for storing encoded cluster data.
-    """
-
-    def __init__(self, molclusters: MolClusters) -> None:
-        """Initialize the MolClustersData object.
-
-        Parameters
-        ----------
-        molclusters : MolClusters
-            The parent MolClusters object.
-        """
-        self.molcls = molclusters
-
-        conf = self.molcls.config.model_dump()
-
-        self.data = {
-            "Software": f"MolClusters {__version__}",
-            "Trajectory": str(
-                path.Path(self.molcls.uni.trajectory.filename).absolute()
-            ),
-            "Topology": str(path.Path(self.molcls.uni.filename).absolute()),
-            "Config": conf,
-            "MolClusters": [],
-        }
-
-    def parse_frame(self) -> None:
-        """Parse the current frame and encode cluster data."""
-        data = {}
-
-        data["Time"] = self.molcls.uni.coord.time
-        data["Frame"] = self.molcls.uni.coord.frame
-        data["NClusters"] = len(self.molcls.tracker.clusters)
-
-        molclusters_data = []
-        for cid, cls in self.molcls.tracker.clusters.items():
-            cls_data = self.encode_cluster(cls)
-            if self.molcls.nucleus is not None:
-                cls_data["Nucleus"] = []
-                if self.molcls.nucleus.nuclei.get(cid, False):
-                    nuclei = reduce(lambda a, b: a + b, self.molcls.nucleus.nuclei[cid])
-                    cls_data["NucleiDipole"] = nuclei.dipole_moment
-                    for nuc in self.molcls.nucleus.nuclei[cid]:
-                        cls_data["Nucleus"].append(MolClustersData.encode_nucleus(nuc))
-
-            molclusters_data.append(cls_data)
-
-        data["Clusters"] = molclusters_data
-        self.data["MolClusters"].append(data)
-
-    @staticmethod
-    def encode_cluster(cls: Cluster) -> dict:
-        """Encode a cluster into a dictionary.
-
-        Parameters
-        ----------
-        cls : Cluster
-            The cluster to encode.
-
-        Returns
-        -------
-        dict
-            The encoded cluster data.
-        """
-        data = {}
-        data["ID"] = cls.id
-        MolClustersData.encode_properties(cls, data)
-        return data
-
-    @staticmethod
-    def encode_nucleus(nuc: MolGroup) -> dict:
-        """Encode a nucleus into a dictionary.
-
-        Parameters
-        ----------
-        nuc : MolGroup
-            The nucleus to encode.
-
-        Returns
-        -------
-        dict
-            The encoded nucleus data.
-        """
-        data = {}
-        MolClustersData.encode_properties(nuc, data)
-        return data
-
-    @staticmethod
-    def encode_properties(obj: Cluster | MolGroup, data: dict) -> None:
-        """Encode the properties of a cluster or nucleus.
-
-        Parameters
-        ----------
-        obj : Cluster | MolGroup
-            The object to encode.
-        data : dict
-            The dictionary to store the encoded properties.
-        """
-        data["Size"] = obj.size
-        data["Composition"] = MolClustersData.encode_composition(obj)
-
-        if isinstance(obj, Cluster):
-            data["Connections"] = MolClustersData.encode_connections(obj)
-
-        data["ResIDs"] = sorted([int(x) for x in obj.resids])
-        data["Mass"] = obj.mass
-        data["Volume"] = obj.volume
-        data["Radius"] = obj.radius
-        data["Diameter"] = obj.diameter
-        data["Density"] = obj.density
-        data["Charge"] = obj.charge
-        data["Dipole Moment"] = obj.dipole_moment
-        data["Sphericity"] = obj.sphericity
-        data["Shape"] = obj.shape_parameter
-
-    @staticmethod
-    def encode_composition(obj: Cluster | MolGroup) -> list[dict]:
-        """Encode the composition of a cluster or nucleus.
-
-        Parameters
-        ----------
-        obj : Cluster | MolGroup
-            The object to encode.
-
-        Returns
-        -------
-        list[dict]
-            A list of dictionaries representing the composition.
-        """
-        comp = {}
-        for rnm, rid in zip(obj.resnames, map(int, obj.resids), strict=True):
-            if rnm in comp:
-                comp[rnm]["n"] += 1
-                comp[rnm]["resids"].append(rid)
-            else:
-                comp[rnm] = {"resname": rnm, "n": 1, "resids": [rid]}
-
-        return list(comp.values())
-
-    @staticmethod
-    def encode_connections(
-        obj: Cluster,
-    ) -> list[tuple[int, int, dict[str, Any]]]:
-        """Encode the connections of a cluster.
-
-        Parameters
-        ----------
-        obj : Cluster
-            The object to encode.
-
-        Returns
-        -------
-        list[tuple[int, int, dict[str, Any]]]
-            A list of tuples representing the connections and their properties.
-        """
-        return [
-            (int(edge[0]), int(edge[1]), {k: float(v) for k, v in edge[2].items()})
-            for edge in obj.graph.edges.data()
-        ]

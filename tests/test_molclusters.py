@@ -11,7 +11,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from molclusters.analysis import Frame, FrameAnalysis, Run, SizeEvolution
+from molclusters.analysis import (
+    ClusterCoordinates,
+    Frame,
+    FrameAnalysis,
+    JsonReport,
+    Nucleus,
+    Run,
+    SizeEvolution,
+    SoluteSolvent,
+)
 from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
@@ -321,7 +330,7 @@ class TestUserAnalyses:
 
         molcls.run()
 
-        assert molcls.analyses == [molcls.size_evolution, largest]
+        assert molcls.analyses[-1] is largest
         assert largest.largest == [3, 0, 2]
         # a built-in's results are found, and complete for the frames seen
         assert largest.size is molcls.size_evolution
@@ -349,13 +358,39 @@ class TestUserAnalyses:
         assert "(largest-7.log)" in warning
         (summary,) = [m for m in captured_logs if m.startswith("Results written")]
         assert summary.endswith(
-            ": evo.txt, largest.txt, largest-<n>.log, molclusters.json\n"
+            ": evo.txt, molclusters.json, largest.txt, largest-<n>.log\n"
         )
 
     def test_none_are_added_by_default(self, analyze: Analyze):
         molcls = analyze([[[1, 2]]], 2)
 
-        assert molcls.analyses == [molcls.size_evolution]
+        assert [type(a) for a in molcls.analyses] == [SizeEvolution, JsonReport]
+
+
+class TestBuiltins:
+    def test_the_config_enables_them_in_order(self, analyze: Analyze):
+        molcls = analyze(
+            [[]],
+            2,
+            ["MOL", "SOL"],
+            rules=ALL_PAIRS_RULES,
+            solute=["MOL"],
+            nucleus=["MOL"],
+            follow=["solute"],
+        )
+
+        assert [type(a) for a in molcls.analyses] == [
+            SizeEvolution,
+            SoluteSolvent,
+            ClusterCoordinates,
+            Nucleus,
+            JsonReport,
+        ]
+        solute, coordinates = molcls.analyses[1:3]
+        assert solute.solutes == {"MOL"}
+        assert solute.solvents == {"SOL"}
+        assert coordinates.follow is True
+        assert molcls.analyses[3] is molcls.nucleus
 
     def test_a_class_instead_of_an_instance_is_refused(self, analyze: Analyze):
         with pytest.raises(TypeError, match="pass an instance, not the class"):

@@ -26,8 +26,8 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   `update`: each previous cluster picks its best connected group (`_best_groups`: most molecules,
   then purest), then each group continues its largest contributor (`_get_older_cluster`: then
   oldest id) or becomes a new cluster.
-- The analyses on top of the tracker are being moved into the `analysis/` package, one
-  `FrameAnalysis` subclass per output: `prepare(run)`, `analyse(frame)` on every frame including
+- The analyses on top of the tracker live in the `analysis/` package, one `FrameAnalysis`
+  subclass per output: `prepare(run)`, `analyse(frame)` on every frame including
   frame 0, `finish(run)`, all called in list order from `MolClusters.run()`. They see the run
   through `Run` (universe, config, `output`, `analysis(Type)` lookup of earlier analyses) and each
   frame through `Frame` (index, time, read-only clusters, `find`), never the tracker itself. All
@@ -37,10 +37,11 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   their own analyses with `MolClusters(..., analyses=[...])`, which run after the config-enabled
   built-ins (there is no registry yet); `Run` dispatches every hook and notes which analysis raised
   an error (`_blame`), and the CLI prints those notes. Built-ins take their options as
-  constructor arguments, and `MolClusters.__init__` builds them from the config. So far
+  constructor arguments, and `MolClusters.__init__` builds them from the config, in this order:
   `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
-  (cls-n/cls-id/solute-*.gro) and `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are
-  for later analyses) have moved; the JSON report is still `MolClustersData`.
+  (cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
+  later analyses), `JsonReport` (molclusters.json, a straight port of the old `MolClustersData`
+  due for a rewrite so other analyses can add to it).
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
   properties computed on the group made whole across PBC (`whole()`, cached per frame; never
   moves the shared Universe for good). `Cluster(MolGroup)` adds the id, a frozen `graph`,

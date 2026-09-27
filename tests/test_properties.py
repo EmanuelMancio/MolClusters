@@ -216,7 +216,7 @@ def make_universe(frames: list[np.ndarray]) -> mda.Universe:
         dimensions=[BOX, BOX, BOX, 90.0, 90.0, 90.0],
         dt=1.0,
     )
-    # MolClustersData records both paths, and chokes on None
+    # JsonReport records both paths, and chokes on None
     uni.filename = "synthetic.top"
     uni.trajectory.filename = "synthetic.traj"
     return uni

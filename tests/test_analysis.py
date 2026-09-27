@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from molclusters.analysis import (
     ClusterCoordinates,
     Frame,
     FrameAnalysis,
+    JsonReport,
     Nucleus,
     Run,
     SizeEvolution,
@@ -409,6 +411,54 @@ class TestNucleus:
 
     def test_declares_the_table(self):
         assert [out.name for out in Nucleus.outputs] == ["nucleus_data.csv"]
+
+
+class TestJsonReport:
+    FRAMES = [[[1, 2, 3, 4]], []]
+    RESNAMES = ["MOL", "MOL", "SOL", "MOL"]
+
+    def run(
+        self,
+        analyses: list[FrameAnalysis],
+        make_universe: UniverseFactory,
+        directory: Path,
+    ) -> dict:
+        run_analyses(
+            analyses,
+            make_universe,
+            self.FRAMES,
+            4,
+            directory,
+            self.RESNAMES,
+            ALL_PAIRS_RULES,
+        )
+        return json.loads((directory / "molclusters.json").read_text())
+
+    def test_writes_every_frame_and_cluster(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        report = self.run([JsonReport()], make_universe, tmp_path)
+
+        assert report["Software"].startswith("MolClusters ")
+        assert report["Config"]["rules"]
+        first, second = report["MolClusters"]
+        assert (first["Time"], first["Frame"], first["NClusters"]) == (0, 0, 1)
+        (cluster,) = first["Clusters"]
+        assert cluster["ResIDs"] == [1, 2, 3, 4]
+        assert "Nucleus" not in cluster
+        assert (second["Time"], second["NClusters"], second["Clusters"]) == (1, 0, [])
+
+    def test_includes_the_nuclei_of_a_nucleus_analysis_before_it(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        report = self.run([Nucleus(["MOL"]), JsonReport()], make_universe, tmp_path)
+
+        (cluster,) = report["MolClusters"][0]["Clusters"]
+        assert sorted(n["ResIDs"] for n in cluster["Nucleus"]) == [[1, 2], [4]]
+        assert "NucleiDipole" in cluster
+
+    def test_declares_the_report(self):
+        assert [out.name for out in JsonReport.outputs] == ["molclusters.json"]
 
 
 class TestErrors:
