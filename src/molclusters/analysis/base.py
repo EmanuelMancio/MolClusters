@@ -12,7 +12,8 @@ Classes:
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
+from contextlib import contextmanager
 from types import MappingProxyType
 from typing import ClassVar
 
@@ -125,8 +126,27 @@ class Run:
         """Prepare every analysis of the run, in order (called by the runner)."""
         for i, analysis in enumerate(self._analyses):
             self._visible = i
-            analysis.prepare(self)
+            with _blame(analysis, "prepare"):
+                analysis.prepare(self)
         self._visible = len(self._analyses)
+
+    def analyse_frame(self, frame: "Frame") -> None:
+        """Run every analysis of the run on `frame`, in order (called by the runner).
+
+        Parameters
+        ----------
+        frame : Frame
+            The current frame.
+        """
+        for analysis in self._analyses:
+            with _blame(analysis, "analyse", frame.index):
+                analysis.analyse(frame)
+
+    def finish_analyses(self) -> None:
+        """Finish every analysis of the run, in order (called by the runner)."""
+        for analysis in self._analyses:
+            with _blame(analysis, "finish"):
+                analysis.finish(self)
 
     def analysis[T: FrameAnalysis](self, kind: type[T]) -> T | None:
         """Find the first analysis of the run of type `kind`, for its results.
@@ -206,3 +226,31 @@ class Frame:
             The cluster id, or False if the molecule is in no cluster.
         """
         return self._tracker.find(mol)
+
+
+@contextmanager
+def _blame(
+    analysis: FrameAnalysis, hook: str, frame: int | None = None
+) -> Generator[None, None, None]:
+    """Note which analysis raised an error, so it can be told from a bug of the run.
+
+    Parameters
+    ----------
+    analysis : FrameAnalysis
+        The analysis being called.
+    hook : str
+        The name of the method being called.
+    frame : int | None
+        The index of the frame being analysed, if any.
+
+    Yields
+    ------
+    None
+        Control, for the call to the analysis.
+    """
+    try:
+        yield
+    except Exception as err:
+        where = "" if frame is None else f" on frame {frame}"
+        err.add_note(f"Raised by {type(analysis).__name__}.{hook}(){where}")
+        raise

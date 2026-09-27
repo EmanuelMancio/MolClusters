@@ -306,7 +306,8 @@ def _describe_error(err: BaseException) -> str:
     -------
     str
         ``<type>: <message>``, one line per error for a group or a config
-        validation error.
+        validation error, followed by the error's notes (e.g. which analysis
+        raised it).
     """
     if isinstance(err, BaseExceptionGroup):
         lines = [f"{err.message}:"]
@@ -325,7 +326,9 @@ def _describe_error(err: BaseException) -> str:
 
     # str(KeyError) quotes its message
     message = err.args[0] if isinstance(err, KeyError) and err.args else err
-    return f"{type(err).__name__}: {message}"
+    # notes say where the error came from, e.g. which analysis raised it
+    notes = "".join(f"\n{note}" for note in getattr(err, "__notes__", []))
+    return f"{type(err).__name__}: {message}{notes}"
 
 
 def _assign_radii(uni: mda.Universe) -> None:

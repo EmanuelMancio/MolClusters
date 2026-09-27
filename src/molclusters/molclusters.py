@@ -26,6 +26,7 @@ import json
 import pathlib as path
 import time
 from collections import Counter
+from collections.abc import Iterable
 from functools import reduce
 from typing import Any, Generator
 
@@ -100,7 +101,12 @@ class MolClusters:
         "output",
     ]
 
-    def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
+    def __init__(
+        self,
+        universe: mda.Universe,
+        config: MolClsConfig,
+        analyses: Iterable[FrameAnalysis] = (),
+    ) -> None:
         """Initialize the MolClusters object.
 
         Parameters
@@ -109,7 +115,27 @@ class MolClusters:
             The MDAnalysis Universe object associated with the simulation.
         config : dict
             The configuration dictionary containing analysis settings.
+        analyses : Iterable[FrameAnalysis]
+            Analyses to run in addition to the ones the config enables, after them
+            and in the order given.
+
+        Raises
+        ------
+        TypeError
+            If one of `analyses` isn't a `FrameAnalysis` instance.
         """
+        extra = list(analyses)
+        for analysis in extra:
+            if not isinstance(analysis, FrameAnalysis):
+                hint = (
+                    " (pass an instance, not the class)"
+                    if isinstance(analysis, type)
+                    else ""
+                )
+                raise TypeError(
+                    f"Analyses must be FrameAnalysis instances, got {analysis!r}{hint}."
+                )
+
         self.uni = universe
         self.config = config
 
@@ -129,7 +155,7 @@ class MolClusters:
         self.tracker = ClusterTracker(self.uni, self.config)
 
         self.size_evolution = SizeEvolution()
-        self.analyses: list[FrameAnalysis] = [self.size_evolution]
+        self.analyses: list[FrameAnalysis] = [self.size_evolution, *extra]
 
         self.radius_evolution = {}
 
@@ -169,8 +195,8 @@ class MolClusters:
     def __check_previous_outputs(self) -> None:
         """Warn about output files left in the working directory by an earlier run.
 
-        The files appended to (the per-frame .gro files) would end up mixing an
-        earlier run's frames with this one's; the other outputs are just overwritten.
+        The files appended to (e.g. the per-frame .gro files) would end up mixing an
+        earlier run's results with this one's; the other outputs are just overwritten.
         """
         cwd = path.Path.cwd()
         outputs = self.__declared_outputs()
@@ -189,8 +215,8 @@ class MolClusters:
         if appended:
             shown = ", ".join(appended[:5]) + (", ..." if len(appended) > 5 else "")
             logger.warning(
-                f"{len(appended)} .gro file(s) from an earlier run are in {cwd} "
-                f"({shown}): this run appends its frames to them, mixing both runs. "
+                f"{len(appended)} file(s) from an earlier run are in {cwd} "
+                f"({shown}): this run appends to them, mixing both runs. "
                 "Move or delete them first to keep the runs apart."
             )
 
@@ -467,7 +493,7 @@ class MolClusters:
         # if the run is interrupted, as appending it frame by frame used to
         with self.output:
             run.prepare_analyses()
-            self.__analyse_frame(0)
+            run.analyse_frame(Frame(0, self.tracker))
 
             if self.config.solute is not None:
                 self.__start_solute_solvent()
@@ -476,7 +502,7 @@ class MolClusters:
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                     self.tracker.update()
-                    self.__analyse_frame(i)
+                    run.analyse_frame(Frame(i, self.tracker))
                     if self.config.solute is not None:
                         self.__solute_solvent_analysis(i)
                         self.__write_coordinates()
@@ -510,8 +536,7 @@ class MolClusters:
             )
             logger.debug(f"Frames not followed, by cluster id: {self.follow_skipped}")
 
-        for analysis in self.analyses:
-            analysis.finish(run)
+        run.finish_analyses()
         self.output.flush()  # in case an analysis appended to a file in `finish`
 
         if self.config.solute is not None:
@@ -554,18 +579,6 @@ class MolClusters:
 
         outputs = ", ".join(out.name for out in self.__declared_outputs())
         logger.info(f"Results written to {self.output.directory}: {outputs}")
-
-    def __analyse_frame(self, index: int) -> None:
-        """Run every analysis on the current frame.
-
-        Parameters
-        ----------
-        index : int
-            The index of the frame in the run.
-        """
-        frame = Frame(index, self.tracker)
-        for analysis in self.analyses:
-            analysis.analyse(frame)
 
     @property
     def clusters(self) -> dict[int, Cluster]:

@@ -394,6 +394,14 @@ class TestDescribeError:
     def test_key_error_message_is_not_quoted(self):
         assert _describe_error(KeyError("no such key")) == "KeyError: no such key"
 
+    def test_notes_follow_the_message(self):
+        err = ValueError("boom")
+        err.add_note("Raised by Broken.analyse() on frame 1")
+
+        assert _describe_error(err) == (
+            "ValueError: boom\nRaised by Broken.analyse() on frame 1"
+        )
+
     @pytest.mark.parametrize(
         ("config", "expected"),
         [

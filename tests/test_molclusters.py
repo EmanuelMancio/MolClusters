@@ -12,10 +12,11 @@ import pandas as pd
 import pytest
 from MDAnalysis import Universe
 
+from molclusters.analysis import Frame, FrameAnalysis, Run, SizeEvolution
 from molclusters.cluster import MDAResidueGroupAnalyzer
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
-from molclusters.output import RunOutput
+from molclusters.output import OutputFile, RunOutput
 
 from .conftest import ALL_PAIRS_RULES, CUTOFF, MOL_RULES, Groups, UniverseFactory
 
@@ -31,18 +32,19 @@ def analyze(make_universe: UniverseFactory) -> Analyze:
     Returns
     -------
     Analyze
-        ``analyze(frames, n_res, resnames=None, **config)``.
+        ``analyze(frames, n_res, resnames=None, analyses=(), **config)``.
     """
 
     def factory(
         frames: Sequence[Groups],
         n_res: int,
         resnames: Sequence[str] | None = None,
+        analyses: Sequence[FrameAnalysis] = (),
         **config_kwargs: Any,  # noqa: ANN401
     ) -> MolClusters:
         uni = make_universe(frames, n_res, resnames)
         config_kwargs.setdefault("rules", MOL_RULES)
-        return MolClusters(uni, MolClsConfig(**config_kwargs))
+        return MolClusters(uni, MolClsConfig(**config_kwargs), analyses)
 
     return factory
 
@@ -251,8 +253,8 @@ class TestRun:
 
         assert "Overwriting results of an earlier run: ['evo.txt']\n" in captured_logs
         # solute-1.gro is only written when following solutes
-        (warning,) = [m for m in captured_logs if ".gro file(s) from an" in m]
-        assert warning.startswith("1 .gro file(s)")
+        (warning,) = [m for m in captured_logs if "file(s) from an" in m]
+        assert warning.startswith("1 file(s)")
         assert "(cls-n2.gro)" in warning
 
     def test_a_fresh_directory_reports_no_earlier_outputs(
@@ -320,3 +322,91 @@ class TestWriteCoordinates:
         assert len(id_files) == len(solute_clusters), (
             "expected one id-grouped .gro output per solute cluster"
         )
+
+
+class LargestCluster(FrameAnalysis):
+    """A user analysis: the largest cluster of every frame, next to the built-ins."""
+
+    outputs = (OutputFile("largest.txt"), OutputFile("largest-<n>.log", append=True))
+
+    def prepare(self, run: Run) -> None:
+        self.size = run.analysis(SizeEvolution)
+        self.largest: list[int] = []
+
+    def analyse(self, frame: Frame) -> None:
+        self.largest.append(max((c.size for c in frame.clusters.values()), default=0))
+
+    def finish(self, run: Run) -> None:
+        run.output.path("largest.txt").write_text(f"{self.largest}\n")
+        run.output.append("largest-1.log", "done\n")
+
+
+class TestUserAnalyses:
+    def test_run_after_the_builtins_and_see_every_frame(
+        self, analyze: Analyze, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        largest = LargestCluster()
+        molcls = analyze([[[1, 2, 3]], [], [[1, 2], [3, 4]]], 4, analyses=[largest])
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        assert molcls.analyses == [molcls.size_evolution, largest]
+        assert largest.largest == [3, 0, 2]
+        # a built-in's results are found, and complete for the frames seen
+        assert largest.size is molcls.size_evolution
+        assert (tmp_path / "largest.txt").read_text() == "[3, 0, 2]\n"
+        assert (tmp_path / "largest-1.log").read_text() == "done\n"
+
+    def test_their_outputs_are_checked_and_reported(
+        self,
+        analyze: Analyze,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        monkeypatch.chdir(tmp_path)
+        for name in ["largest.txt", "largest-7.log"]:
+            (tmp_path / name).write_text("")
+        molcls = analyze([[[1, 2]], [[1, 2]]], 2, analyses=[LargestCluster()])
+
+        molcls.run()
+
+        overwriting = "Overwriting results of an earlier run: ['largest.txt']\n"
+        assert overwriting in captured_logs
+        (warning,) = [m for m in captured_logs if "file(s) from an" in m]
+        assert warning.startswith("1 file(s)")
+        assert "(largest-7.log)" in warning
+        (summary,) = [m for m in captured_logs if m.startswith("Results written")]
+        assert summary.endswith(
+            ": evo.txt, largest.txt, largest-<n>.log, molclusters.json\n"
+        )
+
+    def test_none_are_added_by_default(self, analyze: Analyze):
+        molcls = analyze([[[1, 2]]], 2)
+
+        assert molcls.analyses == [molcls.size_evolution]
+
+    def test_a_class_instead_of_an_instance_is_refused(self, analyze: Analyze):
+        with pytest.raises(TypeError, match="pass an instance, not the class"):
+            analyze([[[1, 2]]], 2, analyses=[LargestCluster])
+
+    def test_other_objects_are_refused(self, analyze: Analyze):
+        with pytest.raises(TypeError, match="FrameAnalysis instances, got 3"):
+            analyze([[[1, 2]]], 2, analyses=[3])
+
+    def test_an_error_names_the_analysis_and_frame(
+        self, analyze: Analyze, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        class Broken(FrameAnalysis):
+            def analyse(self, frame: Frame) -> None:
+                if frame.index == 1:
+                    raise ValueError("boom")
+
+        molcls = analyze([[[1, 2]], [[1, 2]]], 2, analyses=[Broken()])
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(ValueError, match="boom") as err_info:
+            molcls.run()
+
+        assert err_info.value.__notes__ == ["Raised by Broken.analyse() on frame 1"]

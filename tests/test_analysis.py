@@ -40,11 +40,8 @@ def run_analyses(
         for i, _ in enumerate(uni.trajectory):
             if i:
                 tracker.update()
-            frame = Frame(i, tracker)
-            for analysis in analyses:
-                analysis.analyse(frame)
-        for analysis in analyses:
-            analysis.finish(run)
+            run.analyse_frame(Frame(i, tracker))
+        run.finish_analyses()
     return run
 
 
@@ -175,3 +172,34 @@ class TestSizeEvolution:
 
     def test_declares_evo(self):
         assert [out.name for out in SizeEvolution.outputs] == ["evo.txt"]
+
+
+class TestErrors:
+    @pytest.mark.parametrize(
+        ("hook", "note"),
+        [
+            ("prepare", "Raised by Failing.prepare()"),
+            ("analyse", "Raised by Failing.analyse() on frame 0"),
+            ("finish", "Raised by Failing.finish()"),
+        ],
+    )
+    def test_an_error_notes_the_analysis_and_hook(
+        self, make_universe: UniverseFactory, tmp_path: Path, hook: str, note: str
+    ):
+        class Failing(FrameAnalysis):
+            def prepare(self, run: Run) -> None:
+                if hook == "prepare":
+                    raise RuntimeError(hook)
+
+            def analyse(self, frame: Frame) -> None:
+                if hook == "analyse":
+                    raise RuntimeError(hook)
+
+            def finish(self, run: Run) -> None:
+                if hook == "finish":
+                    raise RuntimeError(hook)
+
+        with pytest.raises(RuntimeError, match=hook) as err_info:
+            run_analyses([Failing()], make_universe, [[[1, 2]]], 2, tmp_path)
+
+        assert err_info.value.__notes__ == [note]

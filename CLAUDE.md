@@ -33,7 +33,10 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   frame through `Frame` (index, time, read-only clusters, `find`), never the tracker itself. All
   file writes go through `Run.output` (`output.py`'s `RunOutput`: `path(name)` for whole files,
   buffered `append` for per-frame ones), and each analysis declares its files in `outputs`
-  (`OutputFile`), which drives the earlier-run check and the end-of-run summary. So far only
+  (`OutputFile`), which drives the earlier-run check and the end-of-run summary. Library users add
+  their own analyses with `MolClusters(..., analyses=[...])`, which run after the config-enabled
+  built-ins (there is no registry yet); `Run` dispatches every hook and notes which analysis raised
+  an error (`_blame`), and the CLI prints those notes. So far only
   `SizeEvolution` (evo.txt) has moved; solute-solvent, coordinates, nucleus and the JSON report
   are still methods of `MolClusters`.
 - The analysis is frame-oriented: `MolClusters.run()` calls `tracker.update()` frame by frame,
