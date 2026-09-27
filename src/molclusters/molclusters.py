@@ -121,17 +121,17 @@ class MolClusters:
                     f"Analyses must be FrameAnalysis instances, got {analysis!r}{hint}."
                 )
 
-        self.uni = universe
-        self.config = config
-
         if config.solvent is None and config.solute is not None:
-            config.solvent = sorted(
-                set(universe.residues.resnames) - set(config.solute)
-            )
+            # on a copy: the caller's config may be reused with another topology
+            solvent = sorted(set(universe.residues.resnames) - set(config.solute))
+            config = config.model_copy(update={"solvent": solvent})
             logger.info(
                 "No 'solvent' configured: using every non-solute residue name in the "
                 f"topology: {config.solvent}"
             )
+
+        self.uni = universe
+        self.config = config
 
         self.__check_resnames()
         logger.info(f"Effective configuration:\n{config.describe()}")
