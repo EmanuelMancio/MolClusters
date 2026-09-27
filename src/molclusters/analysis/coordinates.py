@@ -85,10 +85,6 @@ class ClusterCoordinates(FrameAnalysis):
         frame : Frame
             The current frame.
         """
-        # TODO: frame 0 was never written, kept as is while moving this analysis
-        if frame.index == 0:
-            return
-
         for cls in frame.clusters.values():
             sol_ids = self.solute_ids.intersection(cls.resids)
             if not sol_ids:

@@ -170,17 +170,17 @@ class TestRun:
     def test_coordinates_are_written_per_size_id_and_followed_solute(
         self, full_run: Path
     ):
-        # coordinates are only written for frames after the first
         assert {p.name for p in full_run.glob("cls-n*.gro")} == {
             "cls-n2.gro",
+            "cls-n3.gro",
             "cls-n4.gro",
         }
         assert len(list(full_run.glob("cls-id*.gro"))) == 2
 
-        # {1,4,5,6} has exactly one solute to follow; {7,8} has two, so it's skipped
+        # {1,4,5(,6)} has exactly one solute to follow; {7,8} has two, so it's skipped
         assert [p.name for p in full_run.glob("solute-*.gro")] == ["solute-1.gro"]
         frames = (full_run / "solute-1.gro").read_text().count("Cluster-")
-        assert frames == 1
+        assert frames == 2
 
     def test_skipped_solute_following_is_summarized_once(
         self,
@@ -189,7 +189,7 @@ class TestRun:
         monkeypatch: pytest.MonkeyPatch,
         captured_logs: list[str],
     ):
-        # {7,8} holds two solutes in frames 1 and 2, so it can't be followed
+        # {7,8} holds two solutes in every frame, so it can't be followed
         molcls = analyze(
             RUN_FRAMES,
             10,
@@ -203,7 +203,7 @@ class TestRun:
         molcls.run()
 
         (warning,) = [m for m in captured_logs if m.startswith("Solutes were not")]
-        assert "in 2 frame(s) of 1 cluster(s)" in warning
+        assert "in 3 frame(s) of 1 cluster(s)" in warning
         assert any("Results written to" in m for m in captured_logs)
 
     def test_progress_and_duration_are_logged(

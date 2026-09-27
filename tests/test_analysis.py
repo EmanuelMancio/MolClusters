@@ -242,7 +242,7 @@ class TestSoluteSolvent:
 
 class TestClusterCoordinates:
     # {1, 2} holds one solute (1); {3, 4} holds two (3, 4), and gains a SOL in
-    # frame 2. Frame 0 isn't written (a known gap).
+    # frame 2
     FRAMES = [[[1, 2], [3, 4]], [[1, 2], [3, 4]], [[1, 2], [3, 4, 5]]]
     RESNAMES = ["MOL", "SOL", "MOL", "MOL", "SOL"]
 
@@ -291,11 +291,14 @@ class TestClusterCoordinates:
             "cls-n3.gro",
         ]
         assert self.frames_in(tmp_path / f"cls-id{three}.gro") == [
+            f"Cluster-{three} - Time = 0.0",
             f"Cluster-{three} - Time = 1.0",
             f"Cluster-{three} - Time = 2.0",
         ]
         assert sorted(self.frames_in(tmp_path / "cls-n2.gro")) == sorted(
             [
+                f"Cluster-{one} - Time = 0.0",
+                f"Cluster-{three} - Time = 0.0",
                 f"Cluster-{one} - Time = 1.0",
                 f"Cluster-{three} - Time = 1.0",
                 f"Cluster-{one} - Time = 2.0",
@@ -314,13 +317,14 @@ class TestClusterCoordinates:
         analysis, one, three = self.run(make_universe, tmp_path, follow=True)
 
         assert self.frames_in(tmp_path / "solute-1.gro") == [
+            f"Cluster-{one} - Time = 0.0",
             f"Cluster-{one} - Time = 1.0",
             f"Cluster-{one} - Time = 2.0",
         ]
         assert not list(tmp_path.glob("solute-[34].gro"))
-        assert analysis.follow_skipped == {three: 2}
+        assert analysis.follow_skipped == {three: 3}
         (warning,) = [m for m in captured_logs if "were not followed" in m]
-        assert warning.startswith("Solutes were not followed in 2 frame(s) of 1 ")
+        assert warning.startswith("Solutes were not followed in 3 frame(s) of 1 ")
 
     @pytest.mark.parametrize(
         ("follow", "names"),
