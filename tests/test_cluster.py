@@ -161,6 +161,35 @@ class TestMolGroup:
         assert radius > 0
         assert center.shape == (3,)
 
+    @pytest.mark.parametrize(
+        ("points", "sphericity"),
+        [
+            # a rod: all mass on a line
+            ([[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]], 0.0),
+            # a flat square ring: two equal moments, the third zero
+            ([[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]], 0.75),
+            # an octahedron: three equal moments, as for a sphere
+            (
+                [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]],
+                1.0,
+            ),
+        ],
+    )
+    def test_sphericity_is_one_for_spherical_and_zero_for_rods(
+        self, points: list, sphericity: float
+    ):
+        n_atoms = len(points)
+        uni = Universe.empty(
+            n_atoms, n_residues=1, atom_resindex=[0] * n_atoms, trajectory=True
+        )
+        uni.add_TopologyAttr("resids", [1])
+        uni.add_TopologyAttr("masses", [1.0] * n_atoms)
+        uni.add_TopologyAttr("bonds", [(i, i + 1) for i in range(n_atoms - 1)])
+        uni.atoms.positions = np.array(points, dtype=float) + 10.0
+        uni.dimensions = [20.0, 20.0, 20.0, 90.0, 90.0, 90.0]
+
+        assert MolGroup(uni, [1]).sphericity == pytest.approx(sphericity, abs=1e-6)
+
     def test_dipole(self, chain: Cluster):
         # each residue is a +0.3/-0.3 pair 1.2 A apart along z; 1 e·A = 4.8032 D
         expected = 3 * 0.3 * 1.2 * 4.80320

@@ -334,13 +334,17 @@ class MolGroup:
     @property
     @_on_whole
     def sphericity(self) -> float:
-        """Calculate the sphericity of the group.
+        """Calculate how spherical the group is, from its gyration tensor.
+
+        This is one minus the asphericity (Dima & Thirumalai), not Wadell's
+        surface-area sphericity: 1 when the three principal moments of the gyration
+        tensor are equal (a sphere, but also e.g. a cube), 0 for a rod (all mass on
+        a line), and 0.75 for a flat disk or ring.
 
         Returns
         -------
         float
-            The sphericity of the group, a measure of how spherical the shape is.
-            A value near zero represents a spherical shape.
+            1 - asphericity, between 0 (rod) and 1 (spherical).
         """
         return 1 - self._rg.asphericity()
 
