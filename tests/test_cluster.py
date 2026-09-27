@@ -196,6 +196,22 @@ class TestMolGroup:
         assert chain.dipole_moment == pytest.approx(expected, rel=1e-4)
         np.testing.assert_allclose(np.abs(chain.dipole), [0, 0, expected], atol=1e-3)
 
+    def test_dipole_of_a_charged_group_is_about_its_center_of_mass(self):
+        # +1 e on a light atom at x = 0 and a neutral heavy one at x = 2: the center
+        # of mass is at x = 1.5, so the dipole about it is 1 e x -1.5 A
+        uni = Universe.empty(2, n_residues=1, atom_resindex=[0, 0], trajectory=True)
+        uni.add_TopologyAttr("resids", [1])
+        uni.add_TopologyAttr("masses", [1.0, 3.0])
+        uni.add_TopologyAttr("charges", [1.0, 0.0])
+        uni.add_TopologyAttr("bonds", [(0, 1)])
+        uni.atoms.positions = [[10.0, 10.0, 10.0], [12.0, 10.0, 10.0]]
+        uni.dimensions = [20.0, 20.0, 20.0, 90.0, 90.0, 90.0]
+
+        ion = MolGroup(uni, [1])
+
+        np.testing.assert_allclose(ion.dipole, [-1.5 * 4.80320, 0, 0], rtol=1e-4)
+        assert ion.dipole_moment == pytest.approx(1.5 * 4.80320, rel=1e-4)
+
     def test_center_of_mass_of_a_group_inside_the_box(self, chain: Cluster):
         np.testing.assert_allclose(
             chain.center_of_mass, chain.atoms.center_of_mass(), rtol=1e-6

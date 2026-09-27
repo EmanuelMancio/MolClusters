@@ -351,7 +351,13 @@ class MolGroup:
     @property
     @_on_whole
     def dipole_moment(self) -> float:
-        """Calculate the dipole moment of the group.
+        """Calculate the dipole moment of the group, about its center of mass.
+
+        For a neutral group the dipole is the same about any point. For a group
+        with a net charge q (ions, charged nuclei or clusters) it isn't: moving the
+        reference point by d changes the dipole by -q d, so its value is the dipole
+        about the center of mass specifically, and only comparable between groups
+        with that convention in mind.
 
         Returns
         -------
@@ -363,7 +369,9 @@ class MolGroup:
     @property
     @_on_whole
     def dipole(self) -> np.ndarray:
-        """Calculate the dipole vector of the group.
+        """Calculate the dipole vector of the group, about its center of mass.
+
+        See `dipole_moment` for what that reference point means for charged groups.
 
         Returns
         -------
