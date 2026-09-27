@@ -38,6 +38,7 @@ from loguru import logger
 from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
+from .analysis import FrameAnalysis, SizeEvolution
 from .cluster import Cluster, MDAResidueGroupAnalyzer
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
@@ -107,8 +108,13 @@ class MolClusters:
         The tracker's clusters of the current frame, keyed by cluster ID.
     mol_clt : dict[int, int]
         The tracker's mapping of molecule IDs to their respective cluster IDs.
+    analyses : list[FrameAnalysis]
+        The analyses run on the clusters of every frame.
+    size_evolution : SizeEvolution
+        The number and sizes of the clusters over time (one of `analyses`).
     clusters_size_evo : np.ndarray
-        An array tracking the evolution of cluster sizes over time.
+        An array tracking the evolution of cluster sizes over time (see
+        `size_evolution`).
     solutes : list[int]
         A list of solute molecule IDs.
     solvents : list[str]
@@ -121,7 +127,8 @@ class MolClusters:
         "uni",
         "config",
         "tracker",
-        "clusters_size_evo",
+        "analyses",
+        "size_evolution",
         "radius_evolution",
         "solutes",
         "solvents",
@@ -163,11 +170,15 @@ class MolClusters:
         # TODO: move start to run
         self.tracker = ClusterTracker(self.uni, self.config)
 
-        self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
+        self.size_evolution = SizeEvolution()
+        self.analyses: list[FrameAnalysis] = [self.size_evolution]
+
         self.radius_evolution = {}
         self.gro_out = _AppendBuffer()
 
-        self.__get_clusters_info(0)
+        for analysis in self.analyses:
+            analysis.prepare(self.tracker, len(self.uni.trajectory))
+            analysis.analyse(self.tracker, 0)
         if self.config.nucleus is not None:
             self.nucleus_data = np.empty(
                 (len(self.uni.trajectory), 9)
@@ -490,7 +501,8 @@ class MolClusters:
         ):
             for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                 self.tracker.update()
-                self.__get_clusters_info(i)
+                for analysis in self.analyses:
+                    analysis.analyse(self.tracker, i)
                 if self.config.solute is not None:
                     self.__solute_solvent_analysis(i)
                     self.__write_coordinates()
@@ -524,20 +536,9 @@ class MolClusters:
             )
             logger.debug(f"Frames not followed, by cluster id: {self.follow_skipped}")
 
-        n_clusters = self.clusters_size_evo[:, 1]
-        logger.info(
-            f"Found {n_clusters.mean():.1f} cluster(s) per frame on average "
-            f"({n_clusters.min():.0f}-{n_clusters.max():.0f}); the largest held "
-            f"{self.clusters_size_evo[:, 4].max():.0f} molecule(s)."
-        )
+        outputs = [name for analysis in self.analyses for name in analysis.finish()]
+        outputs.append("molclusters.json")
 
-        outputs = ["evo.txt", "molclusters.json"]
-
-        np.savetxt(
-            "evo.txt",
-            self.clusters_size_evo,
-            header="Time NClusters MinSize AvgSize MaxSize",
-        )
         if self.config.solute is not None:
             self.solute_data = pd.DataFrame(
                 self.solute_data,
@@ -607,29 +608,10 @@ class MolClusters:
         """
         return self.tracker.find(mol)
 
-    def __get_clusters_info(self, k: int) -> None:
-        """Update cluster size evolution information for a given frame.
-
-        Parameters
-        ----------
-        k : int
-            The frame index.
-        """
-        sizes = [cls.size for cls in self.tracker.clusters.values()]
-        if len(sizes) == 0:
-            avg, min_size, max_size = 0, 0, 0
-        else:
-            avg = np.average(sizes)
-            min_size = min(sizes)
-            max_size = max(sizes)
-
-        time = self.uni.coord.time
-
-        self.clusters_size_evo[k][0] = time
-        self.clusters_size_evo[k][1] = len(self.tracker.clusters)
-        self.clusters_size_evo[k][2] = min_size
-        self.clusters_size_evo[k][3] = avg
-        self.clusters_size_evo[k][4] = max_size
+    @property
+    def clusters_size_evo(self) -> np.ndarray:
+        """The number and sizes of the clusters, frame by frame (see `size_evolution`)."""
+        return self.size_evolution.data
 
     def __print_clusters_index(self) -> None:
         """Write ndx file with cluster index."""

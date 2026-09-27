@@ -26,6 +26,11 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   `update`: each previous cluster picks its best connected group (`_best_groups`: most molecules,
   then purest), then each group continues its largest contributor (`_get_older_cluster`: then
   oldest id) or becomes a new cluster.
+- The analyses on top of the tracker are being moved into the `analysis/` package, one class per
+  output behind the `FrameAnalysis` protocol (`prepare`/`analyse` every frame including frame
+  0/`finish`, which writes its files and returns their names); `MolClusters.analyses` drives them.
+  So far only `SizeEvolution` (evo.txt) has moved; solute-solvent, coordinates, nucleus and the
+  JSON report are still methods of `MolClusters`.
 - The analysis is frame-oriented: `MolClusters.run()` calls `tracker.update()` frame by frame,
   mutating in-memory cluster state, and only writes results to disk once the full run finishes.
 - The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"
