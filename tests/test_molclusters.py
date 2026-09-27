@@ -15,7 +15,7 @@ from MDAnalysis import Universe
 
 from molclusters.cluster import MDAResidueGroupAnalyzer
 from molclusters.config import MolClsConfig
-from molclusters.molclusters import MolClusters
+from molclusters.molclusters import MolClusters, _AppendBuffer
 
 from .conftest import CUTOFF, Groups, UniverseFactory
 
@@ -849,6 +849,7 @@ class TestWriteCoordinates:
         monkeypatch.chdir(tmp_path)
         molcls._MolClusters__start_solute_solvent()  # as run() does
         molcls._MolClusters__write_coordinates()
+        molcls.gro_out.flush()  # as run() does when it's done
 
         size_files = list(tmp_path.glob("cls-n*.gro"))
         id_files = list(tmp_path.glob("cls-id*.gro"))
@@ -857,3 +858,47 @@ class TestWriteCoordinates:
         assert len(id_files) == len(solute_clusters), (
             "expected one id-grouped .gro output per solute cluster"
         )
+
+
+class TestAppendBuffer:
+    def test_nothing_is_written_before_a_flush(self, tmp_path: Path):
+        buffer = _AppendBuffer()
+
+        buffer.append(str(tmp_path / "a.gro"), "frame 1\n")
+
+        assert not (tmp_path / "a.gro").exists()
+
+    def test_flush_appends_each_file_in_order(self, tmp_path: Path):
+        (tmp_path / "a.gro").write_text("earlier\n")
+        buffer = _AppendBuffer()
+
+        for text in ["1\n", "2\n"]:
+            buffer.append(str(tmp_path / "a.gro"), f"a{text}")
+            buffer.append(str(tmp_path / "b.gro"), f"b{text}")
+        buffer.flush()
+        buffer.flush()  # nothing left to write
+
+        assert (tmp_path / "a.gro").read_text() == "earlier\na1\na2\n"
+        assert (tmp_path / "b.gro").read_text() == "b1\nb2\n"
+
+    def test_a_full_buffer_flushes_itself(self, tmp_path: Path):
+        buffer = _AppendBuffer(max_chars=6)
+        target = tmp_path / "a.gro"
+
+        buffer.append(str(target), "abc")
+        assert not target.exists()
+        buffer.append(str(target), "def")
+        assert target.read_text() == "abcdef"
+
+        buffer.append(str(target), "ghi")
+        buffer.flush()
+        assert target.read_text() == "abcdefghi"
+
+    def test_exiting_the_context_flushes_even_on_errors(self, tmp_path: Path):
+        target = tmp_path / "a.gro"
+
+        with pytest.raises(KeyboardInterrupt), _AppendBuffer() as buffer:
+            buffer.append(str(target), "frame\n")
+            raise KeyboardInterrupt
+
+        assert target.read_text() == "frame\n"

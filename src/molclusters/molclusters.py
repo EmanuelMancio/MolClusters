@@ -46,6 +46,48 @@ from .version import __version__
 # TODO: create analysis class to declutter MolClusters
 
 
+class _AppendBuffer:
+    """Collects text to append to files, writing each file in one go when flushed.
+
+    Opening a file costs milliseconds on Windows (antivirus scanning, on any file
+    size), which dominated runs that appended every frame to its .gro files. Used
+    as a context manager, it flushes on exit.
+
+    Attributes
+    ----------
+    max_chars : int
+        The buffered size, in characters, that triggers a flush.
+    """
+
+    __slots__ = ["max_chars", "_pending", "_size"]
+
+    def __init__(self, max_chars: int = 64 * 2**20) -> None:
+        self.max_chars = max_chars
+        self._pending: defaultdict[str, list[str]] = defaultdict(list)
+        self._size = 0
+
+    def append(self, filename: str, text: str) -> None:
+        """Queue `text` to be appended to `filename`, flushing if the buffer is full."""
+        self._pending[filename].append(text)
+        self._size += len(text)
+        if self._size >= self.max_chars:
+            self.flush()
+
+    def flush(self) -> None:
+        """Append the queued text to its files, opening each file once."""
+        for filename, chunks in self._pending.items():
+            with path.Path(filename).open("a+") as out:
+                out.writelines(chunks)
+        self._pending.clear()
+        self._size = 0
+
+    def __enter__(self) -> "_AppendBuffer":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.flush()
+
+
 class MolClusters:
     """A class for analyzing molecular clusters in molecular dynamics simulations.
 
@@ -94,6 +136,7 @@ class MolClusters:
         "nucleus_holder",
         "data_holder",
         "follow_skipped",
+        "gro_out",
     ]
 
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
@@ -137,6 +180,7 @@ class MolClusters:
 
         self.clusters_size_evo = np.zeros((len(self.uni.trajectory), 5))
         self.radius_evolution = {}
+        self.gro_out = _AppendBuffer()
 
         # TODO: move start to run
         self.__start_clusters()
@@ -617,13 +661,11 @@ class MolClusters:
 
             # pooled by size: an ensemble of what an N-mer looks like, across all
             # clusters that were ever that size, independent of cluster identity
-            with path.Path(f"cls-n{cls.size}.gro").open("a+") as out:
-                out.write(frame)
+            self.gro_out.append(f"cls-n{cls.size}.gro", frame)
 
             # pooled by identity: this specific cluster's own trajectory, tracked
             # across frames via the dominance algorithm regardless of size changes
-            with path.Path(f"cls-id{cls.id}.gro").open("a+") as out:
-                out.write(frame)
+            self.gro_out.append(f"cls-id{cls.id}.gro", frame)
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
@@ -638,8 +680,7 @@ class MolClusters:
 
                 (sol_id,) = sol_ids
 
-                with path.Path(f"solute-{sol_id}.gro").open("a+") as out:
-                    out.write(frame)
+                self.gro_out.append(f"solute-{sol_id}.gro", frame)
 
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
@@ -660,7 +701,12 @@ class MolClusters:
             self.__start_solute_solvent()
             self.__solute_solvent_analysis(0)
 
-        with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
+        # the .gro frames are buffered, so write the ones already rendered even if the
+        # run is interrupted, as appending them frame by frame used to
+        with (
+            tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar,
+            self.gro_out,
+        ):
             for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                 self.__update_clusters()
                 self.__get_clusters_info(i)
