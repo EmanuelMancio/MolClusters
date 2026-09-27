@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import MDAnalysis as mda
+import networkx as nx
 import numpy as np
 import pytest
 from MDAnalysis import Universe
@@ -22,6 +23,38 @@ from molclusters.conntable import (
 from .conftest import BOND_STEP, CUTOFF, UniverseFactory
 
 DATA_DIR = (Path(__file__).parent / "data" / "met-mal").resolve()
+
+
+def dock_hbonds(uni: Universe, resname: str, n_pairs: int = 3) -> None:
+    """Move molecules so that pairs of them H-bond with each other.
+
+    met-mal's start.pdb has no H-bonds between two MAL molecules (only within
+    them), so each pair's second molecule is moved to put an acceptor 1.9 A from
+    the first molecule's hydrogen, straight along the donor-hydrogen bond.
+
+    Parameters
+    ----------
+    uni : Universe
+        The system, changed in place.
+    resname : str
+        The residue name of the molecules to pair up, in topology order.
+    n_pairs : int
+        The number of pairs to dock.
+    """
+    # in memory, so that the moves survive a trajectory rewind (e.g. run())
+    uni.transfer_to_memory()
+    guesser = HydrogenBondAnalysis(uni)
+    hydrogens = uni.select_atoms(guesser.guess_hydrogens())
+    acceptors = uni.select_atoms(guesser.guess_acceptors())
+    residues = uni.select_atoms(f"resname {resname}").residues
+    pairs = zip(residues[0::2][:n_pairs], residues[1::2][:n_pairs], strict=True)
+    for first, second in pairs:
+        hydrogen = (hydrogens & first.atoms)[0]
+        donor = hydrogen.bonded_atoms[0]
+        acceptor = (acceptors & second.atoms)[0]
+        bond = hydrogen.position - donor.position
+        target = hydrogen.position + 1.9 * bond / np.linalg.norm(bond)
+        second.atoms.positions += target - acceptor.position
 
 
 def build(
@@ -218,6 +251,7 @@ class TestHydrogenBondRule:
     @pytest.fixture
     def table(self) -> ConnectionTable:
         uni = Universe(str(DATA_DIR / "met-mal.tpr"), str(DATA_DIR / "start.pdb"))
+        dock_hbonds(uni, "MAL")
         return build(uni, {"MAL": {"MAL": f"hb d {self.D_A} a {self.ANGLE}"}})
 
     def test_edges_carry_distance_and_angle(self, table: ConnectionTable):
@@ -228,9 +262,25 @@ class TestHydrogenBondRule:
             assert 0 < data["distance"] <= self.D_A
             assert self.ANGLE <= data["angle"] <= 180
 
+    def test_hbonds_within_a_molecule_are_not_connections(self, table: ConnectionTable):
+        hb = HydrogenBondAnalysis(
+            table.uni,
+            between=["resname MAL", "resname MAL"],
+            d_a_cutoff=self.D_A,
+            d_h_a_angle_cutoff=self.ANGLE,
+        )
+        hb.run()
+        resids = table.uni.atoms.resids
+        hbonds = hb.results.hbonds.astype(np.intp)
+        within = resids[hbonds[:, 2]] == resids[hbonds[:, 3]]
+        assert within.any(), "MAL has an H-bond within the molecule"
+
+        assert nx.number_of_selfloops(table.conntab) == 0
+        assert table.rule_connections["MAL", "MAL"] == np.count_nonzero(~within)
+
     @pytest.fixture
     def mixed_uni(self) -> Universe:
-        """met-mal with every other MAL renamed MAX.
+        """met-mal with every other MAL renamed MAX, and some MAL pairs H-bonding.
 
         Returns
         -------
@@ -241,6 +291,7 @@ class TestHydrogenBondRule:
         resnames = uni.residues.resnames.copy()
         resnames[np.flatnonzero(resnames == "MAL")[::2]] = "MAX"
         uni.residues.resnames = resnames
+        dock_hbonds(uni, "MAL")
         return uni
 
     def public_run_edges(self, uni: Universe) -> set[frozenset[int]]:
@@ -252,10 +303,12 @@ class TestHydrogenBondRule:
         )
         hb.run()
         atoms = uni.atoms
-        return {
+        pairs = {
             frozenset((atoms[int(h)].resid, atoms[int(a)].resid))
             for h, a in hb.results.hbonds[:, [2, 3]]
         }
+        # H-bonds within one molecule connect it to nothing
+        return {pair for pair in pairs if len(pair) == 2}
 
     def test_matches_mdanalysis_public_run(self, table: ConnectionTable):
         expected = self.public_run_edges(table.uni)

@@ -474,7 +474,8 @@ class ConnectionTable:
         -------
         tuple[np.ndarray, dict[str, np.ndarray]]
             An ``(n, 2)`` array of connected (hydrogen, acceptor) resids, and each
-            connection's donor-acceptor ``"distance"`` and D-H-A ``"angle"``.
+            connection's donor-acceptor ``"distance"`` and D-H-A ``"angle"``. Only
+            H-bonds between two molecules count.
         """
         # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats
         # distance and angle calculations. Until then, this depends on the private
@@ -497,9 +498,12 @@ class ConnectionTable:
                 atoms[np.asarray(acceptors, dtype=np.intp)].resids,
             )
         )
-        return connections, {
-            "distance": np.asarray(distances),
-            "angle": np.asarray(angles),
+        # HydrogenBondAnalysis also finds H-bonds within a molecule, which connect
+        # it to nothing else
+        between = connections[:, 0] != connections[:, 1]
+        return connections[between], {
+            "distance": np.asarray(distances)[between],
+            "angle": np.asarray(angles)[between],
         }
 
     def __construct_table(self) -> None:
