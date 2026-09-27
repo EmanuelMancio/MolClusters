@@ -23,8 +23,13 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
 - LAMMPS dumps record step numbers, not times, and MDAnalysis times them as step x dt (dt = 1
   unless given). The optional `lammps_timestep` (e.g. `"2 fs"`) is passed as `dt` by
   `main._lammps_dump_timestep`, which warns when a dump is read without it. A dump reader's `dt`
-  is the MD timestep, not the time between frames, so `main._log_system` and
-  `main._load_into_memory` (`--traj-memory`) work from the frames' own times instead.
+  is the MD timestep, not the time between frames, so `main._log_system` works from the frames'
+  own times instead.
+- `--traj-memory` doesn't use MDAnalysis' `in_memory`/`transfer_to_memory`, whose in-memory
+  reader times frame i as i x dt from 0 (losing start times, uneven spacing, and a dump's
+  spacing): `main._load_into_memory` copies the frames, times included, into a
+  `main._TimedMemoryReader`. MDAnalysis' MemoryReader applies transformations once to the stored
+  frames, not per read, so a transformation can't restore times.
 - `ClusterTracker` (`tracker.py`) owns the clusters and their ids, with no analysis or file
   output; `MolClusters` is only the runner on top of it. The tracker keeps
   cluster identity stable across formation/merge/split events with a two-step assignment in

@@ -9,6 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import MDAnalysis as mda
+import numpy as np
 import pandas as pd
 import pytest
 from MDAnalysis import Universe
@@ -22,6 +24,7 @@ from molclusters.main import (
     _assign_radii,
     _describe_error,
     _lammps_dump_timestep,
+    _load_into_memory,
     _log_system,
     _traj_format,
 )
@@ -149,6 +152,54 @@ class TestApplyLammpsDumpElements:
 
         with pytest.raises(ValueError, match="don't match"):
             _apply_lammps_dump_elements(uni, dump)
+
+
+class TestLoadIntoMemory:
+    TIMES = [100.0, 102.0, 107.0]  # a continued run, unevenly saved
+
+    @pytest.fixture
+    def trajectory(self, tmp_path: Path, make_universe: UniverseFactory) -> Universe:
+        """A TRR file with velocities and the frames at `TIMES`, read from disk.
+
+        Returns
+        -------
+        Universe
+            The system, streamed from the TRR file.
+        """
+        uni = make_universe([[[1, 2]], [[2, 3]], [[1, 3]]], 3)
+        top, traj = str(tmp_path / "top.gro"), str(tmp_path / "traj.trr")
+        uni.atoms.write(top)
+        with mda.Writer(traj, uni.atoms.n_atoms) as writer:
+            for ts, time in zip(uni.trajectory, self.TIMES, strict=True):
+                ts.time = time
+                ts.velocities = ts.positions / 10
+                writer.write(uni.atoms)
+        return Universe(top, traj)
+
+    @pytest.mark.parametrize("step", [None, 1, 2])
+    def test_keeps_every_frames_time_positions_and_velocities(
+        self, trajectory: Universe, step: int | None
+    ):
+        streamed = [
+            (ts.time, ts.positions.copy(), ts.velocities.copy())
+            for ts in trajectory.trajectory[:: step or 1]
+        ]
+
+        _load_into_memory(trajectory, step)
+
+        in_memory = trajectory.trajectory
+        assert [ts.time for ts in in_memory] == [t for t, _, _ in streamed]
+        assert in_memory[len(streamed) - 1].time == streamed[-1][0]  # random access
+        for ts, (_, positions, velocities) in zip(in_memory, streamed, strict=True):
+            np.testing.assert_array_equal(ts.positions, positions)
+            np.testing.assert_array_equal(ts.velocities, velocities)
+
+    def test_copies_keep_the_times(self, trajectory: Universe):
+        _load_into_memory(trajectory, None)
+
+        copy = trajectory.trajectory.copy()
+
+        assert [ts.time for ts in copy] == self.TIMES
 
 
 class TestLammpsDumpTimestep:

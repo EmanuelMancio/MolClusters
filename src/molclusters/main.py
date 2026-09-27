@@ -54,6 +54,8 @@ from pathlib import Path
 import MDAnalysis as mda
 import numpy as np
 from loguru import logger
+from MDAnalysis.coordinates.memory import MemoryReader
+from MDAnalysis.coordinates.timestep import Timestep
 from MDAnalysis.guesser.tables import vdwradii
 from MDAnalysis.lib.util import guess_format
 from MDAnalysis.topology.LAMMPSParser import LammpsDumpParser
@@ -438,13 +440,15 @@ def _assign_radii(uni: mda.Universe) -> None:
 
 
 def _load_into_memory(uni: mda.Universe, step: int | None) -> None:
-    """Load the trajectory into memory, keeping the time between frames.
+    """Load the trajectory into memory, keeping every frame's time.
 
-    Not ``Universe(in_memory=...)``: MDAnalysis also hands the reader's options to
-    the in-memory reader, which then gets a LAMMPS dump's dt twice. And the
-    in-memory reader times frame i as i x dt, taking dt from the reader, which
-    for a LAMMPS dump is the MD timestep rather than the time between frames, so
-    dt is set from the first two frames' times instead.
+    Not MDAnalysis' own ``Universe(in_memory=...)`` or ``transfer_to_memory``:
+    the first also hands the reader's options to the in-memory reader, which
+    then gets a LAMMPS dump's dt twice, and both time frame i as i x dt from 0,
+    which loses a trajectory's start time (e.g. a continuation run), uneven
+    spacing, and for a LAMMPS dump even the spacing itself (its reader's dt is
+    the MD timestep, not the time between frames). So the frames are copied here,
+    their times with them, into a `_TimedMemoryReader`.
 
     Parameters
     ----------
@@ -454,9 +458,72 @@ def _load_into_memory(uni: mda.Universe, step: int | None) -> None:
         Keep every `step`-th frame (every frame when None).
     """
     traj = uni.trajectory
-    every = traj[1].time - traj[0].time if len(traj) > 1 else traj.dt
-    uni.transfer_to_memory(step=step)
-    uni.trajectory.ts.dt = every * (step or 1)
+    if isinstance(traj, MemoryReader):  # nothing to copy
+        uni.transfer_to_memory(step=step)
+        return
+
+    frames = traj[:: step or 1]
+    n_frames = len(frames)
+    first = traj[0]
+    has_box = first.dimensions is not None
+    coordinates = np.empty((n_frames, traj.n_atoms, 3), dtype=np.float32)
+    dimensions = np.empty((n_frames, 6), dtype=np.float32) if has_box else None
+    velocities = np.empty_like(coordinates) if first.has_velocities else None
+    forces = np.empty_like(coordinates) if first.has_forces else None
+    times = np.empty(n_frames)
+    for i, ts in enumerate(frames):
+        coordinates[i] = ts.positions
+        times[i] = ts.time
+        if dimensions is not None:
+            dimensions[i] = ts.dimensions
+        if velocities is not None:
+            velocities[i] = ts.velocities
+        if forces is not None:
+            forces[i] = ts.forces
+
+    uni.trajectory = _TimedMemoryReader(
+        coordinates,
+        dimensions=dimensions,
+        # for anything reading the reader's dt: the time between frames
+        dt=times[1] - times[0] if n_frames > 1 else traj.dt,
+        filename=traj.filename,
+        velocities=velocities,
+        forces=forces,
+        times=times,
+    )
+
+
+class _TimedMemoryReader(MemoryReader):
+    """An in-memory trajectory whose frames keep their own times.
+
+    MDAnalysis' `MemoryReader` times frame i as i x dt; this one gives each frame
+    the time it had in the trajectory it was copied from (see
+    `_load_into_memory`).
+
+    Attributes
+    ----------
+    times : np.ndarray | None
+        Each frame's time, in ps (None: i x dt, as MemoryReader).
+    """
+
+    def __init__(
+        self, *args: object, times: np.ndarray | None = None, **kwargs: object
+    ) -> None:
+        # before MemoryReader.__init__, which reads the first frame
+        self.times = None if times is None else np.asarray(times, dtype=float)
+        super().__init__(*args, **kwargs)
+
+    def _read_next_timestep(self, ts: Timestep | None = None) -> Timestep:
+        ts = super()._read_next_timestep(ts)
+        if self.times is not None:
+            ts.time = float(self.times[ts.frame])
+        return ts
+
+    def copy(self) -> "_TimedMemoryReader":
+        new = super().copy()
+        new.times = None if self.times is None else self.times.copy()
+        new[self.ts.frame]  # re-read, with its time
+        return new
 
 
 def _analyse(args: arg.Namespace) -> None:
