@@ -9,7 +9,10 @@ import pytest
 from loguru import logger
 
 from molclusters.log import (
+    _FILE_FORMAT,
+    _TERMINAL_FORMAT,
     FILE_ONLY,
+    _formatter,
     _InterceptHandler,
     _not_file_only,
     _short_path,
@@ -24,6 +27,23 @@ from molclusters.log import (
 )
 def test_format_duration(seconds: float, expected: str):
     assert format_duration(seconds) == expected
+
+
+@pytest.mark.parametrize("template", [_TERMINAL_FORMAT, _FILE_FORMAT])
+def test_messages_name_the_analysis_that_logged_them(template: str):
+    logged: list[str] = []
+    handler_id = logger.add(logged.append, format=_formatter(template))
+    try:
+        with logger.contextualize(analysis="SizeEvolution"):
+            logger.info("summary")
+        logger.info("run")
+    finally:
+        logger.remove(handler_id)
+
+    tagged, untagged = logged
+    assert tagged.endswith(" [SizeEvolution] summary\n")
+    assert untagged.endswith(" run\n")
+    assert "[" not in untagged
 
 
 def test_file_only_messages_are_kept_off_the_terminal():

@@ -11,12 +11,14 @@ Classes:
 - Frame: What an analysis sees of the current frame.
 """
 
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from types import MappingProxyType
 
 import MDAnalysis as mda
+from loguru import logger
 
 from ..cluster import Cluster
 from ..config import MolClsConfig
@@ -36,6 +38,19 @@ class FrameAnalysis(ABC):
     attributes; one that writes files does so through `Run.output` and declares
     them in `outputs`. The same analysis may be run more than once, so it should
     start its results over in `prepare`, not only in ``__init__``.
+
+    An analysis logs with loguru's ``logger``, as the rest of the package does;
+    the run tags whatever is logged during its hooks with its class name (the
+    ``analysis`` key of the record's ``extra``), which the log shows. To keep the
+    log readable over long trajectories:
+
+    - `analyse` counts what's worth reporting (e.g. in a `collections.Counter`)
+      instead of logging it, and `finish` logs a summary: one INFO line, or one
+      warning saying how to fix the problem.
+    - Anything logged per frame is DEBUG or TRACE, with loguru's own arguments
+      (``logger.debug("cluster {}: ...", cls.id)``) rather than an f-string: a
+      message filtered out by the log level is then never built.
+    - A warning that could repeat is only logged once.
 
     Attributes
     ----------
@@ -90,9 +105,20 @@ class Run:
         The number of frames of the run.
     output : RunOutput
         Where the analyses write their files.
+    durations : list[float]
+        The time spent in each analysis' hooks so far, in seconds, in the order of
+        the analyses.
     """
 
-    __slots__ = ["universe", "config", "n_frames", "output", "_analyses", "_visible"]
+    __slots__ = [
+        "universe",
+        "config",
+        "n_frames",
+        "output",
+        "durations",
+        "_analyses",
+        "_visible",
+    ]
 
     def __init__(
         self,
@@ -121,6 +147,7 @@ class Run:
         self.config = config
         self.n_frames = n_frames
         self.output = output
+        self.durations = [0.0] * len(analyses)
         self._analyses = analyses
         self._visible = len(analyses)
 
@@ -128,7 +155,7 @@ class Run:
         """Prepare every analysis of the run, in order (called by the runner)."""
         for i, analysis in enumerate(self._analyses):
             self._visible = i
-            with _blame(analysis, "prepare"):
+            with self._hook(i, "prepare"):
                 analysis.prepare(self)
         self._visible = len(self._analyses)
 
@@ -140,14 +167,14 @@ class Run:
         frame : Frame
             The current frame.
         """
-        for analysis in self._analyses:
-            with _blame(analysis, "analyse", frame.index):
+        for i, analysis in enumerate(self._analyses):
+            with self._hook(i, "analyse", frame.index):
                 analysis.analyse(frame)
 
     def finish_analyses(self) -> None:
         """Finish every analysis of the run, in order (called by the runner)."""
-        for analysis in self._analyses:
-            with _blame(analysis, "finish"):
+        for i, analysis in enumerate(self._analyses):
+            with self._hook(i, "finish"):
                 analysis.finish(self)
 
     def analysis[T: FrameAnalysis](self, kind: type[T]) -> T | None:
@@ -171,6 +198,42 @@ class Run:
             if isinstance(analysis, kind):
                 return analysis
         return None
+
+    @contextmanager
+    def _hook(
+        self, i: int, hook: str, frame: int | None = None
+    ) -> Generator[None, None, None]:
+        """Call a hook of the `i`-th analysis: tag its log, time it, blame its errors.
+
+        What's logged during the call is tagged with the analysis' class name, and
+        an error it raises is noted with it, so either can be told from the run's
+        own; the time taken is added to `durations`.
+
+        Parameters
+        ----------
+        i : int
+            The index of the analysis being called.
+        hook : str
+            The name of the method being called.
+        frame : int | None
+            The index of the frame being analysed, if any.
+
+        Yields
+        ------
+        None
+            Control, for the call to the analysis.
+        """
+        name = type(self._analyses[i]).__name__
+        start = time.perf_counter()
+        try:
+            with logger.contextualize(analysis=name):
+                yield
+        except Exception as err:
+            where = "" if frame is None else f" on frame {frame}"
+            err.add_note(f"Raised by {name}.{hook}(){where}")
+            raise
+        finally:
+            self.durations[i] += time.perf_counter() - start
 
 
 class Frame:
@@ -234,31 +297,3 @@ class Frame:
             The cluster id, or None if the molecule is in no cluster.
         """
         return self._tracker.find(mol)
-
-
-@contextmanager
-def _blame(
-    analysis: FrameAnalysis, hook: str, frame: int | None = None
-) -> Generator[None, None, None]:
-    """Note which analysis raised an error, so it can be told from a bug of the run.
-
-    Parameters
-    ----------
-    analysis : FrameAnalysis
-        The analysis being called.
-    hook : str
-        The name of the method being called.
-    frame : int | None
-        The index of the frame being analysed, if any.
-
-    Yields
-    ------
-    None
-        Control, for the call to the analysis.
-    """
-    try:
-        yield
-    except Exception as err:
-        where = "" if frame is None else f" on frame {frame}"
-        err.add_note(f"Raised by {type(analysis).__name__}.{hook}(){where}")
-        raise

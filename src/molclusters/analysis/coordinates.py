@@ -131,9 +131,7 @@ class ClusterCoordinates(FrameAnalysis):
             if self.follow:
                 if len(sol_ids) > 1:
                     # TODO: make more feature-rich follow procedure
-                    logger.debug(
-                        f"Cluster {cls.id}: more than one solute, will not follow"
-                    )
+                    # counted, not logged: `finish` sums them up
                     self.follow_skipped[cls.id] += 1
                     continue
 

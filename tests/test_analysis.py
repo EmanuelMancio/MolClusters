@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import json
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+from loguru import logger
 
 from molclusters.analysis import (
     ClusterCoordinates,
@@ -539,3 +541,55 @@ class TestErrors:
             run_analyses([Failing()], make_universe, [[[1, 2]]], 2, tmp_path)
 
         assert err_info.value.__notes__ == [note]
+
+
+class Chatty(FrameAnalysis):
+    """Logs from every hook, and takes a while to finish."""
+
+    def prepare(self, run: Run) -> None:
+        logger.info("prepare")
+
+    def analyse(self, frame: Frame) -> None:
+        logger.info("analyse {}", frame.index)
+
+    def finish(self, run: Run) -> None:
+        time.sleep(0.02)
+        logger.info("finish")
+
+
+class TestLogging:
+    def test_what_an_analysis_logs_is_tagged_with_its_name(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        captured_logs: list[str],
+    ):
+        tags: dict[str, str | None] = {}
+        handler_id = logger.add(
+            lambda msg: tags.setdefault(
+                msg.record["message"], msg.record["extra"].get("analysis")
+            )
+        )
+        try:
+            run_analyses(
+                [Chatty(), SizeEvolution()], make_universe, [[[1, 2]]] * 2, 2, tmp_path
+            )
+            logger.info("after the run")
+        finally:
+            logger.remove(handler_id)
+
+        assert tags["prepare"] == tags["analyse 1"] == tags["finish"] == "Chatty"
+        (summary,) = [m for m in tags if m.startswith("Found ")]
+        assert tags[summary] == "SizeEvolution"
+        assert tags["after the run"] is None
+
+    def test_the_time_of_each_analysis_is_added_up(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        run = run_analyses(
+            [SizeEvolution(), Chatty()], make_universe, [[[1, 2]]] * 3, 2, tmp_path
+        )
+
+        assert len(run.durations) == 2
+        assert run.durations[0] > 0
+        assert run.durations[1] >= 0.02  # its finish sleeps that long

@@ -9,6 +9,7 @@ import logging
 import platform
 import sys
 import warnings
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
 from typing import Literal, TextIO
@@ -23,8 +24,33 @@ from tqdm import tqdm
 from .version import version
 
 # The terminal only needs what happened; the log files keep loguru's full format,
-# with the module, function and line of each message.
-_TERMINAL_FORMAT = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>"
+# with the module, function and line of each message. `{analysis}` marks where the
+# name of the analysis that logged a message goes (see `_formatter`).
+_TERMINAL_FORMAT = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{analysis}{message}</level>"
+_FILE_FORMAT = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{analysis}{message}</level>"
+
+
+def _formatter(template: str) -> Callable[[dict], str]:
+    """Build a sink's format that names the analysis a message was logged by.
+
+    A run tags what its analyses log with their name (``extra["analysis"]``, see
+    `Run`), shown as a ``[Name]`` prefix; other messages have none.
+
+    Parameters
+    ----------
+    template : str
+        A loguru format with an ``{analysis}`` placeholder for the prefix.
+
+    Returns
+    -------
+    Callable[[dict], str]
+        The format, as a function of the record.
+    """
+    # a format function must end the line itself, which a format string doesn't
+    tagged = template.replace("{analysis}", "[{extra[analysis]}] ") + "\n{exception}"
+    untagged = template.replace("{analysis}", "") + "\n{exception}"
+    return lambda record: tagged if record["extra"].get("analysis") else untagged
+
 
 # Messages bound with `logger.bind(**FILE_ONLY)` only reach the log files: detail
 # the terminal doesn't need, such as tracebacks or progress the bar already shows.
@@ -173,12 +199,12 @@ def start_logging(
         logger.add(
             lambda msg: tqdm.write(msg, end="", file=sys.stderr),
             level=level,
-            format=_TERMINAL_FORMAT,
+            format=_formatter(_TERMINAL_FORMAT),
             colorize=sys.stderr.isatty(),
             filter=_not_file_only,
         )
         logger.add(filename.with_suffix(".json"), serialize=True, level=level)
-        logger.add(filename, level=level)
+        logger.add(filename, level=level, format=_formatter(_FILE_FORMAT))
         _route_third_party_logs()
 
         logger.enable("molclusters")

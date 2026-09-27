@@ -291,6 +291,7 @@ class MolClusters:
 
         self.uni.trajectory[0]
         self.tracker = ClusterTracker(self.uni, self.config)
+        tracking = time.perf_counter() - start  # the analyses' time is kept by `run`
 
         self.output = RunOutput(directory)
         run = Run(self.uni, self.config, n_frames, self.output, self.analyses)
@@ -303,7 +304,9 @@ class MolClusters:
 
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
+                    update_start = time.perf_counter()
                     self.tracker.update()
+                    tracking += time.perf_counter() - update_start
                     run.analyse_frame(Frame(i, self.tracker, self.output))
                     pbar.update()
 
@@ -323,6 +326,15 @@ class MolClusters:
 
         run.finish_analyses()
         self.output.flush()  # in case an analysis appended to a file in `finish`
+
+        durations = ", ".join(
+            f"{type(analysis).__name__} {format_duration(seconds)}"
+            for analysis, seconds in zip(self.analyses, run.durations, strict=True)
+        )
+        logger.info(
+            f"Time spent tracking the clusters: {format_duration(tracking)}; "
+            f"in each analysis: {durations}"
+        )
 
         outputs = ", ".join(out.name for out in self.__declared_outputs())
         logger.info(f"Results written to {self.output.directory}: {outputs}")

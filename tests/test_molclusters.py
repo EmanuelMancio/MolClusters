@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import json
+import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -304,6 +305,13 @@ class TestRun:
             f"Frame {n}/20" for n in range(2, 20, 2)
         ]
         assert any(m.startswith("Tracked 20 frame(s) in ") for m in captured_logs)
+        (durations,) = [m for m in captured_logs if m.startswith("Time spent")]
+        # then the built-ins the config enables, in order
+        assert re.fullmatch(
+            r"Time spent tracking the clusters: [\d.]+s; in each analysis: "
+            r"SizeEvolution [\d.]+s, JsonReport [\d.]+s\s*",
+            durations,
+        )
 
     def test_connections_are_summarized_by_rule(
         self,
