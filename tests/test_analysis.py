@@ -13,6 +13,7 @@ from molclusters.analysis import (
     ClusterCoordinates,
     Frame,
     FrameAnalysis,
+    Nucleus,
     Run,
     SizeEvolution,
     SoluteSolvent,
@@ -331,6 +332,83 @@ class TestClusterCoordinates:
 
         assert [out.name for out in outputs] == names
         assert all(out.append for out in outputs)
+
+
+class TestNucleus:
+    # the chain 1-2-3-4 has a SOL at 3, so its MOL nuclei are {1, 2} and {4}
+    FRAMES = [[[1, 2, 3, 4]], []]
+    RESNAMES = ["MOL", "MOL", "SOL", "MOL"]
+
+    def test_finds_the_nuclei_of_each_cluster(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        seen = []
+
+        class Reader(FrameAnalysis):
+            def prepare(self, run: Run) -> None:
+                self.nucleus = run.analysis(Nucleus)
+
+            def analyse(self, frame: Frame) -> None:
+                seen.append(
+                    {
+                        cid: sorted(sorted(int(r) for r in n.resids) for n in nuclei)
+                        for cid, nuclei in self.nucleus.nuclei.items()
+                    }
+                )
+
+        nucleus = Nucleus(["MOL"])
+        run_analyses(
+            [nucleus, Reader()],
+            make_universe,
+            self.FRAMES,
+            4,
+            tmp_path,
+            self.RESNAMES,
+            ALL_PAIRS_RULES,
+        )
+
+        ((cid, nuclei),) = seen[0].items()
+        assert nuclei == [[1, 2], [4]]
+        # a later frame's nuclei replace the earlier ones
+        assert seen[1] == {}
+        assert nucleus.nuclei == {}
+
+    def test_records_the_averages_and_writes_the_table(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        nucleus = Nucleus(["MOL"])
+
+        run_analyses(
+            [nucleus],
+            make_universe,
+            self.FRAMES,
+            4,
+            tmp_path,
+            self.RESNAMES,
+            ALL_PAIRS_RULES,
+        )
+
+        first, second = nucleus.data
+        np.testing.assert_allclose(first[:3], [0, 2, 1.5])
+        assert np.isfinite(first[3:]).all()
+        np.testing.assert_allclose(second[:2], [1, 0])
+        assert np.isnan(second[2:]).all()
+        table = pd.read_csv(tmp_path / "nucleus_data.csv")
+        assert list(table.columns) == [
+            "Time",
+            "NNuc",
+            "Size",
+            "Radius",
+            "Density",
+            "Charge",
+            "Dipole",
+            "Spher",
+            "Shape",
+        ]
+        np.testing.assert_allclose(table.to_numpy(), nucleus.data)
+
+    def test_declares_the_table(self):
+        assert [out.name for out in Nucleus.outputs] == ["nucleus_data.csv"]
 
 
 class TestErrors:

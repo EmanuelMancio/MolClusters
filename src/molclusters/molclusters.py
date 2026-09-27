@@ -29,9 +29,7 @@ from functools import reduce
 from typing import Any
 
 import MDAnalysis as mda
-import networkx as nx
 import numpy as np
-import pandas as pd
 from loguru import logger
 from tqdm import tqdm
 
@@ -39,6 +37,7 @@ from .analysis import (
     ClusterCoordinates,
     Frame,
     FrameAnalysis,
+    Nucleus,
     Run,
     SizeEvolution,
     SoluteSolvent,
@@ -87,8 +86,7 @@ class MolClusters:
         "analyses",
         "size_evolution",
         "radius_evolution",
-        "nucleus_data",
-        "nucleus_holder",
+        "nucleus",
         "data_holder",
         "output",
     ]
@@ -153,19 +151,14 @@ class MolClusters:
                 SoluteSolvent(config.solute, config.solvent),
                 ClusterCoordinates(config.solute, follow=config._follow_solute),
             ]
+        self.nucleus = None if config.nucleus is None else Nucleus(config.nucleus)
+        if self.nucleus is not None:
+            builtins.append(self.nucleus)
         self.analyses: list[FrameAnalysis] = [*builtins, *extra]
 
         self.radius_evolution = {}
 
-        if self.config.nucleus is not None:
-            self.nucleus_data = np.empty(
-                (len(self.uni.trajectory), 9)
-            )  # Value 9 accounts for time column and 8 property columns
-            self.nucleus_data.fill(np.nan)
-            self.__nucleus_analysis(0)
-
         self.data_holder = MolClustersData(self)
-        self.data_holder.parse_frame()
 
     def __check_resnames(self) -> None:
         """Warn about residue names in the config that the topology doesn't have.
@@ -229,8 +222,6 @@ class MolClusters:
         """
         outputs = [out for analysis in self.analyses for out in analysis.outputs]
         outputs.append(OutputFile("molclusters.json"))
-        if self.config.nucleus is not None:
-            outputs.append(OutputFile("nucleus_data.csv"))
         return outputs
 
     def __log_rule_connections(self, n_frames: int) -> None:
@@ -264,75 +255,6 @@ class MolClusters:
                 "angles in degrees)."
             )
 
-    def __nucleus_analysis(self, frame: int) -> None:
-        """Perform nucleus analysis for a given frame.
-
-        Parameters
-        ----------
-        frame : int
-            index of the current frame in the trajectory.
-        """
-        self.nucleus_holder: dict[int, list[MolGroup]] = {}
-        n_nucleus = []
-        sizes = []
-        radius = []
-        dipole = []
-        density = []
-        sphericity = []
-        shape = []
-        charge = []
-        for cid, cls in self.tracker.clusters.items():
-            possible_nucleus = []
-            for rnm, rid in zip(cls.resnames, cls.resids, strict=True):
-                if rnm in self.config.nucleus:
-                    possible_nucleus.append(rid)
-
-            self.nucleus_holder[cid] = []
-            subcomps = nx.induced_subgraph(cls.graph, possible_nucleus)
-            n_nuc = 0
-            for sg in nx.connected_components(subcomps):
-                tp = MolGroup(self.uni, list(sg))
-
-                n_nuc += 1
-                sizes.append(tp.size)
-                radius.append(tp.radius_of_gyration)
-                dipole.append(tp.dipole_moment)
-                density.append(tp.density)
-                sphericity.append(tp.sphericity)
-                shape.append(tp.shape_parameter)
-                charge.append(tp.charge)
-
-                self.nucleus_holder[cid].append(tp)
-
-            if n_nuc != 0:
-                n_nucleus.append(n_nuc)
-
-        self.nucleus_data[frame][0] = self.uni.coord.time
-        self.nucleus_data[frame][1] = (
-            0 if len(n_nucleus) == 0 else np.average(n_nucleus)
-        )
-        self.nucleus_data[frame][2] = (
-            np.nan if len(n_nucleus) == 0 else np.average(sizes)
-        )
-        self.nucleus_data[frame][3] = (
-            np.nan if len(n_nucleus) == 0 else np.average(radius)
-        )
-        self.nucleus_data[frame][4] = (
-            np.nan if len(n_nucleus) == 0 else np.average(density)
-        )
-        self.nucleus_data[frame][5] = (
-            np.nan if len(n_nucleus) == 0 else np.average(charge)
-        )
-        self.nucleus_data[frame][6] = (
-            np.nan if len(n_nucleus) == 0 else np.average(dipole)
-        )
-        self.nucleus_data[frame][7] = (
-            np.nan if len(n_nucleus) == 0 else np.average(sphericity)
-        )
-        self.nucleus_data[frame][8] = (
-            np.nan if len(n_nucleus) == 0 else np.average(shape)
-        )
-
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
         """Run the molecular cluster analysis.
@@ -355,14 +277,12 @@ class MolClusters:
         with self.output:
             run.prepare_analyses()
             run.analyse_frame(Frame(0, self.tracker))
+            self.data_holder.parse_frame()
 
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                     self.tracker.update()
                     run.analyse_frame(Frame(i, self.tracker))
-                    if self.config.nucleus is not None:
-                        self.__nucleus_analysis(i)
-
                     self.data_holder.parse_frame()
                     pbar.update()
 
@@ -382,23 +302,6 @@ class MolClusters:
 
         run.finish_analyses()
         self.output.flush()  # in case an analysis appended to a file in `finish`
-
-        if self.config.nucleus is not None:
-            self.nucleus_data = pd.DataFrame(
-                self.nucleus_data,
-                columns=[
-                    "Time",
-                    "NNuc",
-                    "Size",
-                    "Radius",
-                    "Density",
-                    "Charge",
-                    "Dipole",
-                    "Spher",
-                    "Shape",
-                ],
-            )
-            self.nucleus_data.to_csv("nucleus_data.csv", index=False)
 
         with path.Path("molclusters.json").open("w+") as json_out:
             json.dump(self.data_holder.data, json_out, indent=2)
@@ -502,12 +405,12 @@ class MolClustersData:
         molclusters_data = []
         for cid, cls in self.molcls.tracker.clusters.items():
             cls_data = self.encode_cluster(cls)
-            if self.molcls.config.nucleus is not None:
+            if self.molcls.nucleus is not None:
                 cls_data["Nucleus"] = []
-                if self.molcls.nucleus_holder.get(cid, False):
-                    nuclei = reduce(lambda a, b: a + b, self.molcls.nucleus_holder[cid])
+                if self.molcls.nucleus.nuclei.get(cid, False):
+                    nuclei = reduce(lambda a, b: a + b, self.molcls.nucleus.nuclei[cid])
                     cls_data["NucleiDipole"] = nuclei.dipole_moment
-                    for nuc in self.molcls.nucleus_holder[cid]:
+                    for nuc in self.molcls.nucleus.nuclei[cid]:
                         cls_data["Nucleus"].append(MolClustersData.encode_nucleus(nuc))
 
             molclusters_data.append(cls_data)
