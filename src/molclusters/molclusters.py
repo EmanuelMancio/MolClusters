@@ -24,7 +24,6 @@ import time
 from collections.abc import Iterable
 
 import MDAnalysis as mda
-import numpy as np
 from loguru import logger
 from tqdm import tqdm
 
@@ -38,7 +37,6 @@ from .analysis import (
     SizeEvolution,
     SoluteSolvent,
 )
-from .cluster import Cluster
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
 from .output import OutputFile, RunOutput
@@ -56,25 +54,17 @@ class MolClusters:
     ----------
     uni : mda.Universe
         The MDAnalysis Universe object associated with the simulation.
-    config : dict
-        The configuration dictionary containing analysis settings.
+    config : MolClsConfig
+        The analysis configuration, with the defaults that depend on the
+        topology filled in (the solvent).
     tracker : ClusterTracker | None
         Follows the clusters frame by frame, keeping their ids stable; created by
         `run` (None before), and left at the last frame.
-    clusters : dict[int, Cluster]
-        The tracker's clusters of the current frame, keyed by cluster ID.
-    mol_clt : dict[int, int]
-        The tracker's mapping of molecule IDs to their respective cluster IDs.
     analyses : list[FrameAnalysis]
-        The analyses run on the clusters of every frame.
-    size_evolution : SizeEvolution
-        The number and sizes of the clusters over time (one of `analyses`).
-    nucleus : Nucleus | None
-        The nuclei inside the clusters, when the config enables them (one of
-        `analyses`).
-    clusters_size_evo : np.ndarray
-        An array tracking the evolution of cluster sizes over time (see
-        `size_evolution`).
+        The analyses run on the clusters of every frame: the built-ins the config
+        enables, then the given ones (see `analysis` to find one).
+    output : RunOutput
+        Where the last run wrote its files.
     """
 
     __slots__ = [
@@ -82,8 +72,6 @@ class MolClusters:
         "config",
         "tracker",
         "analyses",
-        "size_evolution",
-        "nucleus",
         "output",
     ]
 
@@ -99,8 +87,8 @@ class MolClusters:
         ----------
         universe : mda.Universe
             The MDAnalysis Universe object associated with the simulation.
-        config : dict
-            The configuration dictionary containing analysis settings.
+        config : MolClsConfig
+            The analysis configuration.
         analyses : Iterable[FrameAnalysis]
             Analyses to run in addition to the ones the config enables, after them
             and in the order given.
@@ -139,18 +127,35 @@ class MolClusters:
 
         self.tracker: ClusterTracker | None = None  # created by run()
 
-        self.size_evolution = SizeEvolution()
-        builtins: list[FrameAnalysis] = [self.size_evolution]
+        builtins: list[FrameAnalysis] = [SizeEvolution()]
         if config.solute is not None:
             builtins += [
                 SoluteSolvent(config.solute, config.solvent),
                 ClusterCoordinates(config.solute, follow=config._follow_solute),
             ]
-        self.nucleus = None if config.nucleus is None else Nucleus(config.nucleus)
-        if self.nucleus is not None:
-            builtins.append(self.nucleus)
+        if config.nucleus is not None:
+            builtins.append(Nucleus(config.nucleus))
         builtins.append(JsonReport())
         self.analyses: list[FrameAnalysis] = [*builtins, *extra]
+
+    def analysis[T: FrameAnalysis](self, kind: type[T]) -> T | None:
+        """Find the first of the analyses of type `kind`, for its results.
+
+        Parameters
+        ----------
+        kind : type[T]
+            The analysis class to look for (subclasses match too).
+
+        Returns
+        -------
+        T | None
+            The analysis, or None if there's none (e.g. the config doesn't enable
+            that built-in).
+        """
+        for analysis in self.analyses:
+            if isinstance(analysis, kind):
+                return analysis
+        return None
 
     def __check_resnames(self) -> None:
         """Warn about residue names in the config that the topology doesn't have.
@@ -296,33 +301,3 @@ class MolClusters:
 
         outputs = ", ".join(out.name for out in self.__declared_outputs())
         logger.info(f"Results written to {self.output.directory}: {outputs}")
-
-    @property
-    def clusters(self) -> dict[int, Cluster]:
-        """The clusters of the current frame, keyed by cluster ID (see `tracker`)."""
-        return self.tracker.clusters
-
-    @property
-    def mol_clt(self) -> dict[int, int]:
-        """Molecule ID -> cluster ID for the current frame (see `tracker`)."""
-        return self.tracker.mol_clt
-
-    def find(self, mol: int) -> int | bool:
-        """Find the cluster ID for a given molecule.
-
-        Parameters
-        ----------
-        mol : int
-            The molecule ID to search for.
-
-        Returns
-        -------
-        int | bool
-            The cluster ID if the molecule is found, or False if not found.
-        """
-        return self.tracker.find(mol)
-
-    @property
-    def clusters_size_evo(self) -> np.ndarray:
-        """The number and sizes of the clusters, frame by frame (see `size_evolution`)."""
-        return self.size_evolution.data

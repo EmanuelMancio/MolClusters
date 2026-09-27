@@ -21,7 +21,7 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
 - LAMMPS topologies carry no residue names: the config's `lammps_resnames` (name -> LAMMPS
   molecule id or `"first-last"` id range) supplies them, applied in `main._apply_lammps_resnames`.
 - `ClusterTracker` (`tracker.py`) owns the clusters and their ids, with no analysis or file
-  output; `MolClusters` runs the analyses on top of it (`MolClusters.tracker`). The tracker keeps
+  output; `MolClusters` is only the runner on top of it. The tracker keeps
   cluster identity stable across formation/merge/split events with a two-step assignment in
   `update`: each previous cluster picks its best connected group (`_best_groups`: most molecules,
   then purest), then each group continues its largest contributor (`_get_older_cluster`: then
@@ -48,8 +48,13 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   `birth_time`/`age`, `neighbors` and `distance`. Clusters are read-only outside the tracker:
   its only mutator is `Cluster._update`, which `ClusterTracker.update` calls to swap in the new
   frame's frozen graph. The objects are live, so they describe the current frame only.
-- The analysis is frame-oriented: `MolClusters.run()` calls `tracker.update()` frame by frame,
-  mutating in-memory cluster state, and only writes results to disk once the full run finishes.
+- `MolClusters` (`molclusters.py`) is the runner: the constructor fills in the topology-dependent
+  config defaults on a copy (the solvent), checks resnames and builds the analyses;
+  `run()` rewinds the trajectory, creates a fresh `ClusterTracker` (`MolClusters.tracker`, None
+  before the first run), calls `tracker.update()` frame by frame and drives the analyses, so
+  running again gives the same results (analyses start over in `prepare`). Results are read from
+  the analyses, found with `MolClusters.analysis(Type)`; per-frame files are buffered, and the
+  whole-run ones are written when the run finishes.
 - The config's `distance_backend` ("serial"/"OpenMP") only accelerates `ConnectionTable`'s "cm"
   rule (`capped_distance`/`self_capped_distance`); MDAnalysis silently ignores it under its
   auto-selected "nsgrid" method (typical when the cutoff is much smaller than the box), and "hb"

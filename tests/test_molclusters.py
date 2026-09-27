@@ -378,7 +378,7 @@ class TestUserAnalyses:
         assert molcls.analyses[-1] is largest
         assert largest.largest == [3, 0, 2]
         # a built-in's results are found, and complete for the frames seen
-        assert largest.size is molcls.size_evolution
+        assert largest.size is molcls.analysis(SizeEvolution)
         assert (tmp_path / "largest.txt").read_text() == "[3, 0, 2]\n"
         assert (tmp_path / "largest-1.log").read_text() == "done\n"
 
@@ -435,7 +435,16 @@ class TestBuiltins:
         assert solute.solutes == {"MOL"}
         assert solute.solvents == {"SOL"}
         assert coordinates.follow is True
-        assert molcls.analyses[3] is molcls.nucleus
+        assert molcls.analysis(Nucleus) is molcls.analyses[3]
+
+    def test_analysis_finds_one_by_type(self, analyze: Analyze):
+        largest = LargestCluster()
+        molcls = analyze([[]], 2, analyses=[largest])
+
+        assert molcls.analysis(LargestCluster) is largest
+        assert molcls.analysis(FrameAnalysis) is molcls.analyses[0]
+        # not enabled by the config
+        assert molcls.analysis(Nucleus) is None
 
     def test_a_class_instead_of_an_instance_is_refused(self, analyze: Analyze):
         with pytest.raises(TypeError, match="pass an instance, not the class"):
