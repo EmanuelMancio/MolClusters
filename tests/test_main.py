@@ -21,6 +21,7 @@ from molclusters.main import (
     _apply_lammps_resnames,
     _assign_radii,
     _describe_error,
+    _lammps_dump_timestep,
     _log_system,
     _traj_format,
 )
@@ -150,6 +151,36 @@ class TestApplyLammpsDumpElements:
             _apply_lammps_dump_elements(uni, dump)
 
 
+class TestLammpsDumpTimestep:
+    CONFIG = {"rules": {"A": {"A": "cm 5.0"}}}
+
+    def test_is_passed_for_a_dump(self, captured_logs: list[str]):
+        config = MolClsConfig(**self.CONFIG, lammps_timestep="2 fs")
+
+        assert _lammps_dump_timestep(config, "traj.lammpsdump") == {
+            "dt": pytest.approx(0.002)
+        }
+        assert not any("lammps_timestep" in m for m in captured_logs)
+
+    def test_without_it_dump_times_are_step_numbers(self, captured_logs: list[str]):
+        config = MolClsConfig(**self.CONFIG)
+
+        assert _lammps_dump_timestep(config, "traj.lammpstrj") == {}
+        assert "will be a step number, not ps" in captured_logs[-1]
+
+    def test_has_no_effect_on_other_trajectories(self, captured_logs: list[str]):
+        config = MolClsConfig(**self.CONFIG, lammps_timestep="2 fs")
+
+        assert _lammps_dump_timestep(config, "traj.xtc") == {}
+        assert "'lammps_timestep' has no effect" in captured_logs[-1]
+
+    def test_other_trajectories_need_nothing(self, captured_logs: list[str]):
+        config = MolClsConfig(**self.CONFIG)
+
+        assert _lammps_dump_timestep(config, "traj.xtc") == {}
+        assert not any("lammps_timestep" in m for m in captured_logs)
+
+
 def write_config(tmp_path: Path, extra: str = "") -> Path:
     path = tmp_path / "input.yaml"
     path.write_text(
@@ -225,11 +256,7 @@ class TestMain:
         cli_env("traj.xtc", "top.tpr", str(config_file))
 
         assert fake_universe["args"] == ("top.tpr", "traj.xtc")
-        assert fake_universe["kwargs"] == {
-            "format": None,
-            "in_memory": False,
-            "in_memory_step": 1,
-        }
+        assert fake_universe["kwargs"] == {"format": None}
 
         uni = fake_universe["uni"]
         assert uni.atoms[0].element == "C"
@@ -269,19 +296,38 @@ class TestMain:
         df = pd.read_csv(tmp_path / "solute_solvent.csv")
         assert df["NSolv"].tolist() == [1, 1]
 
+    @pytest.mark.parametrize(
+        ("options", "transfers"),
+        [((), []), (("--traj-memory", "--in-memory-step", "2"), [2])],
+    )
     def test_in_memory_options_are_forwarded(
-        self, cli_env: RunCli, fake_universe: FakeUniverse, config_file: Path
+        self,
+        cli_env: RunCli,
+        fake_universe: FakeUniverse,
+        config_file: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        options: tuple[str, ...],
+        transfers: list[int],
     ):
-        cli_env(
-            "traj.xtc", "top.tpr", str(config_file),
-            "--traj-memory", "--in-memory-step", "2",
-        )  # fmt: skip
+        steps = []
+        monkeypatch.setattr(
+            fake_universe["uni"], "transfer_to_memory", lambda step: steps.append(step)
+        )
 
-        assert fake_universe["kwargs"] == {
-            "format": None,
-            "in_memory": True,
-            "in_memory_step": 2,
-        }
+        cli_env("traj.xtc", "top.tpr", str(config_file), *options)
+
+        assert fake_universe["kwargs"] == {"format": None}
+        assert steps == transfers
+
+    def test_lammps_timestep_is_forwarded_for_a_dump(
+        self, cli_env: RunCli, fake_universe: FakeUniverse, tmp_path: Path
+    ):
+        config = write_config(tmp_path, "solvent: [SOL]\nlammps_timestep: 2 fs\n")
+
+        cli_env("traj.lammpsdump", "top.data", str(config))
+
+        assert fake_universe["kwargs"]["format"] == "LAMMPSDUMP"
+        assert fake_universe["kwargs"]["dt"] == pytest.approx(0.002)
 
     def test_in_memory_step_requires_traj_memory(
         self, cli_env: RunCli, config_file: Path, capsys: pytest.CaptureFixture

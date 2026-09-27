@@ -135,6 +135,45 @@ def _traj_format(traj: str) -> str | None:
     return "LAMMPSDUMP" if ext in _LAMMPS_DUMP_EXTS else None
 
 
+def _lammps_dump_timestep(config: MolClsConfig, traj: str) -> dict[str, float]:
+    """Give the trajectory reader the LAMMPS timestep size, for a LAMMPS dump.
+
+    A LAMMPS dump records step numbers only, and MDAnalysis turns them into times
+    as step x dt with dt = 1 unless told otherwise, so times are step numbers
+    unless `lammps_timestep` is set. Warns when that's the case, and when
+    `lammps_timestep` is set but `traj` isn't a LAMMPS dump.
+
+    Parameters
+    ----------
+    config : MolClsConfig
+        The configuration, with the optional `lammps_timestep`.
+    traj : str
+        The trajectory file.
+
+    Returns
+    -------
+    dict[str, float]
+        ``{"dt": timestep in ps}`` to pass to the reader, or an empty dict.
+    """
+    dt = config.lammps_timestep_ps
+    if _traj_format(traj) != "LAMMPSDUMP":
+        if dt is not None:
+            logger.warning(
+                f"'lammps_timestep' has no effect: {traj!r} is not a LAMMPS dump."
+            )
+        return {}
+
+    if dt is None:
+        logger.warning(
+            "LAMMPS dumps record step numbers, not times: every time in the results "
+            "(Time, cluster ages) will be a step number, not ps. Set 'lammps_timestep' "
+            "in the config (e.g. '2 fs') to get them in ps."
+        )
+        return {}
+
+    return {"dt": dt}
+
+
 def _apply_lammps_dump_elements(uni: mda.Universe, traj: str) -> None:
     """Fill in elements on a topology from the `element` column of a LAMMPS dump.
 
@@ -201,12 +240,17 @@ def _log_system(uni: mda.Universe) -> None:
         f"({composition})"
     )
 
-    # times as the reader reports them: the dt is inferred by MDAnalysis for some
-    # formats (it warns when it can't), so they're worth a check
+    # times as the frames carry them: the dt is inferred by MDAnalysis for some
+    # formats (it warns when it can't), so they're worth a check. Not the reader's
+    # dt and totaltime, which for a LAMMPS dump count MD steps, not frames
     traj = uni.trajectory
+    first = traj[0].time
+    every = traj[1].time - first if len(traj) > 1 else 0.0
+    last = traj[-1].time
+    traj[0]
     logger.info(
-        f"Trajectory: {len(traj)} frame(s) from {traj.ts.time:g} to "
-        f"{traj.ts.time + traj.totaltime:g} ps, every {traj.dt:g} ps"
+        f"Trajectory: {len(traj)} frame(s) from {first:g} to {last:g} ps, "
+        f"every {every:g} ps"
     )
 
     box = uni.dimensions
@@ -393,6 +437,28 @@ def _assign_radii(uni: mda.Universe) -> None:
     uni.add_TopologyAttr("radii", values=radii)
 
 
+def _load_into_memory(uni: mda.Universe, step: int | None) -> None:
+    """Load the trajectory into memory, keeping the time between frames.
+
+    Not ``Universe(in_memory=...)``: MDAnalysis also hands the reader's options to
+    the in-memory reader, which then gets a LAMMPS dump's dt twice. And the
+    in-memory reader times frame i as i x dt, taking dt from the reader, which
+    for a LAMMPS dump is the MD timestep rather than the time between frames, so
+    dt is set from the first two frames' times instead.
+
+    Parameters
+    ----------
+    uni : mda.Universe
+        The Universe, changed in place.
+    step : int | None
+        Keep every `step`-th frame (every frame when None).
+    """
+    traj = uni.trajectory
+    every = traj[1].time - traj[0].time if len(traj) > 1 else traj.dt
+    uni.transfer_to_memory(step=step)
+    uni.trajectory.ts.dt = every * (step or 1)
+
+
 def _analyse(args: arg.Namespace) -> None:
     """Load the system described by the command-line arguments and analyse it.
 
@@ -413,9 +479,10 @@ def _analyse(args: arg.Namespace) -> None:
         args.top,
         args.traj,
         format=_traj_format(args.traj),
-        in_memory=args.traj_memory,
-        in_memory_step=args.in_memory_step,
+        **_lammps_dump_timestep(cls_args, args.traj),
     )
+    if args.traj_memory:
+        _load_into_memory(uni, args.in_memory_step)
 
     _apply_lammps_resnames(uni, cls_args)
     _log_system(uni)

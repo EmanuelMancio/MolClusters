@@ -20,7 +20,7 @@ Volume                    Å³
 Density                   g/cm³
 Connection distance       Å (center-of-mass or donor-acceptor distance)
 H-bond angle              degrees
-Time, birth time, age     ps
+Time, birth time, age     ps (for LAMMPS dumps, given `lammps_timestep`)
 ========================  ==============================================
 
 The first classes check the properties; `TestOutputUnits` checks that a run
@@ -28,6 +28,7 @@ writes them to molclusters.json, the CSV tables and evo.txt in the same units.
 """
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,7 @@ import pytest
 from MDAnalysis import Universe
 from MDAnalysis.coordinates.memory import MemoryReader
 
+import molclusters.main as cli
 from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.conntable import ConnectionTable
@@ -289,6 +291,57 @@ class TestTimeUnits:
         assert uni.trajectory.time == pytest.approx(6.0)
         assert cluster.birth_time == pytest.approx(2.0)
         assert cluster.age == pytest.approx(4.0)
+
+
+class TestLammpsTimeUnits:
+    """LAMMPS dumps record step numbers; `lammps_timestep` makes their times ps."""
+
+    DATA = Path(__file__).parent / "data" / "lammps_mini.data"
+
+    def run_cli(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *options: str
+    ) -> Path:
+        # a real-units run (2 fs steps) dumped every 500 steps: 0, 1 and 2 ps
+        snapshot = Path(__file__).parent / "data" / "lammps_mini.lammpsdump"
+        body = snapshot.read_text().split("\n", 2)[2]  # without the TIMESTEP item
+        dump = tmp_path / "traj.lammpsdump"
+        dump.write_text(
+            "".join(f"ITEM: TIMESTEP\n{step}\n{body}" for step in (0, 500, 1000))
+        )
+        config = tmp_path / "input.yaml"
+        config.write_text(
+            "rules:\n  SOL:\n    SOL: cm 5.0\nlammps_resnames:\n  SOL: 1-2\n"
+            "lammps_timestep: 2 fs\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(cli, "start_logging", lambda **_: None)
+        monkeypatch.setattr(
+            sys, "argv",
+            ["molclusters", str(dump), str(self.DATA), str(config), *options],
+        )  # fmt: skip
+        cli.main()
+        return tmp_path
+
+    @pytest.mark.parametrize(
+        ("options", "times"),
+        [
+            ((), [0.0, 1.0, 2.0]),
+            (("--traj-memory",), [0.0, 1.0, 2.0]),
+            (("--traj-memory", "--in-memory-step", "2"), [0.0, 2.0]),
+        ],
+    )
+    def test_times_are_in_ps(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        options: tuple,
+        times: list[float],
+    ):
+        out = self.run_cli(tmp_path, monkeypatch, *options)
+
+        frames = json.loads((out / "molclusters.json").read_text())["MolClusters"]
+        assert [f["Time"] for f in frames] == pytest.approx(times)
+        np.testing.assert_allclose(np.loadtxt(out / "evo.txt", ndmin=2)[:, 0], times)
 
 
 class TestOutputUnits:

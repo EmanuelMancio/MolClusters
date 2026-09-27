@@ -259,6 +259,56 @@ def _parse_lammps_resid_range(spec: _LammpsResidSpec, name: str) -> tuple[int, i
     return value, value
 
 
+# `lammps_timestep` units, and how many ps each is
+_TIME_UNITS_PS = {"fs": 1e-3, "ps": 1.0, "ns": 1e3}
+
+
+def _parse_lammps_timestep(spec: str | float) -> float:
+    """
+    Parse `lammps_timestep`, a LAMMPS timestep size with its unit, into ps.
+
+    The unit is required: LAMMPS' own depends on the run's unit style (fs for
+    ``real``, ps for ``metal``), so a bare number would be ambiguous.
+
+    Parameters
+    ----------
+    spec : str | float
+        The timestep size and its unit, e.g. ``"2 fs"`` or ``"0.001 ps"``.
+
+    Returns
+    -------
+    float
+        The timestep size, in ps.
+
+    Raises
+    ------
+    ValueError
+        If `spec` isn't a positive number followed by fs, ps or ns.
+    """
+    units = ", ".join(_TIME_UNITS_PS)
+    if not isinstance(spec, str):
+        raise ValueError(
+            f"lammps_timestep {spec!r} needs its unit ({units}), e.g. '2 fs' for "
+            "LAMMPS' real units or '0.001 ps' for metal units."
+        )
+
+    text = spec.strip()
+    unit = text[-2:].lower()
+    try:
+        size = float(text[:-2])
+    except ValueError:
+        size = None
+    if unit not in _TIME_UNITS_PS or size is None:
+        raise ValueError(
+            f"Invalid lammps_timestep {spec!r}: expected a number and its unit "
+            f"({units}), e.g. '2 fs'."
+        )
+    if size <= 0:
+        raise ValueError(f"Invalid lammps_timestep {spec!r}: it must be positive.")
+
+    return size * _TIME_UNITS_PS[unit]
+
+
 class MolClsConfig(BaseSettings):
     """Settings class for input parameters."""
 
@@ -285,6 +335,12 @@ class MolClsConfig(BaseSettings):
     # each name used elsewhere in this file (rules, solute, ...) to the LAMMPS
     # molecule id(s) it stands for, e.g. {"SOL": "1-500", "NA": 501}.
     lammps_resnames: dict[str, _LammpsResidSpec | list[_LammpsResidSpec]] | None = None
+
+    # The LAMMPS run's timestep size with its unit, e.g. "2 fs". LAMMPS dumps only
+    # record step numbers, so without it their times are step numbers, not ps.
+    # Optional; used when MolClusters loads a LAMMPS dump (the CLI does).
+    lammps_timestep: str | float | None = None
+    _lammps_timestep_ps: float | None = PrivateAttr(default=None)
 
     # Acceleration backend for the "cm" rule's distance calculations (see
     # `ConnectionTable`); "hb" rules always run serially, since HydrogenBondAnalysis
@@ -319,6 +375,18 @@ class MolClsConfig(BaseSettings):
 
         start, end, name = self._lammps_resid_ranges[idx]
         return name if start <= resid <= end else None
+
+    @property
+    def lammps_timestep_ps(self) -> float | None:
+        """
+        The LAMMPS timestep size, in ps.
+
+        Returns
+        -------
+        float | None
+            `lammps_timestep` converted to ps, or None if it isn't set.
+        """
+        return self._lammps_timestep_ps
 
     def is_ignored_composition(self, resnames: Iterable[str]) -> bool:
         """
@@ -380,8 +448,20 @@ class MolClsConfig(BaseSettings):
             for start, end, name in self._lammps_resid_ranges
         ]
         lines.append(f"lammps_resnames: {', '.join(ranges) or 'none'}")
+        lines.append(
+            "lammps_timestep: none (LAMMPS dump times are step numbers)"
+            if self._lammps_timestep_ps is None
+            else f"lammps_timestep: {self._lammps_timestep_ps:g} ps"
+        )
 
         return "\n".join(lines)
+
+    @model_validator(mode="after")
+    def _build_lammps_timestep(self) -> Self:
+        if self.lammps_timestep is not None:
+            self._lammps_timestep_ps = _parse_lammps_timestep(self.lammps_timestep)
+
+        return self
 
     @model_validator(mode="after")
     def _build_rules(self) -> Self:

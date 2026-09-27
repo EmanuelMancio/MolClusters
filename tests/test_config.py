@@ -69,6 +69,7 @@ class TestDescribe:
             follow=["solute"],
             ignore_composition=[["B", "A"], ["B"]],
             lammps_resnames={"A": "1-10", "B": [11, "12-20"]},
+            lammps_timestep="2 fs",
             distance_backend="OpenMP",
         )
 
@@ -83,6 +84,7 @@ class TestDescribe:
             "ignore_composition: A + B; B",
             "distance_backend: OpenMP (cm rules only)",
             "lammps_resnames: A = 1-10, B = 11-20",
+            "lammps_timestep: 0.002 ps",
         ]
 
     def test_unset_options(self):
@@ -98,6 +100,7 @@ class TestDescribe:
             "ignore_composition: none",
             "distance_backend: serial (cm rules only)",
             "lammps_resnames: none",
+            "lammps_timestep: none (LAMMPS dump times are step numbers)",
         ]
 
     def test_every_option_is_described(self):
@@ -281,6 +284,57 @@ class TestReadConfigYaml:
 
         with pytest.raises(ValueError, match="first id must not be greater"):
             read_config(path)
+
+
+class TestLammpsTimestep:
+    def test_optional(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}})
+
+        assert config.lammps_timestep is None
+        assert config.lammps_timestep_ps is None
+
+    @pytest.mark.parametrize(
+        ("spec", "ps"),
+        [
+            ("2 fs", 0.002),
+            ("0.5fs", 0.0005),
+            ("0.001 ps", 0.001),
+            (" 1 NS ", 1000.0),
+            ("1e-3 ps", 0.001),
+        ],
+    )
+    def test_is_converted_to_ps(self, spec: str, ps: float):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}}, lammps_timestep=spec)
+
+        assert config.lammps_timestep_ps == pytest.approx(ps)
+
+    @pytest.mark.parametrize("spec", [2, 0.002])
+    def test_needs_a_unit(self, spec: float):
+        with pytest.raises(ValueError, match="needs its unit"):
+            MolClsConfig(rules={"A": {"A": "cm 5.0"}}, lammps_timestep=spec)
+
+    @pytest.mark.parametrize("spec", ["2 min", "fs", "two fs", "2"])
+    def test_invalid(self, spec: str):
+        with pytest.raises(ValueError, match="expected a number and its unit"):
+            MolClsConfig(rules={"A": {"A": "cm 5.0"}}, lammps_timestep=spec)
+
+    @pytest.mark.parametrize("spec", ["0 fs", "-1 fs"])
+    def test_must_be_positive(self, spec: str):
+        with pytest.raises(ValueError, match="must be positive"):
+            MolClsConfig(rules={"A": {"A": "cm 5.0"}}, lammps_timestep=spec)
+
+    def test_read_from_yaml_the_way_a_user_would_write_it(self, tmp_path: Path):
+        path = tmp_path / "input.yaml"
+        path.write_text(
+            textwrap.dedent("""\
+                rules:
+                  SOL:
+                    SOL: cm 5.0
+                lammps_timestep: 2 fs
+                """)
+        )
+
+        assert read_config(path).lammps_timestep_ps == pytest.approx(0.002)
 
 
 class TestRules:

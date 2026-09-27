@@ -20,6 +20,11 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
 
 - LAMMPS topologies carry no residue names: the config's `lammps_resnames` (name -> LAMMPS
   molecule id or `"first-last"` id range) supplies them, applied in `main._apply_lammps_resnames`.
+- LAMMPS dumps record step numbers, not times, and MDAnalysis times them as step x dt (dt = 1
+  unless given). The optional `lammps_timestep` (e.g. `"2 fs"`) is passed as `dt` by
+  `main._lammps_dump_timestep`, which warns when a dump is read without it. A dump reader's `dt`
+  is the MD timestep, not the time between frames, so `main._log_system` and
+  `main._load_into_memory` (`--traj-memory`) work from the frames' own times instead.
 - `ClusterTracker` (`tracker.py`) owns the clusters and their ids, with no analysis or file
   output; `MolClusters` is only the runner on top of it. The tracker keeps
   cluster identity stable across formation/merge/split events with a two-step assignment in
