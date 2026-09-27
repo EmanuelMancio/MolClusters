@@ -200,6 +200,11 @@ class JsonReport(FrameAnalysis):
             A list of tuples representing the connections and their properties.
         """
         return [
-            (int(edge[0]), int(edge[1]), {k: float(v) for k, v in edge[2].items()})
+            (
+                int(edge[0]),
+                int(edge[1]),
+                # counts (n_hbonds) stay whole numbers
+                {k: v if isinstance(v, int) else float(v) for k, v in edge[2].items()},
+            )
             for edge in obj.graph.edges.data()
         ]

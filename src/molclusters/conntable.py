@@ -234,7 +234,8 @@ class ConnectionTable:
         HydrogenBondAnalysis doesn't expose a backend option.
     rule_connections : Counter[tuple[str, str]]
         The connections each rule (keyed as in `clst_args`) has found, summed over
-        every frame the table was built for.
+        every frame the table was built for; for "hb" rules, the H-bonds (a pair of
+        molecules can share several).
     """
 
     __slots__ = [
@@ -473,9 +474,13 @@ class ConnectionTable:
         Returns
         -------
         tuple[np.ndarray, dict[str, np.ndarray]]
-            An ``(n, 2)`` array of connected (hydrogen, acceptor) resids, and each
-            connection's donor-acceptor ``"distance"`` and D-H-A ``"angle"``. Only
-            H-bonds between two molecules count.
+            An ``(n, 2)`` array of connected molecule pairs (resids, as the first
+            of their H-bonds joins them: hydrogen's molecule first), one row per
+            pair however many H-bonds join it, and for each
+            pair: ``"distance"`` and ``"angle"``, the donor-acceptor distance and
+            D-H-A angle of its shortest (strongest) H-bond, and ``"n_hbonds"``, the
+            number of H-bonds between the two, either way. Only H-bonds between
+            two molecules count.
         """
         # TODO: implement own HB analysis as HydrogenBondAnalysis from mda repeats
         # distance and angle calculations. Until then, this depends on the private
@@ -501,9 +506,34 @@ class ConnectionTable:
         # HydrogenBondAnalysis also finds H-bonds within a molecule, which connect
         # it to nothing else
         between = connections[:, 0] != connections[:, 1]
-        return connections[between], {
-            "distance": np.asarray(distances)[between],
-            "angle": np.asarray(angles)[between],
+        connections = connections[between]
+        distances = np.asarray(distances)[between]
+        angles = np.asarray(angles)[between]
+        if len(connections) == 0:
+            return connections, {
+                "distance": distances,
+                "angle": angles,
+                "n_hbonds": np.zeros(0, dtype=int),
+            }
+
+        # a pair of molecules can share several H-bonds (e.g. a carboxylic acid
+        # dimer), but the graph holds one connection per pair: keep the shortest
+        # H-bond's geometry and count them all. Each pair keeps the place and
+        # orientation of its first H-bond, as the graph got them when it kept every
+        # H-bond: the order molecules enter the graph breaks ties between clusters
+        # born together (see ClusterTracker)
+        _, first, pair = np.unique(
+            np.sort(connections, axis=1), axis=0, return_index=True, return_inverse=True
+        )
+        pair = pair.ravel()
+        n_hbonds = np.bincount(pair)
+        by_distance = np.lexsort((distances, pair))  # by pair, the shortest first
+        shortest = by_distance[np.cumsum(n_hbonds) - n_hbonds]
+        in_order = np.argsort(first)  # the pairs, as first found
+        return connections[first[in_order]], {
+            "distance": distances[shortest[in_order]],
+            "angle": angles[shortest[in_order]],
+            "n_hbonds": n_hbonds[in_order],
         }
 
     def __construct_table(self) -> None:
@@ -515,7 +545,10 @@ class ConnectionTable:
                 pairs, attribs = self.__cm_connections(resi, resj, self.uni.dimensions)
             else:
                 pairs, attribs = self.__hb_connections(resi, resj)
-            self.rule_connections[resi, resj] += len(pairs)
+            # for "hb" rules, every H-bond rather than every connected pair
+            self.rule_connections[resi, resj] += int(
+                attribs["n_hbonds"].sum() if "n_hbonds" in attribs else len(pairs)
+            )
 
             # a single bulk insert of plain Python values is much faster than an
             # add_edge() call per connection

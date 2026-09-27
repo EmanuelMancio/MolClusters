@@ -810,7 +810,10 @@ class Cluster(MolGroup):
     def graph(self) -> nx.Graph:
         """The molecules of the cluster and their connections, as a frozen graph.
 
-        Nodes are residue IDs; each edge has a ``distance`` and a ``weight``.
+        Nodes are residue IDs, and each edge joins two connected molecules. A
+        "cm" rule's edge has the ``distance`` between their centers of mass; an
+        "hb" rule's has the donor-acceptor ``distance`` and D-H-A ``angle`` of the
+        shortest of their H-bonds, and ``n_hbonds``, how many they share.
 
         Returns
         -------

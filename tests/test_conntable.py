@@ -12,6 +12,8 @@ import pytest
 from MDAnalysis import Universe
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
+from molclusters.analysis.report import JsonReport
+from molclusters.cluster import Cluster
 from molclusters.config import DistanceBackend, MolClsConfig
 from molclusters.conntable import (
     ConnectionTable,
@@ -261,6 +263,67 @@ class TestHydrogenBondRule:
         for _, _, data in edges:
             assert 0 < data["distance"] <= self.D_A
             assert self.ANGLE <= data["angle"] <= 180
+            assert data["n_hbonds"] >= 1
+
+    def test_several_hbonds_between_a_pair_make_one_connection(self):
+        # DON donates two H-bonds to ACC's O (O1-H1 from 2.7 A, O2-H2 from 3.1 A),
+        # and ACC donates one back to DON's O3 (2.9 A), all linear
+        sites = {
+            "O1": ([-2.7, 0, 0], 15.999, -0.8), "H1": ([-1.7, 0, 0], 1.008, 0.4),
+            "O2": ([0, -3.1, 0], 15.999, -0.8), "H2": ([0, -2.1, 0], 1.008, 0.4),
+            "O3": ([0, 0, 2.9], 15.999, -0.8),
+            "O": ([0, 0, 0], 15.999, -0.8), "H": ([0, 0, 1], 1.008, 0.4),
+        }  # fmt: skip
+        positions, masses, charges = zip(*sites.values(), strict=True)
+        uni = Universe.empty(
+            7, n_residues=2, atom_resindex=[0] * 5 + [1] * 2, trajectory=True
+        )
+        uni.add_TopologyAttr("names", list(sites))
+        uni.add_TopologyAttr("resnames", ["DON", "ACC"])
+        uni.add_TopologyAttr("resids", [1, 2])
+        uni.add_TopologyAttr("masses", masses)
+        uni.add_TopologyAttr("charges", charges)
+        uni.add_TopologyAttr("bonds", [(0, 1), (2, 3), (5, 6)])
+        uni.atoms.positions = np.array(positions) + 15.0
+        uni.dimensions = [30.0, 30.0, 30.0, 90.0, 90.0, 90.0]
+
+        table = build(uni, {"DON": {"ACC": "hb d 3.5 a 150"}})
+
+        assert list(table.conntab.edges(data=True)) == [
+            (1, 2, {"distance": pytest.approx(2.7, abs=1e-4),
+                    "angle": pytest.approx(180.0, abs=1e-2),
+                    "n_hbonds": 3})
+        ]  # fmt: skip
+        # the rule is keyed as the config stores it; it counts every H-bond
+        assert list(table.rule_connections.values()) == [3]
+        (group,) = table.subconntables()
+        (connection,) = JsonReport.encode_connections(Cluster(uni, group, cluster_id=1))
+        assert connection[2]["n_hbonds"] == 3
+        assert isinstance(connection[2]["n_hbonds"], int)
+
+    def test_graph_order_is_that_of_every_hbond_added_one_by_one(
+        self, table: ConnectionTable
+    ):
+        # the order molecules enter the graph breaks ties between clusters born
+        # in the same frame, so merging a pair's H-bonds must not change it
+        hb = table.hbs["MAL", "MAL"]
+        hb._ts = table.uni.trajectory.ts
+        hb._single_frame()
+        # one list per column until the analysis concludes
+        hydrogens, acceptors = (
+            np.asarray(c, dtype=np.intp) for c in hb.results.hbonds[2:4]
+        )
+        hb._prepare()
+        resids = table.uni.atoms.resids
+        every_hbond = nx.Graph()
+        every_hbond.add_edges_from(
+            (h, a)
+            for h, a in zip(resids[hydrogens], resids[acceptors], strict=True)
+            if h != a
+        )
+
+        assert list(table.conntab.nodes) == list(every_hbond.nodes)
+        assert list(table.conntab.edges) == list(every_hbond.edges)
 
     def test_hbonds_within_a_molecule_are_not_connections(self, table: ConnectionTable):
         hb = HydrogenBondAnalysis(
