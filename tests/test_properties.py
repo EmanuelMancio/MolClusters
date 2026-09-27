@@ -114,7 +114,8 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
         "Radius": rg,
         "Diameter": 2 * rg,
         "Volume": volume,
-        "Density": mass / volume * 0.602214076,
+        # amu/A^3 -> g/cm^3: 1 amu = 1.66053906660e-24 g, 1 A^3 = 1e-24 cm^3
+        "Density": mass / volume * 1.66053906660,
         "Dipole Moment": np.linalg.norm(dipole),
         "Sphericity": 1 - 1.5 * np.sum(dev**2) / moments.sum() ** 2,
         "Shape": 27 * np.prod(dev) / moments.sum() ** 3,

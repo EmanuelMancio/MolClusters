@@ -178,13 +178,19 @@ class TestMolGroup:
         assert chain.volume == pytest.approx(
             4 / 3 * np.pi * (np.sqrt(5 / 3) * chain.radius) ** 3
         )
-        assert chain.density == pytest.approx(chain.mass / chain.volume * 0.602214076)
+        assert chain.density == pytest.approx(chain.mass / chain.volume * 1.66053906660)
 
     def test_volume_of_a_filled_sphere_is_the_space_its_atoms_fill(self):
         sphere = grid_sphere()
 
         filled = len(sphere.atoms) * SPHERE_SPACING**3
         assert sphere.volume == pytest.approx(filled, rel=1e-3)
+
+    def test_density_of_a_sphere_as_dense_as_water_is_one_g_per_cm3(self):
+        # liquid water: 18.015 amu per 29.915 A^3, i.e. 1 g/cm^3
+        sphere = grid_sphere(atom_mass=18.015 / 29.915 * SPHERE_SPACING**3)
+
+        assert sphere.density == pytest.approx(1.0, rel=1e-3)
 
     def test_shape_properties(self, chain: Cluster):
         assert 0.0 <= chain.sphericity <= 1.0

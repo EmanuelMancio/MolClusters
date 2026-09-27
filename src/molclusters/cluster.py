@@ -406,7 +406,8 @@ class MolGroup:
         float
             The density of the group in g/cm^3.
         """
-        return (self.mass / self.volume) * 0.602214076  # g/cm^3
+        # amu/A^3 -> g/cm^3: 1 amu = 1.66053906660e-24 g, 1 A^3 = 1e-24 cm^3
+        return (self.mass / self.volume) * 1.66053906660  # g/cm^3
 
     @property
     def charge(self) -> float:
