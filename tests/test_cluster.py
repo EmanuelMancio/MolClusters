@@ -173,18 +173,19 @@ class TestMolGroup:
     def test_physical_properties_are_consistent(self, chain: Cluster):
         assert chain.mass == pytest.approx(3 * (12.011 + 15.999))
         assert chain.charge == pytest.approx(0.0)
-        assert chain.radius == chain.radius_of_gyration > 0
+        assert chain.radius_of_gyration > 0
+        assert chain.radius == pytest.approx(np.sqrt(5 / 3) * chain.radius_of_gyration)
         assert chain.diameter == pytest.approx(2 * chain.radius)
-        assert chain.volume == pytest.approx(
-            4 / 3 * np.pi * (np.sqrt(5 / 3) * chain.radius) ** 3
-        )
+        assert chain.volume == pytest.approx(4 / 3 * np.pi * chain.radius**3)
         assert chain.density == pytest.approx(chain.mass / chain.volume * 1.66053906660)
 
-    def test_volume_of_a_filled_sphere_is_the_space_its_atoms_fill(self):
+    def test_filled_sphere_has_the_radius_and_volume_its_atoms_fill(self):
         sphere = grid_sphere()
 
         filled = len(sphere.atoms) * SPHERE_SPACING**3
         assert sphere.volume == pytest.approx(filled, rel=1e-3)
+        assert sphere.radius == pytest.approx(10.0, rel=1e-2)
+        assert sphere.diameter == pytest.approx(20.0, rel=1e-2)
 
     def test_density_of_a_sphere_as_dense_as_water_is_one_g_per_cm3(self):
         # liquid water: 18.015 amu per 29.915 A^3, i.e. 1 g/cm^3

@@ -103,7 +103,7 @@ class Nucleus(FrameAnalysis):
 
                 n_nuc += 1
                 sizes.append(tp.size)
-                radius.append(tp.radius_of_gyration)
+                radius.append(tp.radius)
                 dipole.append(tp.dipole_moment)
                 density.append(tp.density)
                 sphericity.append(tp.sphericity)

@@ -386,7 +386,7 @@ class TestRun:
         data = json.loads((tmp_path / "molclusters.json").read_text())
         for frame in data["MolClusters"]:
             (cluster,) = frame["Clusters"]
-            assert cluster["Radius"] == pytest.approx(pristine.radius_of_gyration)
+            assert cluster["Radius"] == pytest.approx(pristine.radius)
             assert cluster["Shape"] == pytest.approx(pristine.shape_parameter)
 
 

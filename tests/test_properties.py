@@ -105,14 +105,15 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
     moments = np.linalg.eigvalsh((rel * m[:, None]).T @ rel / mass)
     dev = moments - moments.mean()
     # the uniform sphere with that radius of gyration: Rg = sqrt(3/5) R
-    volume = 4 / 3 * np.pi * (np.sqrt(5 / 3) * rg) ** 3
+    radius = np.sqrt(5 / 3) * rg
+    volume = 4 / 3 * np.pi * radius**3
     dipole = q @ rel * E_ANGSTROM_IN_DEBYE
 
     return {
         "Mass": mass,
         "Charge": q.sum(),
-        "Radius": rg,
-        "Diameter": 2 * rg,
+        "Radius": radius,
+        "Diameter": 2 * radius,
         "Volume": volume,
         # amu/A^3 -> g/cm^3: 1 amu = 1.66053906660e-24 g, 1 A^3 = 1e-24 cm^3
         "Density": mass / volume * 1.66053906660,

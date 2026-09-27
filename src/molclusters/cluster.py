@@ -362,29 +362,7 @@ class MolGroup:
 
     @property
     def radius(self) -> float:
-        """The radius of the group.
-
-        Returns
-        -------
-        float
-            The radius of the group, equivalent to the radius of gyration.
-        """
-        return self.radius_of_gyration
-
-    @property
-    def diameter(self) -> float:
-        """Calculate the diameter of the group.
-
-        Returns
-        -------
-        float
-            The diameter of the group, calculated as twice the radius of gyration.
-        """
-        return 2 * self.radius_of_gyration
-
-    @property
-    def volume(self) -> float:
-        """Calculate the volume of the uniform sphere with the group's radius of gyration.
+        """The radius of the uniform sphere with the group's radius of gyration.
 
         A uniform sphere of radius R has a radius of gyration of sqrt(3/5) R, so the
         sphere's radius is sqrt(5/3) times the group's radius of gyration.
@@ -392,10 +370,31 @@ class MolGroup:
         Returns
         -------
         float
+            The group's equivalent sphere radius, in angstroms.
+        """
+        return np.sqrt(5 / 3) * self.radius_of_gyration
+
+    @property
+    def diameter(self) -> float:
+        """Calculate the diameter of the group's equivalent sphere (see `radius`).
+
+        Returns
+        -------
+        float
+            Twice the group's radius, in angstroms.
+        """
+        return 2 * self.radius
+
+    @property
+    def volume(self) -> float:
+        """Calculate the volume of the group's equivalent sphere (see `radius`).
+
+        Returns
+        -------
+        float
             Volume in cubic angstroms.
         """
-        r = np.sqrt(5 / 3) * self.radius_of_gyration
-        return 4 * np.pi * r**3 / 3  # angstrom^3
+        return 4 * np.pi * self.radius**3 / 3  # angstrom^3
 
     @property
     def density(self) -> float:

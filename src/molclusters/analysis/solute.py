@@ -112,7 +112,7 @@ class SoluteSolvent(FrameAnalysis):
             n_solvents.append(sum(composition.get(name, 0) for name in self.solvents))
             n_solutes.append(sum(composition.get(name, 0) for name in self.solutes))
 
-            radius.append(cls.radius_of_gyration)
+            radius.append(cls.radius)
             dipole.append(cls.dipole_moment)
             density.append(cls.density)
             sphericity.append(cls.sphericity)
