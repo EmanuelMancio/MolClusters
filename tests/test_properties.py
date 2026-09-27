@@ -22,12 +22,14 @@ import pandas as pd
 import pytest
 from MDAnalysis.coordinates.memory import MemoryReader
 
-from molclusters.cluster import EA2D, MolGroup
+from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
 
 BOX = 20.0
 CUTOFF = 3.0
+# 1 e·A in Debye, from SI: e * 1e-10 m / (1e-21 / c C·m)
+E_ANGSTROM_IN_DEBYE = 1.602176634e-19 * 1e-10 / (1e-21 / 299792458)
 # residue centers of mass sit on a grid SPACING apart: axis neighbours connect,
 # diagonal ones (SPACING * sqrt(2) = 3.5 A) don't
 SPACING = 2.5
@@ -103,7 +105,7 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
     moments = np.linalg.eigvalsh((rel * m[:, None]).T @ rel / mass)
     dev = moments - moments.mean()
     volume = 4 / 3 * np.pi * rg**3
-    dipole = q @ rel * EA2D
+    dipole = q @ rel * E_ANGSTROM_IN_DEBYE
 
     return {
         "Mass": mass,

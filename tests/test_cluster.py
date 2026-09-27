@@ -10,7 +10,7 @@ import pytest
 from MDAnalysis import Universe
 from MDAnalysis.lib.distances import apply_PBC
 
-from molclusters.cluster import EA2D, Cluster, MolGroup
+from molclusters.cluster import Cluster, MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.conntable import ConnectionTable
 
@@ -155,10 +155,27 @@ class TestMolGroup:
         assert center.shape == (3,)
 
     def test_dipole(self, chain: Cluster):
-        # each residue is a +0.3/-0.3 pair 1.2 A apart along z
-        expected = 3 * 0.3 * 1.2 * EA2D
+        # each residue is a +0.3/-0.3 pair 1.2 A apart along z; 1 e·A = 4.8032 D
+        expected = 3 * 0.3 * 1.2 * 4.80320
         assert chain.dipole_moment == pytest.approx(expected, rel=1e-4)
         np.testing.assert_allclose(np.abs(chain.dipole), [0, 0, expected], atol=1e-3)
+
+    def test_dipole_of_spce_water_is_its_known_value(self):
+        # SPC/E: O-H 1.0 A, H-O-H 109.47 deg, q(H) = +0.4238 e; its dipole is 2.35 D
+        uni = Universe.empty(3, n_residues=1, atom_resindex=[0, 0, 0], trajectory=True)
+        uni.add_TopologyAttr("resids", [1])
+        uni.add_TopologyAttr("masses", [15.9994, 1.008, 1.008])
+        uni.add_TopologyAttr("charges", [-0.8476, 0.4238, 0.4238])
+        uni.add_TopologyAttr("bonds", [(0, 1), (0, 2)])
+        half = np.deg2rad(109.47 / 2)
+        uni.atoms.positions = [
+            [10, 10, 10],
+            [10 + np.sin(half), 10 + np.cos(half), 10],
+            [10 - np.sin(half), 10 + np.cos(half), 10],
+        ]
+        uni.dimensions = [20, 20, 20, 90, 90, 90]
+
+        assert MolGroup(uni, [1]).dipole_moment == pytest.approx(2.35, abs=0.005)
 
     def test_center_of_mass_of_a_group_inside_the_box(self, chain: Cluster):
         np.testing.assert_allclose(

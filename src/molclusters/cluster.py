@@ -16,7 +16,8 @@ Classes:
 
 Constants:
 ----------
-    - EA2D: Conversion factor for dipole moment from atomic units to Debye.
+    - EA2D: Conversion factor for dipole moments from e·Å (MDAnalysis's unit) to
+      Debye.
 
 Dependencies:
 -------------
@@ -38,7 +39,8 @@ from MDAnalysis.lib.distances import apply_PBC
 
 from .conntable import ConnectionTable
 
-EA2D = 1 / 0.3934303
+# 1 D = 0.2081943 e·Å (e·Å, not the atomic unit e·a0: 1 D = 0.3934303 e·a0)
+EA2D = 1 / 0.2081943
 
 
 def _on_whole[T](method: Callable[..., T]) -> Callable[..., T]:
