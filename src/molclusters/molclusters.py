@@ -28,7 +28,7 @@ import time
 from collections import Counter
 from collections.abc import Iterable
 from functools import reduce
-from typing import Any, Generator
+from typing import Any
 
 import MDAnalysis as mda
 import networkx as nx
@@ -38,7 +38,7 @@ from loguru import logger
 from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
-from .analysis import Frame, FrameAnalysis, Run, SizeEvolution
+from .analysis import Frame, FrameAnalysis, Run, SizeEvolution, SoluteSolvent
 from .cluster import Cluster, MolGroup
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
@@ -76,10 +76,6 @@ class MolClusters:
         `size_evolution`).
     solutes : list[int]
         A list of solute molecule IDs.
-    solvents : list[str]
-        A list of solvent residue names.
-    solute_data : np.ndarray
-        An array storing solute-solvent analysis results.
     """
 
     __slots__ = [
@@ -90,10 +86,6 @@ class MolClusters:
         "size_evolution",
         "radius_evolution",
         "solutes",
-        "solvents",
-        "solute_resnames",
-        "solvent_resnames",
-        "solute_data",
         "nucleus_data",
         "nucleus_holder",
         "data_holder",
@@ -155,7 +147,10 @@ class MolClusters:
         self.tracker = ClusterTracker(self.uni, self.config)
 
         self.size_evolution = SizeEvolution()
-        self.analyses: list[FrameAnalysis] = [self.size_evolution, *extra]
+        builtins: list[FrameAnalysis] = [self.size_evolution]
+        if config.solute is not None:
+            builtins.append(SoluteSolvent(config.solute, config.solvent))
+        self.analyses: list[FrameAnalysis] = [*builtins, *extra]
 
         self.radius_evolution = {}
 
@@ -233,7 +228,6 @@ class MolClusters:
         outputs.append(OutputFile("molclusters.json"))
         if self.config.solute is not None:
             outputs += [
-                OutputFile("solute_solvent.csv"),
                 OutputFile("cls-n<size>.gro", append=True),
                 OutputFile("cls-id<id>.gro", append=True),
             ]
@@ -343,88 +337,13 @@ class MolClusters:
             np.nan if len(n_nucleus) == 0 else np.average(shape)
         )
 
-    def __start_solute_solvent(self) -> None:
-        """Initialize solute-solvent analysis."""
+    def __find_solutes(self) -> None:
+        """Find the resids of the solute molecules, for `__write_coordinates`."""
         self.solutes: list[int] = [
             id
             for sel in self.config.solute
             for id in self.tracker.sels[sel].residues.resids
         ]
-        self.solvents = self.config.solvent
-
-        self.solute_resnames = set(self.config.solute)
-        self.solvent_resnames = set(self.config.solvent)
-
-        self.solute_data = np.zeros(
-            (len(self.uni.trajectory), 10)
-        )  # Value 8 accounts for time column and 7 property columns
-
-    def __solute_solvent_clusters(self) -> Generator[Cluster, None, None]:
-        """Generate clusters that contain both solute and solvent residues.
-
-        Yields
-        ------
-        Generator[Cluster]
-            A generator that yields clusters containing both solute and solvent residues.
-        """
-        for cls in self.tracker.clusters.values():
-            res = set(cls.resnames)
-            if (
-                len(res.intersection(self.solute_resnames)) > 0
-                and len(res.intersection(self.solvent_resnames)) > 0
-            ):
-                yield cls
-
-    def __solute_solvent_analysis(self, frame: int) -> None:
-        """Perform solute-solvent analysis for a given frame.
-
-        Parameters
-        ----------
-        frame : int
-            index of the current frame in the trajectory.
-        """
-        n_cls = 0
-        n_solvents = []
-        n_solutes = []
-        radius = []
-        dipole = []
-        density = []
-        sphericity = []
-        shape = []
-        charge = []
-
-        for cls in self.__solute_solvent_clusters():
-            n_cls += 1
-
-            n_solv = 0
-            n_solt = 0
-            mol_pop = cls.composition
-            for solvent in self.solvent_resnames:
-                n_solv += mol_pop.get(solvent, 0)
-
-            for solute in self.solute_resnames:
-                n_solt += mol_pop.get(solute, 0)
-
-            n_solvents.append(n_solv)
-            n_solutes.append(n_solt)
-
-            radius.append(cls.radius_of_gyration)
-            dipole.append(cls.dipole_moment)
-            density.append(cls.density)
-            sphericity.append(cls.sphericity)
-            shape.append(cls.shape_parameter)
-            charge.append(cls.charge)
-
-        self.solute_data[frame][0] = self.uni.coord.time
-        self.solute_data[frame][1] = n_cls
-        self.solute_data[frame][2] = 0 if n_cls == 0 else np.average(n_solutes)
-        self.solute_data[frame][3] = 0 if n_cls == 0 else np.average(n_solvents)
-        self.solute_data[frame][4] = np.nan if n_cls == 0 else np.average(radius)
-        self.solute_data[frame][5] = np.nan if n_cls == 0 else np.average(density)
-        self.solute_data[frame][6] = np.nan if n_cls == 0 else np.average(charge)
-        self.solute_data[frame][7] = np.nan if n_cls == 0 else np.average(dipole)
-        self.solute_data[frame][8] = np.nan if n_cls == 0 else np.average(sphericity)
-        self.solute_data[frame][9] = np.nan if n_cls == 0 else np.average(shape)
 
     def __write_coordinates(self) -> None:
         """Write the coordinates of clusters to files."""
@@ -496,15 +415,13 @@ class MolClusters:
             run.analyse_frame(Frame(0, self.tracker))
 
             if self.config.solute is not None:
-                self.__start_solute_solvent()
-                self.__solute_solvent_analysis(0)
+                self.__find_solutes()
 
             with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
                 for i, _ in enumerate(self.uni.trajectory[1:], start=1):
                     self.tracker.update()
                     run.analyse_frame(Frame(i, self.tracker))
                     if self.config.solute is not None:
-                        self.__solute_solvent_analysis(i)
                         self.__write_coordinates()
 
                     if self.config.nucleus is not None:
@@ -538,24 +455,6 @@ class MolClusters:
 
         run.finish_analyses()
         self.output.flush()  # in case an analysis appended to a file in `finish`
-
-        if self.config.solute is not None:
-            self.solute_data = pd.DataFrame(
-                self.solute_data,
-                columns=[
-                    "Time",
-                    "NCls",
-                    "NSolt",
-                    "NSolv",
-                    "Radius",
-                    "Density",
-                    "Charge",
-                    "Dipole",
-                    "Spher",
-                    "Shape",
-                ],
-            )
-            self.solute_data.to_csv("solute_solvent.csv", index=False)
 
         if self.config.nucleus is not None:
             self.nucleus_data = pd.DataFrame(

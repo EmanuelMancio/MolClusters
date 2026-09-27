@@ -309,7 +309,7 @@ class TestWriteCoordinates:
         assert solute_clusters, "fixture/rule setup should yield a solute cluster"
 
         molcls.output = RunOutput(tmp_path)  # as run() does
-        molcls._MolClusters__start_solute_solvent()
+        molcls._MolClusters__find_solutes()
         molcls._MolClusters__write_coordinates()
         molcls.output.flush()  # as run() does when it's done
 

@@ -6,14 +6,21 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
-from molclusters.analysis import Frame, FrameAnalysis, Run, SizeEvolution
+from molclusters.analysis import (
+    Frame,
+    FrameAnalysis,
+    Run,
+    SizeEvolution,
+    SoluteSolvent,
+)
 from molclusters.config import MolClsConfig
 from molclusters.output import RunOutput
 from molclusters.tracker import ClusterTracker
 
-from .conftest import MOL_RULES, Groups, UniverseFactory
+from .conftest import ALL_PAIRS_RULES, MOL_RULES, Groups, UniverseFactory
 
 
 def run_analyses(
@@ -22,6 +29,8 @@ def run_analyses(
     frames: Sequence[Groups],
     n_res: int,
     directory: Path,
+    resnames: Sequence[str] | None = None,
+    rules: dict = MOL_RULES,
 ) -> Run:
     """Drive `analyses` over every frame and finish them, as `MolClusters.run()` does.
 
@@ -30,8 +39,8 @@ def run_analyses(
     Run
         The run's context.
     """
-    uni = make_universe(frames, n_res)
-    config = MolClsConfig(rules=MOL_RULES)
+    uni = make_universe(frames, n_res, resnames)
+    config = MolClsConfig(rules=rules)
     tracker = ClusterTracker(uni, config)
     run = Run(uni, config, len(frames), RunOutput(directory), analyses)
 
@@ -172,6 +181,59 @@ class TestSizeEvolution:
 
     def test_declares_evo(self):
         assert [out.name for out in SizeEvolution.outputs] == ["evo.txt"]
+
+
+class TestSoluteSolvent:
+    # frame 0: {1, 2, 3} holds a MOL and two SOL, {4, 5} only MOL; frame 1: none
+    FRAMES = [[[1, 2, 3], [4, 5]], []]
+    RESNAMES = ["MOL", "SOL", "SOL", "MOL", "MOL"]
+
+    def run(self, make_universe: UniverseFactory, directory: Path) -> SoluteSolvent:
+        analysis = SoluteSolvent(["MOL"], ["SOL"])
+        run_analyses(
+            [analysis],
+            make_universe,
+            self.FRAMES,
+            5,
+            directory,
+            self.RESNAMES,
+            ALL_PAIRS_RULES,
+        )
+        return analysis
+
+    def test_records_only_clusters_with_solutes_and_solvents(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        analysis = self.run(make_universe, tmp_path)
+
+        first, second = analysis.data
+        np.testing.assert_allclose(first[:4], [0, 1, 1, 2])
+        assert np.isfinite(first[4:]).all()
+        np.testing.assert_allclose(second[:4], [1, 0, 0, 0])
+        assert np.isnan(second[4:]).all()
+
+    def test_finish_writes_the_table(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        analysis = self.run(make_universe, tmp_path)
+
+        table = pd.read_csv(tmp_path / "solute_solvent.csv")
+        assert list(table.columns) == [
+            "Time",
+            "NCls",
+            "NSolt",
+            "NSolv",
+            "Radius",
+            "Density",
+            "Charge",
+            "Dipole",
+            "Spher",
+            "Shape",
+        ]
+        np.testing.assert_allclose(table.to_numpy(), analysis.data)
+
+    def test_declares_the_table(self):
+        assert [out.name for out in SoluteSolvent.outputs] == ["solute_solvent.csv"]
 
 
 class TestErrors:
