@@ -45,7 +45,10 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   due for a rewrite so other analyses can add to it).
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
   properties computed on the group made whole across PBC (`whole()`, cached per frame; never
-  moves the shared Universe for good). `Cluster(MolGroup)` adds the id, a frozen `graph`,
+  moves the shared Universe for good). Its `radius` (and so `diameter`, `volume`, `density`)
+  is an equivalent sphere's: sqrt(5/3)·Rg (a uniform sphere's) plus `radius_buffer`, half the
+  atoms' mean van der Waals radius by element, for the atoms' size; `radius_of_gyration` is Rg
+  itself. `Cluster(MolGroup)` adds the id, a frozen `graph`,
   `birth_time`/`age`, `neighbors` and `distance`. Clusters are read-only outside the tracker:
   its only mutator is `Cluster._update`, which `ClusterTracker.update` calls to swap in the new
   frame's frozen graph. The objects are live, so they describe the current frame only.

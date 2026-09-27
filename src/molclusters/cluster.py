@@ -26,6 +26,7 @@ Dependencies:
     - NumPy: For numerical computations.
 """
 
+import weakref
 from collections import Counter
 from contextlib import contextmanager
 from functools import wraps
@@ -35,12 +36,56 @@ import MDAnalysis as mda
 import networkx as nx
 import numpy as np
 from MDAnalysis import core
+from MDAnalysis.exceptions import NoDataError
+from MDAnalysis.guesser.tables import vdwradii
 from MDAnalysis.lib.distances import apply_PBC
 
 from .conntable import ConnectionTable
 
 # 1 D = 0.2081943 e·Å (e·Å, not the atomic unit e·a0: 1 D = 0.3934303 e·a0)
 EA2D = 1 / 0.2081943
+
+# Universe -> van der Waals radius of each of its atoms (see `_vdw_radii`)
+_VDW_RADII: "weakref.WeakKeyDictionary[mda.Universe, np.ndarray]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _vdw_radii(universe: mda.Universe) -> np.ndarray:
+    """Look up the van der Waals radius of every atom of a Universe, by element.
+
+    Computed once per Universe, since the groups read it every frame.
+
+    Parameters
+    ----------
+    universe : mda.Universe
+        The Universe whose atoms to look up.
+
+    Returns
+    -------
+    np.ndarray
+        One radius per atom, in angstroms, NaN for an element without one.
+
+    Raises
+    ------
+    ValueError
+        If the atoms have no elements.
+    """
+    if universe not in _VDW_RADII:
+        try:
+            elements = universe.atoms.elements
+        except NoDataError as err:
+            raise ValueError(
+                "The equivalent sphere's radius needs the atoms' elements, which the "
+                "topology doesn't have; guess them with "
+                "`universe.guess_TopologyAttrs(to_guess=['elements'])`."
+            ) from err
+
+        names, which = np.unique(elements, return_inverse=True)
+        radii = np.array([vdwradii.get(name.upper(), np.nan) for name in names])
+        _VDW_RADII[universe] = radii[which]
+
+    return _VDW_RADII[universe]
 
 
 def _on_whole[T](method: Callable[..., T]) -> Callable[..., T]:
@@ -361,18 +406,51 @@ class MolGroup:
         return self._rg.radius_of_gyration()
 
     @property
-    def radius(self) -> float:
-        """The radius of the uniform sphere with the group's radius of gyration.
+    def radius_buffer(self) -> float:
+        """Half the mean van der Waals radius of the group's atoms, by element.
 
-        A uniform sphere of radius R has a radius of gyration of sqrt(3/5) R, so the
-        sphere's radius is sqrt(5/3) times the group's radius of gyration.
+        The radius of gyration only sees the atoms' centers, so a sphere built from
+        it ends at the outer atoms' centers and leaves their size out. Adding half,
+        not all, of the atoms' van der Waals radius to it roughly accounts for
+        that, since bonded atoms' van der Waals spheres overlap: on methanol-malic
+        acid mixtures, the full radius puts a lone malic acid at 0.70 g/cm^3 and
+        half at 1.21 (1.61 for the solid), and barely changes large clusters.
+
+        Returns
+        -------
+        float
+            The buffer added to the equivalent sphere's radius, in angstroms.
+
+        Raises
+        ------
+        ValueError
+            If the atoms have no elements, or an element has no van der Waals
+            radius in MDAnalysis' table.
+        """
+        atoms = self._rg.atoms
+        radii = _vdw_radii(self.uni)[atoms.ix]
+        if np.isnan(radii).any():
+            unknown = sorted(set(atoms.elements[np.isnan(radii)]))
+            raise ValueError(
+                f"No van der Waals radius is known for element(s) {unknown}."
+            )
+        return 0.5 * radii.mean()
+
+    @property
+    def radius(self) -> float:
+        """The radius of the group's equivalent sphere.
+
+        That is the uniform sphere with the group's radius of gyration, which has a
+        radius of sqrt(5/3) times it (a uniform sphere of radius R has a radius of
+        gyration of sqrt(3/5) R), grown by `radius_buffer` to roughly account for
+        the size of the atoms.
 
         Returns
         -------
         float
             The group's equivalent sphere radius, in angstroms.
         """
-        return np.sqrt(5 / 3) * self.radius_of_gyration
+        return np.sqrt(5 / 3) * self.radius_of_gyration + self.radius_buffer
 
     @property
     def diameter(self) -> float:

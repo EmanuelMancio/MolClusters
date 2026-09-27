@@ -41,6 +41,9 @@ SPECIES = {
     "CAT": ([15.999, 1.008, 1.008], [-0.4, 0.7, 0.7]),  # +1
     "ANI": ([32.06, 15.999, 15.999], [0.2, -0.6, -0.6]),  # -1
 }
+# the elements of those sites, and their van der Waals radii
+ELEMENTS = {"SOL": ["O", "H", "H"], "CAT": ["O", "H", "H"], "ANI": ["S", "O", "O"]}
+VDW_RADII = {"H": 1.1, "O": 1.52, "S": 1.8}
 # the first residue is solvent and the ions are spread out, so no nucleus shares
 # the cluster's first residue and the ions only connect through the solvent
 RESNAMES = ["SOL", "SOL", "CAT", "SOL", "SOL", "SOL",
@@ -104,8 +107,10 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
     rg = np.sqrt(m @ np.sum(rel**2, axis=1) / mass)
     moments = np.linalg.eigvalsh((rel * m[:, None]).T @ rel / mass)
     dev = moments - moments.mean()
-    # the uniform sphere with that radius of gyration: Rg = sqrt(3/5) R
-    radius = np.sqrt(5 / 3) * rg
+    # the uniform sphere with that radius of gyration (Rg = sqrt(3/5) R), grown by
+    # half the atoms' mean van der Waals radius
+    buffer = np.mean([VDW_RADII[e] for e in atoms.elements]) / 2
+    radius = np.sqrt(5 / 3) * rg + buffer
     volume = 4 / 3 * np.pi * radius**3
     dipole = q @ rel * E_ANGSTROM_IN_DEBYE
 
@@ -207,7 +212,7 @@ def make_universe(frames: list[np.ndarray]) -> mda.Universe:
         trajectory=True,
     )
     uni.add_TopologyAttr("names", ["A1", "A2", "A3"] * n_res)
-    uni.add_TopologyAttr("elements", ["X"] * 3 * n_res)
+    uni.add_TopologyAttr("elements", [e for n in RESNAMES for e in ELEMENTS[n]])
     uni.add_TopologyAttr("resnames", RESNAMES)
     uni.add_TopologyAttr("resids", np.arange(1, n_res + 1))
     uni.add_TopologyAttr("masses", [m for n in RESNAMES for m in SPECIES[n][0]])
