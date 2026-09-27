@@ -14,6 +14,7 @@ Classes:
 """
 
 from collections import Counter, defaultdict
+from itertools import count
 
 import MDAnalysis as mda
 from MDAnalysis import core
@@ -46,7 +47,7 @@ class ClusterTracker:
         A mapping of molecule IDs to their respective cluster IDs.
     """
 
-    __slots__ = ["uni", "config", "sels", "conntab", "clusters", "mol_clt"]
+    __slots__ = ["uni", "config", "sels", "conntab", "clusters", "mol_clt", "_ids"]
 
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
         """Initialize the tracker with the clusters of the current frame.
@@ -74,6 +75,8 @@ class ClusterTracker:
         )
         self.clusters: dict[int, Cluster] = {}
         self.mol_clt: dict[int, int] = {}
+        # each tracker numbers its own clusters, from 1
+        self._ids = count(1)
 
         self._start_clusters()
 
@@ -174,7 +177,7 @@ class ClusterTracker:
         int
             The ID of the newly created cluster.
         """
-        cluster = Cluster(self.uni, subconn)
+        cluster = Cluster(self.uni, subconn, cluster_id=next(self._ids))
         id = cluster.id
         self.clusters[id] = cluster
 

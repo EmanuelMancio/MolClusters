@@ -408,6 +408,8 @@ class Cluster(MDAResidueGroupAnalyzer):
         self,
         universe: mda.Universe,
         subconntab: ConnectionTable._SubConnTable | None = None,
+        *,
+        cluster_id: int | None = None,
     ) -> None:
         """Initialize a Cluster instance.
 
@@ -417,6 +419,10 @@ class Cluster(MDAResidueGroupAnalyzer):
             The MDAnalysis Universe object associated with the cluster.
         subconntab : ConnTable._SubConnTable | None
             An optional connectivity table for initializing the cluster graph.
+        cluster_id : int | None
+            The cluster's id, as handed out by whoever tracks it (e.g. a
+            `ClusterTracker`). If None, the next of a counter shared by every
+            `Cluster` is used.
         """
         self.initial_time: float = universe.coord.time
         self.cluster: nx.Graph = (
@@ -428,8 +434,10 @@ class Cluster(MDAResidueGroupAnalyzer):
 
         super().__init__(universe, self.cluster)
 
-        self._id = Cluster.__cls_id
-        Cluster.__cls_id += 1
+        if cluster_id is None:
+            cluster_id = Cluster.__cls_id
+            Cluster.__cls_id += 1
+        self._id = cluster_id
 
     @classmethod
     def _from_graph(cls, uni: mda.Universe, graph: nx.Graph) -> "Cluster":

@@ -69,6 +69,14 @@ class TestCluster:
 
         assert second.id == first.id + 1
 
+    def test_given_id_is_used_and_leaves_the_counter_alone(self, uni: Universe):
+        first = Cluster(uni)
+        given = Cluster(uni, cluster_id=1000)
+        second = Cluster(uni)
+
+        assert given.id == 1000
+        assert second.id == first.id + 1
+
     def test_add_con_exception(self, empty_cluster: Cluster):
         with pytest.raises(ValueError):
             empty_cluster.add_con(0, 2, 2.0)

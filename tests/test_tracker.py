@@ -557,3 +557,16 @@ class TestClusterIdentity:
         step(tracker, 1)
 
         assert snapshot(tracker) == {cid: {1, 2, 6}}
+
+
+class TestIds:
+    def test_each_tracker_numbers_its_clusters_from_one(self, track: Track):
+        # both clusters carry on in frame 1, and {6, 7} forms
+        frames = [[[1, 2, 3], [4, 5]], [[1, 2], [3, 4, 5], [6, 7]]]
+
+        first, second = track(frames, 7), track(frames, 7)
+        for tracker in (first, second):
+            step(tracker, 1)
+
+        assert snapshot(first) == snapshot(second)
+        assert snapshot(first) == {1: {1, 2}, 2: {3, 4, 5}, 3: {6, 7}}
