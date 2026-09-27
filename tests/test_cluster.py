@@ -62,67 +62,6 @@ def chain(make_universe: UniverseFactory) -> Cluster:
     return Cluster(uni, group, cluster_id=1)
 
 
-SPHERE_SPACING = 1.0
-
-
-def grid_sphere(atom_mass: float = 1.0) -> MolGroup:
-    """A molecule filling a sphere of radius 10 A with carbon atoms on a cubic grid.
-
-    Each atom fills a cube of side SPHERE_SPACING, so the space the atoms' centers
-    fill is the number of atoms times SPHERE_SPACING cubed (see `filled_radius`).
-
-    Returns
-    -------
-    MolGroup
-        The group of the one molecule.
-    """
-    axis = np.arange(-10.0, 10.0 + SPHERE_SPACING / 2, SPHERE_SPACING)
-    grid = np.stack(np.meshgrid(axis, axis, axis), axis=-1).reshape(-1, 3)
-    points = grid[np.linalg.norm(grid, axis=1) <= 10.0]
-    n_atoms = len(points)
-
-    uni = Universe.empty(
-        n_atoms, n_residues=1, atom_resindex=np.zeros(n_atoms, int), trajectory=True
-    )
-    uni.add_TopologyAttr("resids", [1])
-    uni.add_TopologyAttr("elements", ["C"] * n_atoms)
-    uni.add_TopologyAttr("masses", np.full(n_atoms, atom_mass))
-    uni.add_TopologyAttr("charges", np.zeros(n_atoms))
-    uni.add_TopologyAttr("bonds", [(i, i + 1) for i in range(n_atoms - 1)])
-    uni.atoms.positions = points + 50.0
-    uni.dimensions = [100.0, 100.0, 100.0, 90.0, 90.0, 90.0]
-    return MolGroup(uni, [1])
-
-
-def filled_radius(sphere: MolGroup) -> float:
-    """The radius of the sphere filling the space of a `grid_sphere`'s atom centers.
-
-    Returns
-    -------
-    float
-        The radius, in angstroms.
-    """
-    return (3 * len(sphere.atoms) * SPHERE_SPACING**3 / (4 * np.pi)) ** (1 / 3)
-
-
-def lone_atom(element: str) -> MolGroup:
-    """A molecule of one atom.
-
-    Returns
-    -------
-    MolGroup
-        The group of the one molecule.
-    """
-    uni = Universe.empty(1, n_residues=1, atom_resindex=[0], trajectory=True)
-    uni.add_TopologyAttr("resids", [1])
-    uni.add_TopologyAttr("elements", [element])
-    uni.add_TopologyAttr("masses", [1.0])
-    uni.add_TopologyAttr("bonds", [])
-    uni.atoms.positions = [[5.0, 5.0, 5.0]]
-    uni.dimensions = [10.0, 10.0, 10.0, 90.0, 90.0, 90.0]
-    return MolGroup(uni, [1])
-
-
 def members(group: MolGroup) -> list[int]:
     return sorted(int(r) for r in group.resids)
 
@@ -211,42 +150,9 @@ class TestMolGroup:
         assert chain.volume == pytest.approx(4 / 3 * np.pi * chain.radius**3)
         assert chain.density == pytest.approx(chain.mass / chain.volume * 1.66053906660)
 
-    def test_filled_sphere_has_the_radius_its_atoms_fill_plus_the_buffer(self):
-        sphere = grid_sphere()
-        # half a carbon atom's van der Waals radius, 1.7 A
-        assert sphere.radius_buffer == pytest.approx(0.85)
-
-        radius = filled_radius(sphere) + 0.85
-        assert sphere.radius == pytest.approx(radius, rel=1e-3)
-        assert sphere.diameter == pytest.approx(2 * radius, rel=1e-3)
-        assert sphere.volume == pytest.approx(4 / 3 * np.pi * radius**3, rel=3e-3)
-
-    def test_density_of_a_sphere_as_dense_as_water_is_one_g_per_cm3(self):
-        # liquid water: 18.015 amu per 29.915 A^3, i.e. 1 g/cm^3 within the space
-        # the atoms fill, which the buffer then spreads over a larger sphere
-        sphere = grid_sphere(atom_mass=18.015 / 29.915 * SPHERE_SPACING**3)
-
-        diluted = (filled_radius(sphere) / sphere.radius) ** 3
-        assert sphere.density == pytest.approx(diluted, rel=3e-3)
-
-    def test_lone_atom_has_half_its_van_der_waals_radius(self):
-        assert lone_atom("O").radius == pytest.approx(1.52 / 2)
-        assert lone_atom("Cl").radius == pytest.approx(1.75 / 2)
-
     def test_radius_buffer_averages_over_the_atoms(self, chain: Cluster):
         # C-O residues: van der Waals radii of 1.7 and 1.52 A
         assert chain.radius_buffer == pytest.approx((1.7 + 1.52) / 4)
-
-    def test_radius_needs_elements(self):
-        uni = Universe.empty(1, n_residues=1, atom_resindex=[0], trajectory=True)
-        uni.add_TopologyAttr("resids", [1])
-
-        with pytest.raises(ValueError, match="guess_TopologyAttrs"):
-            _ = MolGroup(uni, [1]).radius_buffer
-
-    def test_radius_needs_known_elements(self):
-        with pytest.raises(ValueError, match="Xx"):
-            _ = lone_atom("Xx").radius_buffer
 
     def test_shape_properties(self, chain: Cluster):
         assert 0.0 <= chain.sphericity <= 1.0
@@ -260,23 +166,6 @@ class TestMolGroup:
         expected = 3 * 0.3 * 1.2 * 4.80320
         assert chain.dipole_moment == pytest.approx(expected, rel=1e-4)
         np.testing.assert_allclose(np.abs(chain.dipole), [0, 0, expected], atol=1e-3)
-
-    def test_dipole_of_spce_water_is_its_known_value(self):
-        # SPC/E: O-H 1.0 A, H-O-H 109.47 deg, q(H) = +0.4238 e; its dipole is 2.35 D
-        uni = Universe.empty(3, n_residues=1, atom_resindex=[0, 0, 0], trajectory=True)
-        uni.add_TopologyAttr("resids", [1])
-        uni.add_TopologyAttr("masses", [15.9994, 1.008, 1.008])
-        uni.add_TopologyAttr("charges", [-0.8476, 0.4238, 0.4238])
-        uni.add_TopologyAttr("bonds", [(0, 1), (0, 2)])
-        half = np.deg2rad(109.47 / 2)
-        uni.atoms.positions = [
-            [10, 10, 10],
-            [10 + np.sin(half), 10 + np.cos(half), 10],
-            [10 - np.sin(half), 10 + np.cos(half), 10],
-        ]
-        uni.dimensions = [20, 20, 20, 90, 90, 90]
-
-        assert MolGroup(uni, [1]).dipole_moment == pytest.approx(2.35, abs=0.005)
 
     def test_center_of_mass_of_a_group_inside_the_box(self, chain: Cluster):
         np.testing.assert_allclose(

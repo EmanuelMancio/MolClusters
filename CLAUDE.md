@@ -86,3 +86,6 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   plausible cluster-id assignment you get. Correcting output that was simply wrong (a bug nobody
   would have expected or relied on, e.g. deriving correct atom names for LAMMPS topologies) is a
   normal `fix`, even though the stored values change.
+- Units (amu, e, D, Å, Å³, g/cm³, degrees, ps) are pinned in `tests/test_units.py`, each against
+  a physical fact rather than a copy of its formula; a new reported quantity or output file gets
+  a test there too.
