@@ -384,14 +384,17 @@ class MolGroup:
 
     @property
     def volume(self) -> float:
-        """Calculate the group volume assuming a spherical shape and using the radius of gyration.
+        """Calculate the volume of the uniform sphere with the group's radius of gyration.
+
+        A uniform sphere of radius R has a radius of gyration of sqrt(3/5) R, so the
+        sphere's radius is sqrt(5/3) times the group's radius of gyration.
 
         Returns
         -------
         float
             Volume in cubic angstroms.
         """
-        r = self.radius_of_gyration
+        r = np.sqrt(5 / 3) * self.radius_of_gyration
         return 4 * np.pi * r**3 / 3  # angstrom^3
 
     @property

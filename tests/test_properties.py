@@ -104,7 +104,8 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
     rg = np.sqrt(m @ np.sum(rel**2, axis=1) / mass)
     moments = np.linalg.eigvalsh((rel * m[:, None]).T @ rel / mass)
     dev = moments - moments.mean()
-    volume = 4 / 3 * np.pi * rg**3
+    # the uniform sphere with that radius of gyration: Rg = sqrt(3/5) R
+    volume = 4 / 3 * np.pi * (np.sqrt(5 / 3) * rg) ** 3
     dipole = q @ rel * E_ANGSTROM_IN_DEBYE
 
     return {

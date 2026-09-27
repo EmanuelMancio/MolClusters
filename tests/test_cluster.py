@@ -62,6 +62,37 @@ def chain(make_universe: UniverseFactory) -> Cluster:
     return Cluster(uni, group, cluster_id=1)
 
 
+SPHERE_SPACING = 1.0
+
+
+def grid_sphere(atom_mass: float = 1.0) -> MolGroup:
+    """A molecule filling a sphere of radius 10 A with atoms on a cubic grid.
+
+    Each atom fills a cube of side SPHERE_SPACING, so the molecule's volume is the
+    number of atoms times SPHERE_SPACING cubed.
+
+    Returns
+    -------
+    MolGroup
+        The group of the one molecule.
+    """
+    axis = np.arange(-10.0, 10.0 + SPHERE_SPACING / 2, SPHERE_SPACING)
+    grid = np.stack(np.meshgrid(axis, axis, axis), axis=-1).reshape(-1, 3)
+    points = grid[np.linalg.norm(grid, axis=1) <= 10.0]
+    n_atoms = len(points)
+
+    uni = Universe.empty(
+        n_atoms, n_residues=1, atom_resindex=np.zeros(n_atoms, int), trajectory=True
+    )
+    uni.add_TopologyAttr("resids", [1])
+    uni.add_TopologyAttr("masses", np.full(n_atoms, atom_mass))
+    uni.add_TopologyAttr("charges", np.zeros(n_atoms))
+    uni.add_TopologyAttr("bonds", [(i, i + 1) for i in range(n_atoms - 1)])
+    uni.atoms.positions = points + 50.0
+    uni.dimensions = [100.0, 100.0, 100.0, 90.0, 90.0, 90.0]
+    return MolGroup(uni, [1])
+
+
 def members(group: MolGroup) -> list[int]:
     return sorted(int(r) for r in group.resids)
 
@@ -144,8 +175,16 @@ class TestMolGroup:
         assert chain.charge == pytest.approx(0.0)
         assert chain.radius == chain.radius_of_gyration > 0
         assert chain.diameter == pytest.approx(2 * chain.radius)
-        assert chain.volume == pytest.approx(4 / 3 * np.pi * chain.radius**3)
+        assert chain.volume == pytest.approx(
+            4 / 3 * np.pi * (np.sqrt(5 / 3) * chain.radius) ** 3
+        )
         assert chain.density == pytest.approx(chain.mass / chain.volume * 0.602214076)
+
+    def test_volume_of_a_filled_sphere_is_the_space_its_atoms_fill(self):
+        sphere = grid_sphere()
+
+        filled = len(sphere.atoms) * SPHERE_SPACING**3
+        assert sphere.volume == pytest.approx(filled, rel=1e-3)
 
     def test_shape_properties(self, chain: Cluster):
         assert 0.0 <= chain.sphericity <= 1.0
