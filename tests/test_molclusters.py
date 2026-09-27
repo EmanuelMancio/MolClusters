@@ -181,16 +181,20 @@ class TestRun:
     def test_coordinates_are_written_per_size_id_and_followed_solute(
         self, full_run: Path
     ):
-        assert {p.name for p in full_run.glob("cls-n*.gro")} == {
+        assert {p.name for p in full_run.glob("coordinates/cls-n*.gro")} == {
             "cls-n2.gro",
             "cls-n3.gro",
             "cls-n4.gro",
         }
-        assert len(list(full_run.glob("cls-id*.gro"))) == 2
+        assert len(list(full_run.glob("coordinates/cls-id*.gro"))) == 2
 
         # {1,4,5(,6)} has exactly one solute to follow; {7,8} has two, so it's skipped
-        assert [p.name for p in full_run.glob("solute-*.gro")] == ["solute-1.gro"]
-        frames = (full_run / "solute-1.gro").read_text().count("Cluster-")
+        assert [p.name for p in full_run.glob("coordinates/solute-*.gro")] == [
+            "solute-1.gro"
+        ]
+        frames = (
+            (full_run / "coordinates" / "solute-1.gro").read_text().count("Cluster-")
+        )
         assert frames == 2
 
     def test_skipped_solute_following_is_summarized_once(
@@ -320,7 +324,14 @@ class TestRun:
         captured_logs: list[str],
     ):
         monkeypatch.chdir(tmp_path)
-        for name in ["evo.txt", "cls-n2.gro", "solute-1.gro", "cls-n2-mine.gro"]:
+        (tmp_path / "coordinates").mkdir()
+        for name in [
+            "evo.txt",
+            "coordinates/cls-n2.gro",
+            "coordinates/solute-1.gro",
+            "coordinates/cls-n2-mine.gro",
+            "cls-n3.gro",  # outside the folder
+        ]:
             (tmp_path / name).write_text("")
         molcls = analyze([[[1, 2]], [[1, 2]]], 2, solute=["MOL"])
 
@@ -330,7 +341,7 @@ class TestRun:
         # solute-1.gro is only written when following solutes
         (warning,) = [m for m in captured_logs if "file(s) from an" in m]
         assert warning.startswith("1 file(s)")
-        assert "(cls-n2.gro)" in warning
+        assert "(coordinates/cls-n2.gro)" in warning
 
     def test_a_fresh_directory_reports_no_earlier_outputs(
         self,

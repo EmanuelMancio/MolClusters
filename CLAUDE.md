@@ -32,14 +32,15 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   through `Run` (universe, config, `output`, `analysis(Type)` lookup of earlier analyses) and each
   frame through `Frame` (index, time, read-only clusters, `find`), never the tracker itself. All
   file writes go through `Run.output` (`output.py`'s `RunOutput`: `path(name)` for whole files,
-  buffered `append` for per-frame ones), and each analysis declares its files in `outputs`
+  buffered `append` for per-frame ones; names may include folders, created on demand, all
+  under the run's output directory, `--output-dir`), and each analysis declares its files in `outputs`
   (`OutputFile`), which drives the earlier-run check and the end-of-run summary. Library users add
   their own analyses with `MolClusters(..., analyses=[...])`, which run after the config-enabled
   built-ins (there is no registry yet); `Run` dispatches every hook and notes which analysis raised
   an error (`_blame`), and the CLI prints those notes. Built-ins take their options as
   constructor arguments, and `MolClusters.__init__` builds them from the config, in this order:
   `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
-  (cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
+  (coordinates/cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
   later analyses), `JsonReport` (molclusters.json, a straight port of the old `MolClustersData`
   due for a rewrite so other analyses can add to it).
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with

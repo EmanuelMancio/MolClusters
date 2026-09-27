@@ -27,10 +27,35 @@ class TestOutputFile:
     def test_a_placeholder_matches_nothing_else(self, name: str):
         assert not OutputFile("cls-id<id>.gro", append=True).matches(name)
 
+    def test_a_name_in_a_folder_matches_only_in_that_folder(self):
+        out = OutputFile("gro/cls-id<id>.gro", append=True)
+
+        assert out.matches("gro/cls-id3.gro")
+        assert not out.matches("cls-id3.gro")
+        assert not out.matches("other/cls-id3.gro")
+
+    def test_existing_finds_the_files_in_their_folder(self, tmp_path: Path):
+        (tmp_path / "gro").mkdir()
+        for name in ["gro/cls-id3.gro", "gro/cls-id10.gro", "gro/x.gro", "cls-id4.gro"]:
+            (tmp_path / name).write_text("")
+
+        found = OutputFile("gro/cls-id<id>.gro", append=True).existing(tmp_path)
+
+        assert found == [tmp_path / "gro/cls-id10.gro", tmp_path / "gro/cls-id3.gro"]
+        assert OutputFile("none/cls-id<id>.gro").existing(tmp_path) == []
+
 
 class TestRunOutput:
     def test_paths_are_in_the_output_directory(self, tmp_path: Path):
         assert RunOutput(tmp_path).path("evo.txt") == tmp_path / "evo.txt"
+
+    def test_folders_of_a_path_are_created(self, tmp_path: Path):
+        output = RunOutput(tmp_path)
+
+        output.append("a/b/c.gro", "x\n")
+        output.flush()
+
+        assert (tmp_path / "a" / "b" / "c.gro").read_text() == "x\n"
 
     def test_nothing_is_appended_before_a_flush(self, tmp_path: Path):
         output = RunOutput(tmp_path)

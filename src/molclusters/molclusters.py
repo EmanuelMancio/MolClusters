@@ -202,9 +202,12 @@ class MolClusters:
             logger.info(f"Overwriting results of an earlier run: {overwritten}")
 
         appended = sorted(
-            file.name
-            for file in directory.iterdir()
-            if any(out.append and out.matches(file.name) for out in outputs)
+            {
+                file.relative_to(directory).as_posix()
+                for out in outputs
+                if out.append
+                for file in out.existing(directory)
+            }
         )
         if appended:
             shown = ", ".join(appended[:5]) + (", ..." if len(appended) > 5 else "")

@@ -7,6 +7,7 @@
 import io
 from collections import Counter
 from collections.abc import Iterable
+from pathlib import PurePosixPath
 
 import MDAnalysis as mda
 from loguru import logger
@@ -23,7 +24,7 @@ class ClusterCoordinates(FrameAnalysis):
     Each such cluster, made whole, is appended to ``cls-n<size>.gro`` (the clusters
     of one size, pooled) and ``cls-id<id>.gro`` (one cluster's own trajectory). When
     following the solutes, a cluster holding exactly one solute is also appended to
-    ``solute-<resid>.gro``.
+    ``solute-<resid>.gro``. The files go in the ``folder`` of the output directory.
 
     Attributes
     ----------
@@ -31,6 +32,8 @@ class ClusterCoordinates(FrameAnalysis):
         The residue names of the solutes.
     follow : bool
         Whether to write each solute's cluster to its own file.
+    folder : str
+        The folder of the output directory the files go in.
     solute_ids : set[int]
         The resids of the solute molecules, found by `prepare`.
     follow_skipped : Counter[int]
@@ -38,7 +41,13 @@ class ClusterCoordinates(FrameAnalysis):
         one solute.
     """
 
-    def __init__(self, solutes: Iterable[str], *, follow: bool = False) -> None:
+    def __init__(
+        self,
+        solutes: Iterable[str],
+        *,
+        follow: bool = False,
+        folder: str = "coordinates",
+    ) -> None:
         """Initialize the analysis.
 
         Parameters
@@ -47,19 +56,38 @@ class ClusterCoordinates(FrameAnalysis):
             The residue names of the solutes.
         follow : bool
             Whether to write each solute's cluster to its own file.
+        folder : str
+            The folder of the output directory the files go in ("" for the
+            output directory itself).
         """
         self.solutes = set(solutes)
         self.follow = follow
+        self.folder = folder
         self.solute_ids: set[int] = set()
         self.follow_skipped: Counter[int] = Counter()
         self._output: RunOutput | None = None
 
         self.outputs = (
-            OutputFile("cls-n<size>.gro", append=True),
-            OutputFile("cls-id<id>.gro", append=True),
+            OutputFile(self._file("cls-n<size>.gro"), append=True),
+            OutputFile(self._file("cls-id<id>.gro"), append=True),
         )
         if follow:
-            self.outputs += (OutputFile("solute-<resid>.gro", append=True),)
+            self.outputs += (OutputFile(self._file("solute-<resid>.gro"), append=True),)
+
+    def _file(self, name: str) -> str:
+        """Place the file `name` in `folder`.
+
+        Parameters
+        ----------
+        name : str
+            The file name.
+
+        Returns
+        -------
+        str
+            The file's path relative to the output directory.
+        """
+        return str(PurePosixPath(self.folder, name))
 
     def prepare(self, run: Run) -> None:
         """Find the solute molecules, and keep where to write for `analyse`.
@@ -94,11 +122,11 @@ class ClusterCoordinates(FrameAnalysis):
 
             # pooled by size: an ensemble of what an N-mer looks like, across all
             # clusters that were ever that size, independent of cluster identity
-            self._output.append(f"cls-n{cls.size}.gro", text)
+            self._output.append(self._file(f"cls-n{cls.size}.gro"), text)
 
             # pooled by identity: this specific cluster's own trajectory, tracked
             # across frames via the dominance algorithm regardless of size changes
-            self._output.append(f"cls-id{cls.id}.gro", text)
+            self._output.append(self._file(f"cls-id{cls.id}.gro"), text)
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
@@ -113,7 +141,7 @@ class ClusterCoordinates(FrameAnalysis):
 
                 (sol_id,) = sol_ids
 
-                self._output.append(f"solute-{sol_id}.gro", text)
+                self._output.append(self._file(f"solute-{sol_id}.gro"), text)
 
     @staticmethod
     def _render(cls: Cluster, time: float) -> str:

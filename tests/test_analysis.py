@@ -283,6 +283,7 @@ class TestClusterCoordinates:
         self, make_universe: UniverseFactory, tmp_path: Path
     ):
         _, one, three = self.run(make_universe, tmp_path, follow=False)
+        tmp_path /= "coordinates"
 
         assert sorted(p.name for p in tmp_path.iterdir()) == [
             "cls-id1.gro",
@@ -315,6 +316,7 @@ class TestClusterCoordinates:
         captured_logs: list[str],
     ):
         analysis, one, three = self.run(make_universe, tmp_path, follow=True)
+        tmp_path /= "coordinates"
 
         assert self.frames_in(tmp_path / "solute-1.gro") == [
             f"Cluster-{one} - Time = 0.0",
@@ -329,8 +331,15 @@ class TestClusterCoordinates:
     @pytest.mark.parametrize(
         ("follow", "names"),
         [
-            (False, ["cls-n<size>.gro", "cls-id<id>.gro"]),
-            (True, ["cls-n<size>.gro", "cls-id<id>.gro", "solute-<resid>.gro"]),
+            (False, ["coordinates/cls-n<size>.gro", "coordinates/cls-id<id>.gro"]),
+            (
+                True,
+                [
+                    "coordinates/cls-n<size>.gro",
+                    "coordinates/cls-id<id>.gro",
+                    "coordinates/solute-<resid>.gro",
+                ],
+            ),
         ],
     )
     def test_declares_its_files(self, follow: bool, names: list[str]):
@@ -338,6 +347,26 @@ class TestClusterCoordinates:
 
         assert [out.name for out in outputs] == names
         assert all(out.append for out in outputs)
+
+    @pytest.mark.parametrize(("folder", "where"), [("", "."), ("gro/all", "gro/all")])
+    def test_writes_in_the_folder_given(
+        self, make_universe: UniverseFactory, tmp_path: Path, folder: str, where: str
+    ):
+        analysis = ClusterCoordinates(["MOL"], folder=folder)
+        run_analyses(
+            [analysis],
+            make_universe,
+            self.FRAMES,
+            5,
+            tmp_path,
+            self.RESNAMES,
+            ALL_PAIRS_RULES,
+        )
+
+        assert (tmp_path / where / "cls-n3.gro").exists()
+        assert analysis.outputs[0].name == str(
+            Path(where, "cls-n<size>.gro").as_posix()
+        )
 
 
 class TestNucleus:

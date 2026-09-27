@@ -13,7 +13,7 @@ Classes:
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +25,8 @@ class OutputFile:
     name : str
         The file name, or a pattern where each ``<placeholder>`` stands for an
         integer, e.g. ``cls-id<id>.gro`` for ``cls-id1.gro``, ``cls-id2.gro``, ...
+        It may start with folders, separated by ``/`` (placeholders only go in
+        the file name), relative to the output directory.
     append : bool
         Whether the file is appended to instead of overwritten, so that the
         results of an earlier run in the same place would end up mixed in.
@@ -39,7 +41,7 @@ class OutputFile:
         Parameters
         ----------
         filename : str
-            A file name, without its directory.
+            A file's path relative to the output directory, with ``/`` separators.
 
         Returns
         -------
@@ -49,6 +51,28 @@ class OutputFile:
         literal_parts = re.split(r"<[^<>]*>", self.name)
         pattern = r"\d+".join(re.escape(part) for part in literal_parts)
         return re.fullmatch(pattern, filename) is not None
+
+    def existing(self, directory: Path) -> list[Path]:
+        """Find the files of this declaration that already exist in `directory`.
+
+        Parameters
+        ----------
+        directory : Path
+            The output directory.
+
+        Returns
+        -------
+        list[Path]
+            The existing files, sorted.
+        """
+        folder = directory / PurePosixPath(self.name).parent
+        if not folder.is_dir():
+            return []
+        return sorted(
+            file
+            for file in folder.iterdir()
+            if file.is_file() and self.matches(file.relative_to(directory).as_posix())
+        )
 
 
 class RunOutput:
@@ -92,14 +116,16 @@ class RunOutput:
         Parameters
         ----------
         name : str
-            The file name.
+            The file name, possibly in folders (see `OutputFile.name`).
 
         Returns
         -------
         Path
-            The file's path, in `directory`.
+            The file's path, in `directory`; its folders are created if missing.
         """
-        return self.directory / name
+        path = self.directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
 
     def append(self, name: str, text: str) -> None:
         """Queue `text` to be appended to the file `name`, flushing if the buffer is full.
