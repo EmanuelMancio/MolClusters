@@ -24,9 +24,8 @@ Dependencies:
 import io
 import json
 import pathlib as path
-import re
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from functools import reduce
 from typing import Any, Generator
 
@@ -38,56 +37,15 @@ from loguru import logger
 from MDAnalysis.lib.util import NamedStream
 from tqdm import tqdm
 
-from .analysis import FrameAnalysis, SizeEvolution
+from .analysis import Frame, FrameAnalysis, Run, SizeEvolution
 from .cluster import Cluster, MDAResidueGroupAnalyzer
 from .config import MolClsConfig
 from .log import FILE_ONLY, format_duration
+from .output import OutputFile, RunOutput
 from .tracker import ClusterTracker
 from .version import __version__
 
 # TODO: create analysis class to declutter MolClusters
-
-
-class _AppendBuffer:
-    """Collects text to append to files, writing each file in one go when flushed.
-
-    Opening a file costs milliseconds on Windows (antivirus scanning, on any file
-    size), which dominated runs that appended every frame to its .gro files. Used
-    as a context manager, it flushes on exit.
-
-    Attributes
-    ----------
-    max_chars : int
-        The buffered size, in characters, that triggers a flush.
-    """
-
-    __slots__ = ["max_chars", "_pending", "_size"]
-
-    def __init__(self, max_chars: int = 64 * 2**20) -> None:
-        self.max_chars = max_chars
-        self._pending: defaultdict[str, list[str]] = defaultdict(list)
-        self._size = 0
-
-    def append(self, filename: str, text: str) -> None:
-        """Queue `text` to be appended to `filename`, flushing if the buffer is full."""
-        self._pending[filename].append(text)
-        self._size += len(text)
-        if self._size >= self.max_chars:
-            self.flush()
-
-    def flush(self) -> None:
-        """Append the queued text to its files, opening each file once."""
-        for filename, chunks in self._pending.items():
-            with path.Path(filename).open("a+") as out:
-                out.writelines(chunks)
-        self._pending.clear()
-        self._size = 0
-
-    def __enter__(self) -> "_AppendBuffer":
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        self.flush()
 
 
 class MolClusters:
@@ -139,7 +97,7 @@ class MolClusters:
         "nucleus_holder",
         "data_holder",
         "follow_skipped",
-        "gro_out",
+        "output",
     ]
 
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
@@ -174,11 +132,7 @@ class MolClusters:
         self.analyses: list[FrameAnalysis] = [self.size_evolution]
 
         self.radius_evolution = {}
-        self.gro_out = _AppendBuffer()
 
-        for analysis in self.analyses:
-            analysis.prepare(self.tracker, len(self.uni.trajectory))
-            analysis.analyse(self.tracker, 0)
         if self.config.nucleus is not None:
             self.nucleus_data = np.empty(
                 (len(self.uni.trajectory), 9)
@@ -215,28 +169,22 @@ class MolClusters:
     def __check_previous_outputs(self) -> None:
         """Warn about output files left in the working directory by an earlier run.
 
-        The per-frame .gro files are appended to, so an earlier run's frames would
-        end up mixed with this one's; the other outputs are just overwritten.
+        The files appended to (the per-frame .gro files) would end up mixing an
+        earlier run's frames with this one's; the other outputs are just overwritten.
         """
         cwd = path.Path.cwd()
-        names = ["evo.txt", "molclusters.json"]
-        patterns = []
-        if self.config.solute is not None:
-            names.append("solute_solvent.csv")
-            patterns += [r"cls-n\d+\.gro", r"cls-id\d+\.gro"]
-            if self.config._follow_solute:
-                patterns.append(r"solute-\d+\.gro")
-        if self.config.nucleus is not None:
-            names.append("nucleus_data.csv")
+        outputs = self.__declared_outputs()
 
-        overwritten = [name for name in names if (cwd / name).exists()]
+        overwritten = [
+            out.name for out in outputs if not out.append and (cwd / out.name).exists()
+        ]
         if overwritten:
             logger.info(f"Overwriting results of an earlier run: {overwritten}")
 
         appended = sorted(
             file.name
-            for file in cwd.glob("*.gro")
-            if any(re.fullmatch(pattern, file.name) for pattern in patterns)
+            for file in cwd.iterdir()
+            if any(out.append and out.matches(file.name) for out in outputs)
         )
         if appended:
             shown = ", ".join(appended[:5]) + (", ..." if len(appended) > 5 else "")
@@ -245,6 +193,29 @@ class MolClusters:
                 f"({shown}): this run appends its frames to them, mixing both runs. "
                 "Move or delete them first to keep the runs apart."
             )
+
+    def __declared_outputs(self) -> list[OutputFile]:
+        """List the files this run writes, in the order they're reported.
+
+        Returns
+        -------
+        list[OutputFile]
+            The analyses' outputs, then those of the analyses not moved to
+            `FrameAnalysis` yet.
+        """
+        outputs = [out for analysis in self.analyses for out in analysis.outputs]
+        outputs.append(OutputFile("molclusters.json"))
+        if self.config.solute is not None:
+            outputs += [
+                OutputFile("solute_solvent.csv"),
+                OutputFile("cls-n<size>.gro", append=True),
+                OutputFile("cls-id<id>.gro", append=True),
+            ]
+            if self.config._follow_solute:
+                outputs.append(OutputFile("solute-<resid>.gro", append=True))
+        if self.config.nucleus is not None:
+            outputs.append(OutputFile("nucleus_data.csv"))
+        return outputs
 
     def __log_rule_connections(self, n_frames: int) -> None:
         """Log how many connections each rule found, warning about unused rules.
@@ -453,11 +424,11 @@ class MolClusters:
 
             # pooled by size: an ensemble of what an N-mer looks like, across all
             # clusters that were ever that size, independent of cluster identity
-            self.gro_out.append(f"cls-n{cls.size}.gro", frame)
+            self.output.append(f"cls-n{cls.size}.gro", frame)
 
             # pooled by identity: this specific cluster's own trajectory, tracked
             # across frames via the dominance algorithm regardless of size changes
-            self.gro_out.append(f"cls-id{cls.id}.gro", frame)
+            self.output.append(f"cls-id{cls.id}.gro", frame)
 
             # TODO: change to support merges
             # FIXME: with changes in config this needs to be updated
@@ -472,7 +443,7 @@ class MolClusters:
 
                 (sol_id,) = sol_ids
 
-                self.gro_out.append(f"solute-{sol_id}.gro", frame)
+                self.output.append(f"solute-{sol_id}.gro", frame)
 
     # TODO: break into single_step function to better use in MDRHConstant
     def run(self) -> None:
@@ -489,36 +460,39 @@ class MolClusters:
         # the bar only shows on the terminal, so the log files get a line every 10%
         progress_step = max(1, n_frames // 10)
 
-        if self.config.solute is not None:
-            self.__start_solute_solvent()
-            self.__solute_solvent_analysis(0)
+        self.output = RunOutput(path.Path.cwd())
+        run = Run(self.uni, self.config, n_frames, self.output, self.analyses)
 
-        # the .gro frames are buffered, so write the ones already rendered even if the
-        # run is interrupted, as appending them frame by frame used to
-        with (
-            tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar,
-            self.gro_out,
-        ):
-            for i, _ in enumerate(self.uni.trajectory[1:], start=1):
-                self.tracker.update()
-                for analysis in self.analyses:
-                    analysis.analyse(self.tracker, i)
-                if self.config.solute is not None:
-                    self.__solute_solvent_analysis(i)
-                    self.__write_coordinates()
+        # the appended files are buffered, so write what was already rendered even
+        # if the run is interrupted, as appending it frame by frame used to
+        with self.output:
+            run.prepare_analyses()
+            self.__analyse_frame(0)
 
-                if self.config.nucleus is not None:
-                    self.__nucleus_analysis(i)
+            if self.config.solute is not None:
+                self.__start_solute_solvent()
+                self.__solute_solvent_analysis(0)
 
-                self.data_holder.parse_frame()
-                pbar.update()
+            with tqdm(total=n_frames, initial=1, mininterval=5, miniters=10) as pbar:
+                for i, _ in enumerate(self.uni.trajectory[1:], start=1):
+                    self.tracker.update()
+                    self.__analyse_frame(i)
+                    if self.config.solute is not None:
+                        self.__solute_solvent_analysis(i)
+                        self.__write_coordinates()
 
-                done = i + 1
-                if done % progress_step == 0 and done < n_frames:
-                    logger.bind(**FILE_ONLY).info(
-                        f"Frame {done}/{n_frames} ({done / n_frames:.0%}), "
-                        f"{format_duration(time.perf_counter() - start)} elapsed"
-                    )
+                    if self.config.nucleus is not None:
+                        self.__nucleus_analysis(i)
+
+                    self.data_holder.parse_frame()
+                    pbar.update()
+
+                    done = i + 1
+                    if done % progress_step == 0 and done < n_frames:
+                        logger.bind(**FILE_ONLY).info(
+                            f"Frame {done}/{n_frames} ({done / n_frames:.0%}), "
+                            f"{format_duration(time.perf_counter() - start)} elapsed"
+                        )
 
         elapsed = time.perf_counter() - start
         logger.info(
@@ -536,8 +510,9 @@ class MolClusters:
             )
             logger.debug(f"Frames not followed, by cluster id: {self.follow_skipped}")
 
-        outputs = [name for analysis in self.analyses for name in analysis.finish()]
-        outputs.append("molclusters.json")
+        for analysis in self.analyses:
+            analysis.finish(run)
+        self.output.flush()  # in case an analysis appended to a file in `finish`
 
         if self.config.solute is not None:
             self.solute_data = pd.DataFrame(
@@ -556,9 +531,6 @@ class MolClusters:
                 ],
             )
             self.solute_data.to_csv("solute_solvent.csv", index=False)
-            outputs += ["solute_solvent.csv", "cls-n<size>.gro", "cls-id<id>.gro"]
-            if self.config._follow_solute:
-                outputs.append("solute-<resid>.gro")
 
         if self.config.nucleus is not None:
             self.nucleus_data = pd.DataFrame(
@@ -576,12 +548,24 @@ class MolClusters:
                 ],
             )
             self.nucleus_data.to_csv("nucleus_data.csv", index=False)
-            outputs.append("nucleus_data.csv")
 
         with path.Path("molclusters.json").open("w+") as json_out:
             json.dump(self.data_holder.data, json_out, indent=2)
 
-        logger.info(f"Results written to {path.Path.cwd()}: {', '.join(outputs)}")
+        outputs = ", ".join(out.name for out in self.__declared_outputs())
+        logger.info(f"Results written to {self.output.directory}: {outputs}")
+
+    def __analyse_frame(self, index: int) -> None:
+        """Run every analysis on the current frame.
+
+        Parameters
+        ----------
+        index : int
+            The index of the frame in the run.
+        """
+        frame = Frame(index, self.tracker)
+        for analysis in self.analyses:
+            analysis.analyse(frame)
 
     @property
     def clusters(self) -> dict[int, Cluster]:

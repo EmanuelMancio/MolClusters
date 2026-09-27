@@ -7,10 +7,11 @@
 import numpy as np
 from loguru import logger
 
-from ..tracker import ClusterTracker
+from ..output import OutputFile
+from .base import Frame, FrameAnalysis, Run
 
 
-class SizeEvolution:
+class SizeEvolution(FrameAnalysis):
     """Records the number of clusters and their sizes, frame by frame.
 
     Attributes
@@ -22,33 +23,31 @@ class SizeEvolution:
 
     __slots__ = ["data"]
 
+    outputs = (OutputFile("evo.txt"),)
+
     def __init__(self) -> None:
         """Initialize an empty record, sized by `prepare`."""
         self.data = np.zeros((0, 5))
 
-    def prepare(self, tracker: ClusterTracker, n_frames: int) -> None:  # noqa: ARG002
-        """Make room for `n_frames` frames.
+    def prepare(self, run: Run) -> None:
+        """Make room for every frame of the run.
 
         Parameters
         ----------
-        tracker : ClusterTracker
-            The tracker whose clusters will be analysed.
-        n_frames : int
-            The number of frames of the run.
+        run : Run
+            The run about to start.
         """
-        self.data = np.zeros((n_frames, 5))
+        self.data = np.zeros((run.n_frames, 5))
 
-    def analyse(self, tracker: ClusterTracker, frame: int) -> None:
-        """Update cluster size evolution information for a given frame.
+    def analyse(self, frame: Frame) -> None:
+        """Record the number of clusters and their sizes in the current frame.
 
         Parameters
         ----------
-        tracker : ClusterTracker
-            The tracker, up to date with the current frame.
-        frame : int
-            The frame index.
+        frame : Frame
+            The current frame.
         """
-        sizes = [cls.size for cls in tracker.clusters.values()]
+        sizes = [cls.size for cls in frame.clusters.values()]
         if len(sizes) == 0:
             avg, min_size, max_size = 0, 0, 0
         else:
@@ -56,21 +55,19 @@ class SizeEvolution:
             min_size = min(sizes)
             max_size = max(sizes)
 
-        time = tracker.uni.coord.time
+        self.data[frame.index][0] = frame.time
+        self.data[frame.index][1] = len(sizes)
+        self.data[frame.index][2] = min_size
+        self.data[frame.index][3] = avg
+        self.data[frame.index][4] = max_size
 
-        self.data[frame][0] = time
-        self.data[frame][1] = len(tracker.clusters)
-        self.data[frame][2] = min_size
-        self.data[frame][3] = avg
-        self.data[frame][4] = max_size
-
-    def finish(self) -> list[str]:
+    def finish(self, run: Run) -> None:
         """Log a summary of the cluster counts and sizes and write them to evo.txt.
 
-        Returns
-        -------
-        list[str]
-            The names of the files written.
+        Parameters
+        ----------
+        run : Run
+            The run that just ended.
         """
         n_clusters = self.data[:, 1]
         logger.info(
@@ -80,8 +77,7 @@ class SizeEvolution:
         )
 
         np.savetxt(
-            "evo.txt",
+            run.output.path("evo.txt"),
             self.data,
             header="Time NClusters MinSize AvgSize MaxSize",
         )
-        return ["evo.txt"]
