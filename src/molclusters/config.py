@@ -347,6 +347,10 @@ class MolClsConfig(BaseSettings):
     # doesn't expose a backend option.
     distance_backend: DistanceBackend = "serial"
 
+    # Turns built-in analyses on or off by class name, e.g. {"JsonReport": False}.
+    # One left out runs when the options it needs are set (see `analysis.builtins`).
+    analyses: dict[str, bool] = Field(default_factory=dict)
+
     # Sorted, non-overlapping (start, end, name) ranges built from `lammps_resnames`,
     # kept as ranges (not one dict entry per id) so a config spanning millions of
     # molecule ids costs only as much memory as the handful of lines the user wrote.
@@ -443,6 +447,15 @@ class MolClsConfig(BaseSettings):
         )
         lines.append(f"distance_backend: {self.distance_backend} (cm rules only)")
 
+        from .analysis.builtins import BUILTINS  # the analysis package imports this one
+
+        running = [b.name for b in BUILTINS if b.runs(self)]
+        off = [b.name for b in BUILTINS if not self.analyses.get(b.name, True)]
+        lines.append(
+            f"analyses: {', '.join(running) or 'none'}"
+            + (f" (turned off: {', '.join(off)})" if off else "")
+        )
+
         ranges = [
             f"{name} = {start}" if start == end else f"{name} = {start}-{end}"
             for start, end, name in self._lammps_resid_ranges
@@ -535,6 +548,30 @@ class MolClsConfig(BaseSettings):
                     f"'follow' entries {unused} have no effect: only the 'solute' "
                     "keyword is supported so far."
                 )
+
+        return self
+
+    @model_validator(mode="after")
+    def _check_analyses(self) -> Self:
+        from .analysis.builtins import BUILTINS  # the analysis package imports this one
+
+        known = [b.name for b in BUILTINS]
+        unknown = [name for name in self.analyses if name not in known]
+        if unknown:
+            # a misspelled name would otherwise silently leave an analysis on
+            raise ValueError(
+                f"Unknown analyses {unknown} in 'analyses': the built-ins are {known}."
+            )
+
+        missing = [
+            f"{b.name} needs '{option}'"
+            for b in BUILTINS
+            if self.analyses.get(b.name)
+            for option in b.needs
+            if getattr(self, option) is None
+        ]
+        if missing:
+            raise ValueError(f"Analyses turned on without what they need: {missing}.")
 
         return self
 

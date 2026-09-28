@@ -487,6 +487,64 @@ class TestBuiltins:
         assert coordinates.follow is True
         assert molcls.analysis(Nucleus) is molcls.analyses[3]
 
+    def test_the_config_turns_them_off(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        config = MolClsConfig(
+            rules=ALL_PAIRS_RULES,
+            solute=["MOL"],
+            nucleus=["MOL"],
+            analyses={"ClusterCoordinates": False, "Nucleus": False},
+        )
+        molcls = MolClusters(make_universe(RUN_FRAMES, 10, RUN_RESNAMES), config)
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        assert [type(a) for a in molcls.analyses] == [
+            SizeEvolution,
+            SoluteSolvent,
+            JsonReport,
+        ]
+        assert not (tmp_path / "coordinates").exists()
+        assert not (tmp_path / "nucleus_data.csv").exists()
+        # the report leaves the nuclei out, as when no nucleus is configured
+        data = json.loads((tmp_path / "molclusters.json").read_text())
+        assert all(
+            "Nucleus" not in cls
+            for frame in data["MolClusters"]
+            for cls in frame["Clusters"]
+        )
+
+    def test_turning_one_on_keeps_the_rest(self, make_universe: UniverseFactory):
+        config = MolClsConfig(rules=MOL_RULES, analyses={"SizeEvolution": True})
+        molcls = MolClusters(make_universe([[]], 2), config)
+
+        assert [type(a) for a in molcls.analyses] == [SizeEvolution, JsonReport]
+
+    def test_every_one_turned_off_warns(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_logs: list[str],
+    ):
+        config = MolClsConfig(
+            rules=MOL_RULES, analyses={"SizeEvolution": False, "JsonReport": False}
+        )
+        molcls = MolClusters(make_universe([[[1, 2]]], 2), config)
+        monkeypatch.chdir(tmp_path)
+
+        molcls.run()
+
+        assert molcls.analyses == []
+        (warning,) = [m for m in captured_logs if m.startswith("Every analysis")]
+        assert "no results written" in warning
+        assert list(tmp_path.iterdir()) == []
+
     def test_analysis_finds_one_by_type(self, analyze: Analyze):
         largest = LargestCluster()
         molcls = analyze([[]], 2, analyses=[largest])

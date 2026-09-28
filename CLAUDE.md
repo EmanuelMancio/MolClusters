@@ -46,13 +46,18 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   under the run's output directory, `--output-dir`), and each analysis declares its files in `outputs`
   (`OutputFile`), which drives the earlier-run check and the end-of-run summary. Library users add
   their own analyses with `MolClusters(..., analyses=[...])`, which run after the config-enabled
-  built-ins (there is no registry yet); `Run` dispatches every hook through `Run._hook`, which
+  built-ins; `Run` dispatches every hook through `Run._hook`, which
   notes which analysis raised an error (the CLI prints those notes), tags what's logged meanwhile
   with the analysis' name (`logger.contextualize(analysis=...)`, shown as a `[Name]` prefix by
   `log._formatter`) and adds up its time in `Run.durations`, logged at the end of the run next to the tracker's.
   Analyses log with loguru's global `logger` (no logging service on `Run`): count per frame,
   summarise once in `finish` (see the `FrameAnalysis` docstring). Built-ins take their options as
-  constructor arguments, and `MolClusters.__init__` builds them from the config, in this order:
+  constructor arguments; the registry `analysis/builtins.py`'s `BUILTINS` says how each is built
+  from the config and which options it `needs`, and `MolClusters.__init__` builds the ones that
+  run (`build_builtins`): those whose options are set, unless the config's `analyses` (class name
+  -> bool) turns them off. `MolClsConfig` checks `analyses` against the registry (a lazy import,
+  since the analysis package imports the config): unknown names, or one turned on without an
+  option it `needs`, are errors. A new built-in is one `BUILTINS` line, in this order:
   `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
   (coordinates/cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
   later analyses), `JsonReport` (molclusters.json, a straight port of the old `MolClustersData`

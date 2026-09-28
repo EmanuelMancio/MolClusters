@@ -7,6 +7,8 @@
 Modules
 -------
     base: `FrameAnalysis`, and the `Run` and `Frame` an analysis sees.
+    builtins: `BUILTINS`, the built-in analyses in the order they run, and what
+      each needs from the config.
     coordinates: `ClusterCoordinates`, the clusters holding solutes (.gro files).
     nucleus: `Nucleus`, the nuclei inside the clusters (nucleus_data.csv).
     report: `JsonReport`, every cluster of every frame (molclusters.json).

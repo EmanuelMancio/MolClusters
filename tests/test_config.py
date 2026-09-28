@@ -83,6 +83,8 @@ class TestDescribe:
             "follow: solute (one solute-<resid>.gro per solute)",
             "ignore_composition: A + B; B",
             "distance_backend: OpenMP (cm rules only)",
+            "analyses: SizeEvolution, SoluteSolvent, ClusterCoordinates, Nucleus, "
+            "JsonReport",
             "lammps_resnames: A = 1-10, B = 11-20",
             "lammps_timestep: 0.002 ps",
         ]
@@ -99,6 +101,7 @@ class TestDescribe:
             "follow: none",
             "ignore_composition: none",
             "distance_backend: serial (cm rules only)",
+            "analyses: SizeEvolution, JsonReport",
             "lammps_resnames: none",
             "lammps_timestep: none (LAMMPS dump times are step numbers)",
         ]
@@ -109,6 +112,56 @@ class TestDescribe:
 
         for field in MolClsConfig.model_fields:
             assert any(line.startswith(f"{field}") for line in described.splitlines())
+
+
+class TestAnalyses:
+    def test_all_that_apply_run_by_default(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}})
+
+        assert config.analyses == {}
+
+    def test_turned_off_ones_are_described(self):
+        config = MolClsConfig(
+            rules={"A": {"A": "cm 5.0"}},
+            solute=["A"],
+            analyses={"ClusterCoordinates": False, "JsonReport": False},
+        )
+
+        (line,) = [
+            ln for ln in config.describe().splitlines() if ln.startswith("analyses")
+        ]
+        assert line == (
+            "analyses: SizeEvolution, SoluteSolvent "
+            "(turned off: ClusterCoordinates, JsonReport)"
+        )
+
+    def test_unknown_names_raise(self):
+        with pytest.raises(ValueError, match=r"Unknown analyses \['JSONReport'\]") as e:
+            MolClsConfig(rules={"A": {"A": "cm 5.0"}}, analyses={"JSONReport": False})
+
+        # the message lists the names to pick from
+        assert "'JsonReport'" in str(e.value)
+
+    def test_turned_on_without_what_they_need_raises(self):
+        with pytest.raises(
+            ValueError,
+            match=r"\[\"SoluteSolvent needs 'solute'\", \"Nucleus needs 'nucleus'\"\]",
+        ):
+            MolClsConfig(
+                rules={"A": {"A": "cm 5.0"}},
+                analyses={"Nucleus": True, "SoluteSolvent": True, "JsonReport": True},
+            )
+
+    def test_read_from_yaml_the_way_a_user_would_write_it(self, tmp_path: Path):
+        path = tmp_path / "config.yml"
+        path.write_text(
+            "rules:\n  A:\n    A: cm 5.0\nanalyses:\n  JsonReport: false\n"
+            "  SizeEvolution: off\n"
+        )
+
+        config = read_config(path)
+
+        assert config.analyses == {"JsonReport": False, "SizeEvolution": False}
 
 
 class TestLammpsResnames:

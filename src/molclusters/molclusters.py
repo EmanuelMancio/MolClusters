@@ -27,16 +27,8 @@ import MDAnalysis as mda
 from loguru import logger
 from tqdm import tqdm
 
-from .analysis import (
-    ClusterCoordinates,
-    Frame,
-    FrameAnalysis,
-    JsonReport,
-    Nucleus,
-    Run,
-    SizeEvolution,
-    SoluteSolvent,
-)
+from .analysis import Frame, FrameAnalysis, Run
+from .analysis.builtins import build_builtins
 from .config import MolClsConfig
 from .conntable import check_resids
 from .log import FILE_ONLY, format_duration
@@ -49,7 +41,9 @@ class MolClusters:
 
     It tracks the clusters frame by frame and runs the analyses on them: the
     built-ins the config enables (cluster sizes, solute-solvent, coordinates,
-    nuclei, the JSON report), then the ones given to it.
+    nuclei, the JSON report; see `analysis.builtins`), then the ones given to it.
+    A built-in runs when the config options it needs are set, unless the
+    config's `analyses` turns it off.
 
     Attributes
     ----------
@@ -132,16 +126,12 @@ class MolClusters:
 
         self.tracker: ClusterTracker | None = None  # created by run()
 
-        builtins: list[FrameAnalysis] = [SizeEvolution()]
-        if config.solute is not None:
-            builtins += [
-                SoluteSolvent(config.solute, config.solvent),
-                ClusterCoordinates(config.solute, follow=config._follow_solute),
-            ]
-        if config.nucleus is not None:
-            builtins.append(Nucleus(config.nucleus))
-        builtins.append(JsonReport())
-        self.analyses: list[FrameAnalysis] = [*builtins, *extra]
+        self.analyses: list[FrameAnalysis] = [*build_builtins(config), *extra]
+        if not self.analyses:
+            logger.warning(
+                "Every analysis is turned off ('analyses' in the config): the clusters "
+                "will be tracked, but no results written."
+            )
 
     def analysis[T: FrameAnalysis](self, kind: type[T]) -> T | None:
         """Find the first of the analyses of type `kind`, for its results.
@@ -155,7 +145,7 @@ class MolClusters:
         -------
         T | None
             The analysis, or None if there's none (e.g. the config doesn't enable
-            that built-in).
+            that built-in, or turns it off).
         """
         for analysis in self.analyses:
             if isinstance(analysis, kind):
