@@ -50,14 +50,29 @@ uv run cz bump
 ```
 
 Commitizen computes the next version from the commits since the last tag, updates
-`pyproject.toml`, `uv.lock` and `CHANGELOG.md`, and creates a GPG-signed commit
-(`chore: release vX -> vY [skip ci]`) and an annotated tag `vY`. Its pre-bump hooks
-refuse to run off `main` (`scripts/check_release_branch.py`) and refresh `uv.lock`.
-Then push the branch and the tag:
+`pyproject.toml`, `uv.lock`, `CITATION.cff` and `CHANGELOG.md`, and creates a
+GPG-signed commit (`chore: release vX -> vY [skip ci]`) and an annotated tag `vY`.
+Its pre-bump hooks refuse to run off `main` (`scripts/check_release_branch.py`),
+refresh `uv.lock`, and set `CITATION.cff`'s `version` and `date-released`
+(`scripts/update_citation.py`). Then push the branch and the tag, and publish a
+GitHub release for the tag:
 
 ```bash
 git push origin main --follow-tags
+gh release create vY --verify-tag --title vY --generate-notes
 ```
 
 and merge `main` back into `dev`. Pushing to `main` also publishes this
 documentation site (see [Writing the docs](docs.md)).
+
+## DOIs (Zenodo)
+
+Each published GitHub release is archived on [Zenodo](https://zenodo.org/), which gives
+it a DOI; a tag alone isn't. Zenodo takes the record's title, description, authors
+(with their ORCID and affiliation), keywords and license from `CITATION.cff`, and the
+version from the release's tag, so the authors in `CITATION.cff` are the ones credited.
+A Zenodo record can't be deleted: check `CITATION.cff` before publishing a release.
+
+The first archived release also creates a *concept DOI*, which always resolves to the
+latest version. Add it to `CITATION.cff` as `doi:` and as a badge in the README, so that
+citations can use the concept DOI or a specific version's one.

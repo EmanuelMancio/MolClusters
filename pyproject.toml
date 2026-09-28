@@ -74,7 +74,11 @@ bump_message = "chore: release v$current_version -> v$new_version [skip ci]"
 changelog_incremental = true
 major_version_zero = true
 tag_format = "v$version"
-pre_bump_hooks = ["uv run python scripts/check_release_branch.py", "uv lock"]
+pre_bump_hooks = [
+    "uv run python scripts/check_release_branch.py",
+    "uv lock",
+    "uv run python scripts/update_citation.py",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
