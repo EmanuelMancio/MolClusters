@@ -44,9 +44,9 @@ All hooks are `local` and run the tools uv installed, so their versions come fro
 - **License headers**: every file needs a REUSE/SPDX header, as a comment at the
   top or, for files that can't carry one (data, docs pages), an annotation in
   `REUSE.toml`. Code is `LGPL-3.0-or-later`; configuration and data files are `CC0-1.0`.
-- **Line endings**: every file is stored with LF, and nothing normalises them.
-  Editors and scripts on Windows can silently rewrite a whole file as CRLF; check
-  `git diff --stat` before committing.
+- **Line endings**: every text file is stored and checked out with LF
+  (`.gitattributes`), so a tool that rewrites a file as CRLF on Windows, as
+  `cz bump` does with `pyproject.toml`, still commits it with LF.
 - **Logging**: use loguru's `logger`. The package disables its own logger on import
   (`molclusters/__init__.py`); `start_logging` enables it for a run. Detail the
   terminal doesn't need goes through `logger.bind(**FILE_ONLY)`.

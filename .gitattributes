@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# Store every text file with LF line endings, and check them out with LF, on any
+# platform. Tools that write files in text mode on Windows would otherwise commit
+# whole files as CRLF: `cz bump` rewrites pyproject.toml that way.
+* text=auto eol=lf
