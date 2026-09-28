@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 """Defines the `ConnectionTable` class, which manages molecular connectivity tables for analyzing molecular clusters. It uses NetworkX for graph-based operations and MDAnalysis for molecular dynamics trajectory analysis.
 

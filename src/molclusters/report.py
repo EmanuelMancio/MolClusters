@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 """Provides the format of the JSON report (molclusters.jsonl), and its reader.
 

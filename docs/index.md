@@ -83,4 +83,6 @@ Emanuel Fernandes Dias Mancio (grants: #2022/01284-1, #2025/15166-9), listed in 
 [FAPESP research database](https://bv.fapesp.br/pt/pesquisador/709594/emanuel-fernandes-dias-mancio).
 
 MolClusters is free software, licensed under the
-[GNU GPL v3](https://github.com/EmanuelMancio/MolClusters/blob/main/LICENSE).
+[GNU LGPL v3](https://github.com/EmanuelMancio/MolClusters/blob/main/LICENSE) or any
+later version: you can use it as a library from software under any license, and changes
+to MolClusters itself that you distribute stay under the LGPL.

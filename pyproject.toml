@@ -1,13 +1,13 @@
 # SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 [project]
 name = "MolClusters"
 version = "0.6.0"
 description = "Tool to analyze cluster formation in molecular dynamics simulations"
 authors = [{ name = "Emanuel Mancio", email = "emanuelmancio@usp.br" }]
-license = "GPL-3.0-only"
+license = "LGPL-3.0-or-later"
 license-files = ["LICENSE", "COPYING", "LICENSES/*.txt"]
 readme = "README.md"
 requires-python = ">=3.12,<4.0"

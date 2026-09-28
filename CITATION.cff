@@ -21,7 +21,7 @@ authors:
     orcid: "https://orcid.org/0000-0002-7586-3324"
 version: 0.6.0
 date-released: "2026-09-22"
-license: GPL-3.0-only
+license: LGPL-3.0-or-later
 repository-code: "https://github.com/EmanuelMancio/MolClusters"
 url: "https://emanuelmancio.github.io/MolClusters/"
 keywords:

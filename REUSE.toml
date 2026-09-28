@@ -3,7 +3,7 @@ version = 1
 [[annotations]]
 path = ["src/molclusters/**/*.py","tests/**/*.py"]
 SPDX-FileCopyrightText = "© 2026 Emanuel Mancio <emanuelmancio@usp.br>"
-SPDX-License-Identifier = "GPL-3.0-only"
+SPDX-License-Identifier = "LGPL-3.0-or-later"
 
 [[annotations]]
 path = [
@@ -29,7 +29,7 @@ SPDX-License-Identifier = "CC0-1.0"
 [[annotations]]
 path = ["docs/**"]
 SPDX-FileCopyrightText = "© 2026 Emanuel Mancio <emanuelmancio@usp.br>"
-SPDX-License-Identifier = "GPL-3.0-only"
+SPDX-License-Identifier = "LGPL-3.0-or-later"
 
 # Icons from Academicons (https://github.com/jpswalsh/academicons), used by the docs.
 # After docs/**: of the annotations matching a file, the last one applies.

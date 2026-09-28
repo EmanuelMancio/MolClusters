@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 """Provides `SoluteSolvent`, the clusters holding both solutes and solvents (solute_solvent.csv)."""
 

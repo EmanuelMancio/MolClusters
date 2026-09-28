@@ -43,7 +43,7 @@ All hooks are `local` and run the tools uv installed, so their versions come fro
   is generated from them.
 - **License headers**: every file needs a REUSE/SPDX header, as a comment at the
   top or, for files that can't carry one (data, docs pages), an annotation in
-  `REUSE.toml`. Code is `GPL-3.0-only`; configuration and data files are `CC0-1.0`.
+  `REUSE.toml`. Code is `LGPL-3.0-or-later`; configuration and data files are `CC0-1.0`.
 - **Line endings**: every file is stored with LF, and nothing normalises them.
   Editors and scripts on Windows can silently rewrite a whole file as CRLF; check
   `git diff --stat` before committing.

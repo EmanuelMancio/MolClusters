@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 """Provides `ClusterCoordinates`, the coordinates of the clusters holding solutes (.gro files)."""
 

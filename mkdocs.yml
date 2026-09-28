@@ -11,7 +11,7 @@ site_url: https://emanuelmancio.github.io/MolClusters/
 repo_url: https://github.com/EmanuelMancio/MolClusters
 repo_name: EmanuelMancio/MolClusters
 edit_uri: edit/dev/docs/
-copyright: Copyright &copy; 2024-2026 Emanuel Mancio &middot; GPL-3.0-only
+copyright: Copyright &copy; 2024-2026 Emanuel Mancio &middot; LGPL-3.0-or-later
 
 theme:
   name: material

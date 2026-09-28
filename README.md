@@ -1,14 +1,14 @@
 <!--
 SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
 
-SPDX-License-Identifier: GPL-3.0-only
+SPDX-License-Identifier: LGPL-3.0-or-later
 -->
 
 # MolClusters
 
 [![Tests](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml/badge.svg?branch=dev)](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml)
 [![Docs](https://github.com/EmanuelMancio/MolClusters/actions/workflows/docs.yml/badge.svg)](https://emanuelmancio.github.io/MolClusters/)
-[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+[![License: LGPL v3+](https://img.shields.io/badge/license-LGPL--3.0--or--later-blue.svg)](LICENSE)
 [![REUSE compliant](https://img.shields.io/badge/REUSE-compliant-green.svg)](https://reuse.software/)
 
 Track the formation, growth, splitting, merging and lifetime of molecular clusters in
@@ -56,8 +56,11 @@ details, and GitHub's "Cite this repository" button formats them.
 ## License
 
 MolClusters is free software, licensed under the
-[GNU GPL v3](https://choosealicense.com/licenses/gpl-3.0/) only; see [LICENSE](LICENSE).
-Every file's license is declared per the [REUSE](https://reuse.software/) specification.
+[GNU LGPL v3](https://choosealicense.com/licenses/lgpl-3.0/) or any later version; see
+[LICENSE](LICENSE) and, for the GNU GPL v3 it builds on, [COPYING](COPYING). You can use it
+as a library from software under any license; changes to MolClusters itself that you
+distribute must stay under the LGPL. Every file's license is declared per the
+[REUSE](https://reuse.software/) specification.
 
 ## Authorship
 
