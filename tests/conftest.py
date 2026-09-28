@@ -125,7 +125,7 @@ def make_universe() -> UniverseFactory:
             dimensions=[BOX, BOX, BOX, 90.0, 90.0, 90.0],
             dt=1.0,
         )
-        # JsonReport records both paths, and chokes on None
+        # JsonReport records both paths
         uni.filename = "synthetic.top"
         uni.trajectory.filename = "synthetic.traj"
         return uni

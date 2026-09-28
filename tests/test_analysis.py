@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
-import json
 import time
 from collections.abc import Sequence
 from pathlib import Path
@@ -22,8 +21,9 @@ from molclusters.analysis import (
     SizeEvolution,
     SoluteSolvent,
 )
-from molclusters.config import MolClsConfig
+from molclusters.config import MolClsConfig, ReportCompression
 from molclusters.output import OutputFile, RunOutput
+from molclusters.report import Report, read_report
 from molclusters.tracker import ClusterTracker
 
 from .conftest import ALL_PAIRS_RULES, MOL_RULES, Groups, UniverseFactory
@@ -473,7 +473,7 @@ class TestJsonReport:
         analyses: list[FrameAnalysis],
         make_universe: UniverseFactory,
         directory: Path,
-    ) -> dict:
+    ) -> Report:
         run_analyses(
             analyses,
             make_universe,
@@ -483,33 +483,55 @@ class TestJsonReport:
             self.RESNAMES,
             ALL_PAIRS_RULES,
         )
-        return json.loads((directory / "molclusters.json").read_text())
+        return read_report(directory / "molclusters.jsonl.zst")
 
     def test_writes_every_frame_and_cluster(
         self, make_universe: UniverseFactory, tmp_path: Path
     ):
         report = self.run([JsonReport()], make_universe, tmp_path)
 
-        assert report["Software"].startswith("MolClusters ")
-        assert report["Config"]["rules"]
-        first, second = report["MolClusters"]
-        assert (first["Time"], first["Frame"], first["NClusters"]) == (0, 0, 1)
-        (cluster,) = first["Clusters"]
-        assert cluster["ResIDs"] == [1, 2, 3, 4]
+        assert report.header["software"].startswith("MolClusters ")
+        assert report.header["config"]["rules"]
+        assert report.header["n_frames"] == 2
+        first, second = report.frames()
+        assert (first["time"], first["frame"]) == (0, 0)
+        (cluster,) = first["clusters"]
+        assert cluster["resids"] == [1, 2, 3, 4]
+        assert cluster["composition"] == {"MOL": 3, "SOL": 1}
         assert "Nucleus" not in cluster
-        assert (second["Time"], second["NClusters"], second["Clusters"]) == (1, 0, [])
+        assert (second["time"], second["clusters"]) == (1, [])
 
     def test_includes_the_nuclei_of_a_nucleus_analysis_before_it(
         self, make_universe: UniverseFactory, tmp_path: Path
     ):
         report = self.run([Nucleus(["MOL"]), JsonReport()], make_universe, tmp_path)
 
-        (cluster,) = report["MolClusters"][0]["Clusters"]
-        assert sorted(n["ResIDs"] for n in cluster["Nucleus"]) == [[1, 2], [4]]
-        assert "NucleiDipole" in cluster
+        (cluster,) = next(report.frames())["clusters"]
+        nuclei = cluster["Nucleus"]
+        assert sorted(n["resids"] for n in nuclei["nuclei"]) == [[1, 2], [4]]
+        assert nuclei["combined_dipole_moment"] is not None
 
-    def test_declares_the_report(self):
-        assert [out.name for out in JsonReport.outputs] == ["molclusters.json"]
+    @pytest.mark.parametrize(
+        ("compression", "name"),
+        [
+            ("zstd", "molclusters.jsonl.zst"),
+            ("gzip", "molclusters.jsonl.gz"),
+            ("none", "molclusters.jsonl"),
+        ],
+    )
+    def test_declares_the_report_it_compresses(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        compression: ReportCompression,
+        name: str,
+    ):
+        report = JsonReport(compression)
+        run_analyses([report], make_universe, self.FRAMES, 4, tmp_path, self.RESNAMES)
+
+        assert [out.name for out in report.outputs] == [name]
+        assert [p.name for p in tmp_path.iterdir()] == [name]
+        assert len(list(read_report(tmp_path / name).frames())) == 2
 
 
 class TestErrors:

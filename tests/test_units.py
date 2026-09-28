@@ -24,10 +24,10 @@ Time, birth time, age     ps (for LAMMPS dumps, given `lammps_timestep`)
 ========================  ==============================================
 
 The first classes check the properties; `TestOutputUnits` checks that a run
-writes them to molclusters.json, the CSV tables and evo.txt in the same units.
+writes them to the report (molclusters.jsonl), the CSV tables and evo.txt in the
+same units.
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -42,6 +42,7 @@ from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.conntable import ConnectionTable
 from molclusters.molclusters import MolClusters
+from molclusters.report import read_report
 
 # SPC/E water: O-H 1.0 A, H-O-H 109.47 deg, q(H) = +0.4238 e. Literature: 2.35 D.
 SPCE_MASSES = [15.9994, 1.008, 1.008]
@@ -342,8 +343,8 @@ class TestLammpsTimeUnits:
     ):
         out = self.run_cli(tmp_path, monkeypatch, *options)
 
-        frames = json.loads((out / "molclusters.json").read_text())["MolClusters"]
-        assert [f["Time"] for f in frames] == pytest.approx(times)
+        frames = read_report(out / "molclusters.jsonl.zst").frames()
+        assert [f["time"] for f in frames] == pytest.approx(times)
         np.testing.assert_allclose(np.loadtxt(out / "evo.txt", ndmin=2)[:, 0], times)
 
     @pytest.mark.parametrize(
@@ -364,8 +365,8 @@ class TestLammpsTimeUnits:
         # continued from step 1000, then dumped 500 and 1000 steps apart
         out = self.run_cli(tmp_path, monkeypatch, *options, steps=(1000, 1500, 2500))
 
-        frames = json.loads((out / "molclusters.json").read_text())["MolClusters"]
-        assert [f["Time"] for f in frames] == pytest.approx(times)
+        frames = read_report(out / "molclusters.jsonl.zst").frames()
+        assert [f["time"] for f in frames] == pytest.approx(times)
         np.testing.assert_allclose(np.loadtxt(out / "evo.txt", ndmin=2)[:, 0], times)
 
 
@@ -390,36 +391,47 @@ class TestOutputUnits:
         MolClusters(uni, config).run(output_dir=tmp_path)
         return uni, tmp_path
 
-    def test_json(self, run: tuple[Universe, Path]):
+    def test_report(self, run: tuple[Universe, Path]):
         uni, out = run
-        frames = json.loads((out / "molclusters.json").read_text())["MolClusters"]
+        report = read_report(out / "molclusters.jsonl.zst")
+        frames = list(report.frames())
         cluster_group = MolGroup(uni, [1, 2])
         water = MolGroup(uni, [1])
 
-        assert [f["Time"] for f in frames] == pytest.approx([0.0, 2.0])
+        # the units the header declares are those the values are in
+        assert report.header["units"] == {
+            "time": "ps",
+            "mass": "amu",
+            "volume": "angstrom^3",
+            "radius": "angstrom",
+            "diameter": "angstrom",
+            "density": "g/cm^3",
+            "charge": "e",
+            "dipole_moment": "D",
+            "distance": "angstrom",
+            "angle": "degrees",
+        }
+        assert [f["time"] for f in frames] == pytest.approx([0.0, 2.0])
         for frame in frames:
-            (cluster,) = frame["Clusters"]
-            assert cluster["Mass"] == pytest.approx(2 * SPCE_MASS)
-            assert cluster["Charge"] == pytest.approx(0.0, abs=1e-6)
+            (cluster,) = frame["clusters"]
+            assert cluster["mass"] == pytest.approx(2 * SPCE_MASS)
+            assert cluster["charge"] == pytest.approx(0.0, abs=1e-6)
             # parallel dipoles add up
-            assert cluster["Dipole Moment"] == pytest.approx(2 * SPCE_DIPOLE, abs=0.01)
-            ((_, _, connection),) = cluster["Connections"]
-            assert connection["distance"] == pytest.approx(3.0, abs=1e-4)
+            assert cluster["dipole_moment"] == pytest.approx(2 * SPCE_DIPOLE, abs=0.01)
+            ((_, _, distance, _, _),) = cluster["connections"]
+            assert distance == pytest.approx(3.0, abs=1e-4)
             # the geometric ones as the properties pinned above give them
-            for key, prop in [
-                ("Radius", "radius"),
-                ("Diameter", "diameter"),
-                ("Volume", "volume"),
-                ("Density", "density"),
-            ]:
-                assert cluster[key] == pytest.approx(getattr(cluster_group, prop))
+            for key in ["radius", "diameter", "volume", "density"]:
+                assert cluster[key] == pytest.approx(getattr(cluster_group, key))
 
-            (nucleus,) = cluster["Nucleus"]
-            assert nucleus["Mass"] == pytest.approx(SPCE_MASS)
-            assert nucleus["Dipole Moment"] == pytest.approx(SPCE_DIPOLE, abs=0.005)
-            assert cluster["NucleiDipole"] == pytest.approx(SPCE_DIPOLE, abs=0.005)
-            assert nucleus["Radius"] == pytest.approx(water.radius)
-            assert nucleus["Density"] == pytest.approx(water.density)
+            nuclei = cluster["Nucleus"]
+            (nucleus,) = nuclei["nuclei"]
+            assert nucleus["mass"] == pytest.approx(SPCE_MASS)
+            assert nucleus["dipole_moment"] == pytest.approx(SPCE_DIPOLE, abs=0.005)
+            combined = nuclei["combined_dipole_moment"]
+            assert combined == pytest.approx(SPCE_DIPOLE, abs=0.005)
+            assert nucleus["radius"] == pytest.approx(water.radius)
+            assert nucleus["density"] == pytest.approx(water.density)
 
     def test_solute_solvent_table(self, run: tuple[Universe, Path]):
         uni, out = run

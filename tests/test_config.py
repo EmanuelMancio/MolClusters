@@ -71,6 +71,7 @@ class TestDescribe:
             lammps_resnames={"A": "1-10", "B": [11, "12-20"]},
             lammps_timestep="2 fs",
             distance_backend="OpenMP",
+            report_compression="gzip",
         )
 
         assert config.describe().splitlines() == [
@@ -85,6 +86,7 @@ class TestDescribe:
             "distance_backend: OpenMP (cm rules only)",
             "analyses: SizeEvolution, SoluteSolvent, ClusterCoordinates, Nucleus, "
             "JsonReport",
+            "report_compression: gzip (molclusters.jsonl.gz)",
             "lammps_resnames: A = 1-10, B = 11-20",
             "lammps_timestep: 0.002 ps",
         ]
@@ -102,6 +104,7 @@ class TestDescribe:
             "ignore_composition: none",
             "distance_backend: serial (cm rules only)",
             "analyses: SizeEvolution, JsonReport",
+            "report_compression: zstd (molclusters.jsonl.zst)",
             "lammps_resnames: none",
             "lammps_timestep: none (LAMMPS dump times are step numbers)",
         ]

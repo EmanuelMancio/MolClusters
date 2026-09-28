@@ -12,7 +12,6 @@ being analyzed over the same atoms (a nucleus inside its cluster), drifts away
 from the reference computed here straight from the whole coordinates.
 """
 
-import json
 from itertools import permutations
 from pathlib import Path
 
@@ -25,6 +24,7 @@ from MDAnalysis.coordinates.memory import MemoryReader
 from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
+from molclusters.report import read_report
 
 BOX = 20.0
 CUTOFF = 3.0
@@ -61,26 +61,26 @@ ALL_IONS = tuple(r for (r,) in NUCLEI)
 CENTERED, ON_CORNER = 0, 1
 CENTERS = [(BOX / 2, BOX / 2, BOX / 2), (0.3, 0.2, 0.1)]
 
-# (JSON key, analyzer attribute) of every scalar property the outputs report
+# every scalar property the outputs report: the report's key, the analyzer's attribute
 PROPERTIES = [
-    ("Mass", "mass"),
-    ("Charge", "charge"),
-    ("Radius", "radius"),
-    ("Diameter", "diameter"),
-    ("Volume", "volume"),
-    ("Density", "density"),
-    ("Dipole Moment", "dipole_moment"),
-    ("Sphericity", "sphericity"),
-    ("Shape", "shape_parameter"),
+    "mass",
+    "charge",
+    "radius",
+    "diameter",
+    "volume",
+    "density",
+    "dipole_moment",
+    "sphericity",
+    "shape_parameter",
 ]
-# column of solute_solvent.csv / nucleus_data.csv -> JSON key
+# column of solute_solvent.csv / nucleus_data.csv -> report key
 CSV_COLUMNS = {
-    "Radius": "Radius",
-    "Density": "Density",
-    "Charge": "Charge",
-    "Dipole": "Dipole Moment",
-    "Spher": "Sphericity",
-    "Shape": "Shape",
+    "Radius": "radius",
+    "Density": "density",
+    "Charge": "charge",
+    "Dipole": "dipole_moment",
+    "Spher": "sphericity",
+    "Shape": "shape_parameter",
 }
 
 
@@ -95,7 +95,7 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
     Returns
     -------
     dict
-        Property values keyed as in molclusters.json, plus ``"dipole"`` (vector)
+        Property values keyed as in the report, plus ``"dipole"`` (vector)
         and ``"bsphere"`` (bounding-sphere radius).
     """
     atoms = uni.residues[np.array(resids) - 1].atoms
@@ -115,24 +115,24 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
     dipole = q @ rel * E_ANGSTROM_IN_DEBYE
 
     return {
-        "Mass": mass,
-        "Charge": q.sum(),
-        "Radius": radius,
-        "Diameter": 2 * radius,
-        "Volume": volume,
+        "mass": mass,
+        "charge": q.sum(),
+        "radius": radius,
+        "diameter": 2 * radius,
+        "volume": volume,
         # amu/A^3 -> g/cm^3: 1 amu = 1.66053906660e-24 g, 1 A^3 = 1e-24 cm^3
-        "Density": mass / volume * 1.66053906660,
-        "Dipole Moment": np.linalg.norm(dipole),
-        "Sphericity": 1 - 1.5 * np.sum(dev**2) / moments.sum() ** 2,
-        "Shape": 27 * np.prod(dev) / moments.sum() ** 3,
+        "density": mass / volume * 1.66053906660,
+        "dipole_moment": np.linalg.norm(dipole),
+        "sphericity": 1 - 1.5 * np.sum(dev**2) / moments.sum() ** 2,
+        "shape_parameter": 27 * np.prod(dev) / moments.sum() ** 3,
         "dipole": dipole,
         "bsphere": np.max(np.linalg.norm(pos - pos.mean(axis=0), axis=1)),
     }
 
 
 def assert_matches(values: dict, expected: dict, label: object = "") -> None:
-    """Compare JSON-keyed property values with the reference."""
-    for key, _ in PROPERTIES:
+    """Compare property values, keyed as in the report, with the reference."""
+    for key in PROPERTIES:
         assert values[key] == pytest.approx(expected[key], rel=1e-4, abs=1e-4), (
             f"{key} of {label}"
         )
@@ -148,14 +148,14 @@ def assert_row_matches(row: pd.Series, groups: list[dict], frame: object) -> Non
 
 
 def analyzer_values(analyzer: MolGroup) -> dict:
-    """Read every scalar property of `analyzer`, keyed as in molclusters.json.
+    """Read every scalar property of `analyzer`, keyed as in the report.
 
     Returns
     -------
     dict
         The analyzer's property values.
     """
-    return {key: getattr(analyzer, attr) for key, attr in PROPERTIES}
+    return {key: getattr(analyzer, key) for key in PROPERTIES}
 
 
 def build_whole_frame(rng: np.random.Generator, center: tuple) -> np.ndarray:
@@ -226,7 +226,7 @@ def make_universe(frames: list[np.ndarray]) -> mda.Universe:
         dimensions=[BOX, BOX, BOX, 90.0, 90.0, 90.0],
         dt=1.0,
     )
-    # JsonReport records both paths, and chokes on None
+    # JsonReport records both paths
     uni.filename = "synthetic.top"
     uni.trajectory.filename = "synthetic.traj"
     return uni
@@ -270,8 +270,8 @@ class TestSystem:
     def test_the_nuclei_are_charged_and_far_apart(self, system: System):
         uni, whole = system
 
-        charges = [reference(uni, whole[0], nuc)["Charge"] for nuc in NUCLEI]
-        dipole = reference(uni, whole[0], ALL_IONS)["Dipole Moment"]
+        charges = [reference(uni, whole[0], nuc)["charge"] for nuc in NUCLEI]
+        dipole = reference(uni, whole[0], ALL_IONS)["dipole_moment"]
 
         assert charges == pytest.approx([1.0, -1.0, 1.0])
         # the ions sit several angstrom apart: a large dipole is expected
@@ -351,44 +351,44 @@ class TestRunOutputs:
         return tmp_path
 
     @pytest.fixture
-    def json_frames(self, run_dir: Path) -> list[dict]:
-        data = json.loads((run_dir / "molclusters.json").read_text())
-        return data["MolClusters"]
+    def report_frames(self, run_dir: Path) -> list[dict]:
+        return list(read_report(run_dir / "molclusters.jsonl.zst").frames())
 
     def test_the_run_sees_one_cluster_with_one_nucleus_per_ion(
-        self, json_frames: list[dict]
+        self, report_frames: list[dict]
     ):
-        for frame in json_frames:
-            (cluster,) = frame["Clusters"]
-            assert tuple(cluster["ResIDs"]) == ALL
-            nuclei = sorted(tuple(n["ResIDs"]) for n in cluster["Nucleus"])
+        for frame in report_frames:
+            (cluster,) = frame["clusters"]
+            assert tuple(cluster["resids"]) == ALL
+            nuclei = sorted(tuple(n["resids"]) for n in cluster["Nucleus"]["nuclei"])
             assert nuclei == list(NUCLEI)
 
-    def test_cluster_properties(self, system: System, json_frames: list[dict]):
+    def test_cluster_properties(self, system: System, report_frames: list[dict]):
         uni, whole = system
 
-        for f, frame in enumerate(json_frames):
-            (cluster,) = frame["Clusters"]
+        for f, frame in enumerate(report_frames):
+            (cluster,) = frame["clusters"]
             assert_matches(cluster, reference(uni, whole[f], ALL), f"frame {f}")
 
-    def test_nucleus_properties(self, system: System, json_frames: list[dict]):
+    def test_nucleus_properties(self, system: System, report_frames: list[dict]):
         uni, whole = system
 
-        for f, frame in enumerate(json_frames):
-            (cluster,) = frame["Clusters"]
-            for nucleus in cluster["Nucleus"]:
-                expected = reference(uni, whole[f], tuple(nucleus["ResIDs"]))
-                assert_matches(nucleus, expected, f"frame {f}, {nucleus['ResIDs']}")
+        for f, frame in enumerate(report_frames):
+            (cluster,) = frame["clusters"]
+            for nucleus in cluster["Nucleus"]["nuclei"]:
+                expected = reference(uni, whole[f], tuple(nucleus["resids"]))
+                assert_matches(nucleus, expected, f"frame {f}, {nucleus['resids']}")
 
-    def test_nuclei_dipole_is_the_dipole_of_all_nuclei_together(
-        self, system: System, json_frames: list[dict]
+    def test_the_combined_dipole_is_that_of_all_nuclei_together(
+        self, system: System, report_frames: list[dict]
     ):
         uni, whole = system
 
-        for f, frame in enumerate(json_frames):
-            (cluster,) = frame["Clusters"]
-            expected = reference(uni, whole[f], ALL_IONS)["Dipole Moment"]
-            assert cluster["NucleiDipole"] == pytest.approx(expected, rel=1e-4)
+        for f, frame in enumerate(report_frames):
+            (cluster,) = frame["clusters"]
+            expected = reference(uni, whole[f], ALL_IONS)["dipole_moment"]
+            combined = cluster["Nucleus"]["combined_dipole_moment"]
+            assert combined == pytest.approx(expected, rel=1e-4)
 
     def test_solute_solvent_table(self, system: System, run_dir: Path):
         uni, whole = system

@@ -11,7 +11,7 @@ Modules
       each needs from the config.
     coordinates: `ClusterCoordinates`, the clusters holding solutes (.gro files).
     nucleus: `Nucleus`, the nuclei inside the clusters (nucleus_data.csv).
-    report: `JsonReport`, every cluster of every frame (molclusters.json).
+    report: `JsonReport`, every cluster of every frame (molclusters.jsonl).
     size: `SizeEvolution`, the number and sizes of the clusters over time (evo.txt).
     solute: `SoluteSolvent`, the clusters holding solutes and solvents
       (solute_solvent.csv).

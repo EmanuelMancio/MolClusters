@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
-import json
 import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -26,6 +25,7 @@ from molclusters.cluster import MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
 from molclusters.output import OutputFile
+from molclusters.report import read_report
 
 from .conftest import ALL_PAIRS_RULES, CUTOFF, MOL_RULES, Groups, UniverseFactory
 
@@ -118,7 +118,7 @@ RUN_FRAMES = [
 
 
 class TestRun:
-    def test_minimal_run_writes_evolution_and_json(
+    def test_minimal_run_writes_evolution_and_report(
         self, analyze: Analyze, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         molcls = analyze([[[1, 2, 3]], []], 3)
@@ -129,14 +129,15 @@ class TestRun:
         evo = np.loadtxt(tmp_path / "evo.txt")
         np.testing.assert_allclose(evo, [[0, 1, 3, 3, 3], [1, 0, 0, 0, 0]])
 
-        data = json.loads((tmp_path / "molclusters.json").read_text())
-        assert data["Config"]["rules"] == MOL_RULES
-        assert [f["NClusters"] for f in data["MolClusters"]] == [1, 0]
-        (cls,) = data["MolClusters"][0]["Clusters"]
-        assert cls["Size"] == 3
-        assert cls["ResIDs"] == [1, 2, 3]
-        assert cls["Composition"] == [{"resname": "MOL", "n": 3, "resids": [1, 2, 3]}]
-        assert {(a, b) for a, b, _ in cls["Connections"]} == {(1, 2), (2, 3)}
+        report = read_report(tmp_path / "molclusters.jsonl.zst")
+        assert report.header["config"]["rules"] == MOL_RULES
+        frames = list(report.frames())
+        assert [len(f["clusters"]) for f in frames] == [1, 0]
+        (cls,) = frames[0]["clusters"]
+        assert cls["size"] == 3
+        assert cls["resids"] == [1, 2, 3]
+        assert cls["composition"] == {"MOL": 3}
+        assert {(i, j) for i, j, *_ in cls["connections"]} == {(1, 2), (2, 3)}
 
         assert not (tmp_path / "solute_solvent.csv").exists()
         assert not (tmp_path / "nucleus_data.csv").exists()
@@ -180,13 +181,13 @@ class TestRun:
         assert df["NNuc"].tolist() == [1, 1, 1]
         assert df["Size"].tolist() == [1.5, 1.5, 2]
 
-    def test_json_records_nuclei(self, full_run: Path):
-        data = json.loads((full_run / "molclusters.json").read_text())
+    def test_report_records_nuclei(self, full_run: Path):
+        first = next(read_report(full_run / "molclusters.jsonl.zst").frames())
 
-        frame0 = {tuple(c["ResIDs"]): c for c in data["MolClusters"][0]["Clusters"]}
-        assert [n["ResIDs"] for n in frame0[(1, 4, 5)]["Nucleus"]] == [[1]]
-        assert [n["ResIDs"] for n in frame0[(7, 8)]["Nucleus"]] == [[7, 8]]
-        assert "NucleiDipole" in frame0[(7, 8)]
+        frame0 = {tuple(c["resids"]): c["Nucleus"] for c in first["clusters"]}
+        assert [n["resids"] for n in frame0[(1, 4, 5)]["nuclei"]] == [[1]]
+        assert [n["resids"] for n in frame0[(7, 8)]["nuclei"]] == [[7, 8]]
+        assert frame0[(7, 8)]["combined_dipole_moment"] is not None
 
     def test_coordinates_are_written_per_size_id_and_followed_solute(
         self, full_run: Path
@@ -245,7 +246,10 @@ class TestRun:
         molcls.run(output_dir="results/run1")
         molcls.run(output_dir=out)
 
-        assert sorted(p.name for p in out.iterdir()) == ["evo.txt", "molclusters.json"]
+        assert sorted(p.name for p in out.iterdir()) == [
+            "evo.txt",
+            "molclusters.jsonl.zst",
+        ]
         assert not (tmp_path / "evo.txt").exists()
         # the earlier-run check looks there too
         overwriting = [m for m in captured_logs if m.startswith("Overwriting")]
@@ -275,14 +279,14 @@ class TestRun:
             RUN_FRAMES, 10, RUN_RESNAMES, rules=ALL_PAIRS_RULES, nucleus=["MOL"]
         )
         monkeypatch.chdir(tmp_path)
-        files = ["evo.txt", "molclusters.json", "nucleus_data.csv"]
+        files = ["evo.txt", "molclusters.jsonl.zst", "nucleus_data.csv"]
 
         molcls.run()
-        first = {name: (tmp_path / name).read_text() for name in files}
+        first = {name: (tmp_path / name).read_bytes() for name in files}
         molcls.uni.trajectory[1]  # wherever the trajectory was left
         molcls.run()
 
-        assert {name: (tmp_path / name).read_text() for name in files} == first
+        assert {name: (tmp_path / name).read_bytes() for name in files} == first
         connections = [m for m in captured_logs if m.startswith("Connections per")]
         assert len(connections) == 2
         assert connections[0] == connections[1]
@@ -399,11 +403,10 @@ class TestRun:
 
         molcls.run()
 
-        data = json.loads((tmp_path / "molclusters.json").read_text())
-        for frame in data["MolClusters"]:
-            (cluster,) = frame["Clusters"]
-            assert cluster["Radius"] == pytest.approx(pristine.radius)
-            assert cluster["Shape"] == pytest.approx(pristine.shape_parameter)
+        for frame in read_report(tmp_path / "molclusters.jsonl.zst").frames():
+            (cluster,) = frame["clusters"]
+            assert cluster["radius"] == pytest.approx(pristine.radius)
+            assert cluster["shape_parameter"] == pytest.approx(pristine.shape_parameter)
 
 
 class LargestCluster(FrameAnalysis):
@@ -466,7 +469,7 @@ class TestUserAnalyses:
         assert "(largest-7.log)" in warning
         (summary,) = [m for m in captured_logs if m.startswith("Results written")]
         assert summary.endswith(
-            ": evo.txt, molclusters.json, largest.txt, largest-<n>.log\n"
+            ": evo.txt, molclusters.jsonl.zst, largest.txt, largest-<n>.log\n"
         )
 
     def test_none_are_added_by_default(self, analyze: Analyze):
@@ -525,11 +528,9 @@ class TestBuiltins:
         assert not (tmp_path / "coordinates").exists()
         assert not (tmp_path / "nucleus_data.csv").exists()
         # the report leaves the nuclei out, as when no nucleus is configured
-        data = json.loads((tmp_path / "molclusters.json").read_text())
+        frames = read_report(tmp_path / "molclusters.jsonl.zst").frames()
         assert all(
-            "Nucleus" not in cls
-            for frame in data["MolClusters"]
-            for cls in frame["Clusters"]
+            "Nucleus" not in cls for frame in frames for cls in frame["clusters"]
         )
 
     def test_turning_one_on_keeps_the_rest(self, make_universe: UniverseFactory):

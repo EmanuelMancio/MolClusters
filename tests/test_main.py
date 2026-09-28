@@ -315,7 +315,7 @@ class TestMain:
 
         df = pd.read_csv(tmp_path / "solute_solvent.csv")
         assert df["NSolv"].tolist() == [1, 1]
-        assert (tmp_path / "molclusters.json").exists()
+        assert (tmp_path / "molclusters.jsonl.zst").exists()
 
     def test_output_dir_holds_the_results_and_the_log(
         self,
@@ -334,8 +334,8 @@ class TestMain:
 
         out = tmp_path / "out" / "run1"
         assert (out / "solute_solvent.csv").exists()
-        assert (out / "molclusters.json").exists()
-        assert not (tmp_path / "molclusters.json").exists()
+        assert (out / "molclusters.jsonl.zst").exists()
+        assert not (tmp_path / "molclusters.jsonl.zst").exists()
         (log_file,) = log_files
         assert log_file.parent == Path("out/run1")
 
@@ -470,7 +470,7 @@ class TestMain:
             str(config),
         )
 
-        assert (tmp_path / "molclusters.json").exists()
+        assert (tmp_path / "molclusters.jsonl.zst").exists()
 
     @pytest.mark.parametrize("ext", ["lammpsdump", "lammpstrj", "dump"])
     def test_runs_on_a_lammps_data_topology_with_a_dump(
@@ -486,7 +486,7 @@ class TestMain:
 
         cli_env(str(dump), LAMMPS_DATA, str(config))
 
-        assert (tmp_path / "molclusters.json").exists()
+        assert (tmp_path / "molclusters.jsonl.zst").exists()
 
     def test_lammps_dump_without_elements_is_reported(
         self, cli_env: RunCli, tmp_path: Path, captured_logs: list[str]

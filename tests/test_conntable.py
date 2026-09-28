@@ -12,7 +12,6 @@ import pytest
 from MDAnalysis import Universe
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
-from molclusters.analysis.report import JsonReport
 from molclusters.cluster import Cluster
 from molclusters.config import DistanceBackend, MolClsConfig
 from molclusters.conntable import (
@@ -21,6 +20,7 @@ from molclusters.conntable import (
     _warn_if_openmp_unavailable,
     check_resids,
 )
+from molclusters.report import connection_rows
 
 from .conftest import BOND_STEP, CUTOFF, UniverseFactory
 
@@ -297,9 +297,9 @@ class TestHydrogenBondRule:
         # the rule is keyed as the config stores it; it counts every H-bond
         assert list(table.rule_connections.values()) == [3]
         (group,) = table.subconntables()
-        (connection,) = JsonReport.encode_connections(Cluster(uni, group, cluster_id=1))
-        assert connection[2]["n_hbonds"] == 3
-        assert isinstance(connection[2]["n_hbonds"], int)
+        ((*_, n_hbonds),) = connection_rows(Cluster(uni, group, cluster_id=1))
+        assert n_hbonds == 3
+        assert isinstance(n_hbonds, int)
 
     def test_graph_order_is_that_of_every_hbond_added_one_by_one(
         self, table: ConnectionTable

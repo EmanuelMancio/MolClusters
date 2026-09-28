@@ -62,8 +62,18 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   option it `needs`, are errors. A new built-in is one `BUILTINS` line, in this order:
   `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
   (coordinates/cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
-  later analyses), `JsonReport` (molclusters.json, a straight port of the old `MolClustersData`
-  due for a rewrite so other analyses can add to it).
+  later analyses), `JsonReport` (molclusters.jsonl.zst, see below).
+- The report (`report.py` holds its format, encoders and reader; `analysis/report.py` the
+  `JsonReport` that writes it): JSON Lines, a header line then one line per frame, appended
+  through `RunOutput` as each frame is analysed, so nothing accumulates in memory and an
+  interrupted run leaves its frames readable. Encoded with orjson (NaN becomes null; the stdlib
+  wrote invalid bare NaN), every float rounded to `DECIMALS` (6) places where it's computed, and
+  compressed per the config's `report_compression` (zstd default, gzip, none): `RunOutput`
+  compresses `.zst`/`.gz` names into one stream per run, ending a block on every flush.
+  `report.read_report` reads it back frame by frame (compression told from the magic bytes),
+  warning when it ends before the header's `n_frames`, or as pandas tables. Its schema is in
+  `report.py`'s docstring; changing it bumps `VERSION`. Derived fields (diameter, volume,
+  density) are kept on purpose, for users reading the file without the reader.
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
   properties computed on the group made whole across PBC (`whole()`; never
   moves the shared Universe for good; residues are placed along a spanning tree, a `Cluster`'s

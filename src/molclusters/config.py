@@ -46,6 +46,10 @@ _Charge = Annotated[float, Field(allow_inf_nan=False)]
 # back to its "bruteforce"/"pkdtree" methods (see `ConnectionTable`'s docstring).
 DistanceBackend = Literal["serial", "OpenMP"]
 
+# How the JSON report (molclusters.jsonl) is compressed: zstd (.zst), gzip (.gz),
+# or not at all.
+ReportCompression = Literal["zstd", "gzip", "none"]
+
 
 @dataclass
 class Rule:
@@ -351,6 +355,10 @@ class MolClsConfig(BaseSettings):
     # One left out runs when the options it needs are set (see `analysis.builtins`).
     analyses: dict[str, bool] = Field(default_factory=dict)
 
+    # How `JsonReport` compresses its report: zstd is the fastest and smallest,
+    # gzip the most widely readable (see `report` for the file's format).
+    report_compression: ReportCompression = "zstd"
+
     # Sorted, non-overlapping (start, end, name) ranges built from `lammps_resnames`,
     # kept as ranges (not one dict entry per id) so a config spanning millions of
     # molecule ids costs only as much memory as the handful of lines the user wrote.
@@ -447,13 +455,19 @@ class MolClsConfig(BaseSettings):
         )
         lines.append(f"distance_backend: {self.distance_backend} (cm rules only)")
 
-        from .analysis.builtins import BUILTINS  # the analysis package imports this one
+        # both import this module
+        from .analysis.builtins import BUILTINS
+        from .report import report_name
 
         running = [b.name for b in BUILTINS if b.runs(self)]
         off = [b.name for b in BUILTINS if not self.analyses.get(b.name, True)]
         lines.append(
             f"analyses: {', '.join(running) or 'none'}"
             + (f" (turned off: {', '.join(off)})" if off else "")
+        )
+        lines.append(
+            f"report_compression: {self.report_compression} "
+            f"({report_name(self.report_compression)})"
         )
 
         ranges = [

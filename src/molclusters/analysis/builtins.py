@@ -88,7 +88,7 @@ BUILTINS: tuple[Builtin, ...] = (
         needs=("solute",),
     ),
     Builtin(Nucleus, lambda c: Nucleus(c.nucleus), needs=("nucleus",)),
-    Builtin(JsonReport, lambda c: JsonReport()),
+    Builtin(JsonReport, lambda c: JsonReport(c.report_compression)),
 )
 
 
