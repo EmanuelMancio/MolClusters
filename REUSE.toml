@@ -24,3 +24,16 @@ SPDX-License-Identifier = "CC0-1.0"
 path = ["uv.lock"]
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"
+
+# Documentation site (Markdown pages and their assets, which can't all carry a header).
+[[annotations]]
+path = ["docs/**"]
+SPDX-FileCopyrightText = "© 2026 Emanuel Mancio <emanuelmancio@usp.br>"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# Icons from Academicons (https://github.com/jpswalsh/academicons), used by the docs.
+# After docs/**: of the annotations matching a file, the last one applies.
+[[annotations]]
+path = ["docs/assets/icons/academicons/*.svg"]
+SPDX-FileCopyrightText = "Academicons contributors <https://github.com/jpswalsh/academicons>"
+SPDX-License-Identifier = "OFL-1.1"

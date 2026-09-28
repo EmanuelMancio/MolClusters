@@ -12,6 +12,11 @@ SPDX-License-Identifier: GPL-3.0-only
   `cz check` commit-message lint): `uv run pre-commit run --all-files`. All hooks are `local`
   and run the uv-installed tools, so their versions come from `uv.lock` (bumped weekly by
   Dependabot, `.github/dependabot.yml`); don't use `pre-commit autoupdate`.
+- Docs (MkDocs Material + mkdocstrings, `docs/`, `mkdocs.yml`, `docs` dependency group):
+  `uv run --group docs mkdocs serve` to preview, `uv run --group docs mkdocs build --strict`
+  as CI does (`.github/workflows/docs.yml`, which deploys `main` to GitHub Pages). A change to
+  a config key, the CLI help, an output file, the report format, a property or id assignment
+  updates its user-guide page too (table in `docs/developer-guide/docs.md`).
 
 Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--cov=src
 --cov-report html`), so a plain `uv run pytest` produces an HTML coverage report under `htmlcov/`.
@@ -35,12 +40,18 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   cluster identity stable across formation/merge/split events with a two-step assignment in
   `update`: each previous cluster picks its best connected group (`_best_groups`: most molecules,
   then purest), then each group continues its largest contributor (`_get_older_cluster`: then
-  oldest id) or becomes a new cluster.
+  oldest id) or becomes a new cluster. Each `update` (and the first frame) leaves a
+  `Transition` (`tracker.transition`, `Frame.transition` for analyses): `flows` (previous id,
+  current id) -> molecules, id 0 for none, `born`, `merged` (absorbed -> survivor) and
+  `dissolved`. `Lineage` turns it into events stamped with the first frame that shows them, so a
+  cluster's DeathTime is the first frame it's gone from and its lifetime a whole number of frame
+  spacings (a one-frame cluster lived one spacing); lifetimes born at the start or alive at the
+  end are censored.
 - The analyses on top of the tracker live in the `analysis/` package, one `FrameAnalysis`
   subclass per output: `prepare(run)`, `analyse(frame)` on every frame including
   frame 0, `finish(run)`, all called in list order from `MolClusters.run()`. They see the run
   through `Run` (universe, config, `output`, `analysis(Type)` lookup of earlier analyses) and each
-  frame through `Frame` (index, time, read-only clusters, `find`, `output`), never the tracker itself. All
+  frame through `Frame` (index, time, read-only clusters, `transition`, `find`, `output`), never the tracker itself. All
   file writes go through `Run.output` (`output.py`'s `RunOutput`: `path(name)` for whole files,
   buffered `append` for per-frame ones, overwritten on their first flush of a run so runs never
   mix; names may include folders, created on demand, all
@@ -60,7 +71,8 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   -> bool) turns them off. `MolClsConfig` checks `analyses` against the registry (a lazy import,
   since the analysis package imports the config): unknown names, or one turned on without an
   option it `needs`, are errors. A new built-in is one `BUILTINS` line, in this order:
-  `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
+  `SizeEvolution` (evo.txt), `Lineage` (cluster_events.csv, cluster_lifetimes.csv; adds each
+  frame's transition to the report), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
   (coordinates/cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
   later analyses), `JsonReport` (molclusters.jsonl.zst, see below; `last`).
 - The report (`report.py` holds its format, encoders and reader; `analysis/report.py` the

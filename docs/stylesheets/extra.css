@@ -1,0 +1,91 @@
+/* Material lets inline code break anywhere (word-break: break-word), so a table
+   column can shrink until a name like `dissolution` splits mid-word. In tables,
+   keep code whole: it still wraps at spaces, and a wide table scrolls sideways. */
+.md-typeset table:not([class]) code {
+  word-break: normal;
+}
+
+/* The API reference's symbol-type labels, spelled out rather than mkdocstrings'
+   abbreviations (meth, func, attr, mod, param). */
+code.doc-symbol-method::after {
+  content: "method";
+}
+code.doc-symbol-function::after {
+  content: "function";
+}
+code.doc-symbol-attribute::after {
+  content: "attribute";
+}
+code.doc-symbol-module::after {
+  content: "module";
+}
+code.doc-symbol-parameter::after {
+  content: "parameter";
+}
+code.doc-symbol-type_parameter::after {
+  content: "type parameter";
+}
+
+/* Each class of the API reference, with its members, in a faint box, so where one
+   class ends and the next starts is clear. */
+.md-typeset .doc-class {
+  margin: 1.5em 0;
+  padding: 0 1em 0.5em;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  background-color: color-mix(in srgb, var(--md-default-fg-color--lightest) 40%, transparent);
+}
+
+/* On white, the theme's faintest grey barely shows: a firmer border and fill. */
+[data-md-color-scheme="default"] .md-typeset .doc-class {
+  border-color: rgb(0 0 0 / 16%);
+  background-color: rgb(0 0 0 / 3.5%);
+}
+
+/* The "Source code in ..." bar has the page's background and no padding, so its
+   icons line up with the text; inside a box it would show as a strip with the
+   icons against its edges, so let the box show through. */
+.md-typeset .doc-class details.mkdocstrings-source {
+  background-color: transparent;
+}
+
+/* Profile links (ORCID, Lattes, Web of Science) after a person's name: icons only,
+   raised and small like footnote marks, with a hair of space between them. */
+.md-typeset a.profile {
+  font-size: 0.75em;
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 0.2em;
+}
+
+/* A terminal icon beside each command block (```bash), in place of a `$` prompt:
+   drawn by CSS, it isn't part of the text the copy button copies. The icon is
+   Material Design's "console", bundled with Material for MkDocs. */
+.md-typeset .language-bash.highlight pre {
+  position: relative;
+}
+.md-typeset .language-bash.highlight pre > code {
+  padding-left: 3.4em;
+}
+.md-typeset .language-bash.highlight pre::before {
+  content: "";
+  position: absolute;
+  top: 0.6em;
+  left: 0.95em;
+  width: 1.25em;
+  height: 1.25em;
+  background-color: var(--md-default-fg-color--light);
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20 19V7H4v12zm0-16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-7 14v-2h5v2zm-3.42-4L5.57 9H8.4l3.3 3.3c.39.39.39 1.03 0 1.42L8.42 17H5.59z'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20 19V7H4v12zm0-16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-7 14v-2h5v2zm-3.42-4L5.57 9H8.4l3.3 3.3c.39.39.39 1.03 0 1.42L8.42 17H5.59z'/></svg>") center / contain no-repeat;
+}
+
+/* Material's deep-orange accent (#ff6e42) suits the dark theme (5.8:1 on its
+   background) but is pale on white (2.8:1), where it colours diagrams, hovered
+   links and focus. The light theme gets a deeper step of the same orange, 4.5:1
+   on white, and lighter diagram fills: the 10% tint reads as salmon on white, so
+   boxes get 5%, keeping the orange for their outlines. */
+[data-md-color-scheme="default"][data-md-color-accent="deep-orange"] {
+  --md-accent-fg-color: #d64215;
+  --md-accent-fg-color--transparent: #d642151a;
+  --md-mermaid-node-bg-color: #d642150d;
+}

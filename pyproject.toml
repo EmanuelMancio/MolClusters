@@ -46,6 +46,10 @@ dev = [
     "commitizen>=4.5.1,<5.0.0",
     "reuse>=6.0.0,<7.0.0",
 ]
+docs = [
+    "mkdocs-material>=9.7.7,<10.0.0",
+    "mkdocstrings[python]>=1.0.6,<2.0.0",
+]
 
 [tool.commitizen]
 name = "cz_conventional_commits"

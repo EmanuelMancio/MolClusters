@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# Builds the documentation site on every pull request (to catch broken links and
+# docstrings), and publishes the build of `main` to GitHub Pages. Pages must be set
+# to deploy from GitHub Actions (Settings > Pages > Source).
+
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Build the site
+        run: uv run --locked --only-group docs mkdocs build --strict
+
+      - name: Upload the site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

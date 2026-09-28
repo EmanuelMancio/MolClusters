@@ -1,0 +1,174 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+site_name: MolClusters
+site_description: >-
+  Track the formation, growth, splitting, merging and lifetime of molecular
+  clusters in molecular dynamics trajectories.
+site_author: Emanuel Mancio
+site_url: https://emanuelmancio.github.io/MolClusters/
+repo_url: https://github.com/EmanuelMancio/MolClusters
+repo_name: EmanuelMancio/MolClusters
+edit_uri: edit/dev/docs/
+copyright: Copyright &copy; 2024-2026 Emanuel Mancio &middot; GPL-3.0-only
+
+theme:
+  name: material
+  icon:
+    logo: material/molecule
+    repo: fontawesome/brands/github
+  favicon: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - content.action.edit
+    - content.code.annotate
+    - content.code.copy
+    - content.tabs.link
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - User guide:
+      - user-guide/index.md
+      - Installation: user-guide/installation.md
+      - Quick start: user-guide/quickstart.md
+      - How clusters are tracked: user-guide/concepts.md
+      - Configuration: user-guide/configuration.md
+      - Command line: user-guide/cli.md
+      - Output files: user-guide/outputs.md
+      - The JSON report: user-guide/report.md
+      - Cluster properties: user-guide/properties.md
+      - LAMMPS systems: user-guide/lammps.md
+      - Using it from Python: user-guide/python.md
+      - Writing your own analysis: user-guide/custom-analyses.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Developer guide:
+      - developer-guide/index.md
+      - Development setup: developer-guide/setup.md
+      - Architecture: developer-guide/architecture.md
+      - The tracking algorithm: developer-guide/tracking.md
+      - Adding a built-in analysis: developer-guide/builtin-analyses.md
+      - Changing the report format: developer-guide/report-format.md
+      - Testing: developer-guide/testing.md
+      - Commits and releases: developer-guide/releases.md
+      - Writing the docs: developer-guide/docs.md
+  - API reference:
+      - reference/index.md
+      - molclusters: reference/molclusters.md
+      - molclusters.config: reference/config.md
+      - molclusters.tracker: reference/tracker.md
+      - molclusters.cluster: reference/cluster.md
+      - molclusters.analysis: reference/analysis.md
+      - molclusters.output: reference/output.md
+      - molclusters.report: reference/report.md
+      - molclusters.conntable: reference/conntable.md
+      - molclusters.log: reference/log.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      options:
+        custom_icons:  # icon sets beyond Material's, e.g. :academicons-lattes:
+          - docs/assets/icons
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
+            - https://pandas.pydata.org/docs/objects.inv
+            - https://networkx.org/documentation/stable/objects.inv
+            - https://docs.mdanalysis.org/stable/objects.inv
+          options:
+            docstring_style: numpy
+            docstring_section_style: table
+            filters: ["!^_[^_]"]
+            heading_level: 2
+            members_order: source
+            merge_init_into_class: true
+            separate_signature: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_source: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+watch:
+  - src/molclusters
+  - CHANGELOG.md
