@@ -11,7 +11,32 @@ on:
     branches: [main, dev]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  # The pre-commit hooks' checks, for pull requests from contributors who don't run them.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      # ruff check, ruff format and reuse lint-file; pytest runs in its own job below.
+      - name: Run the pre-commit hooks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+        env:
+          SKIP: pytest
+
   test:
     runs-on: ubuntu-latest
     strategy:
