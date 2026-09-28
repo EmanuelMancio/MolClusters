@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# Publishes the GitHub release of a version tag pushed by `cz bump` (see the developer
+# guide's "Commits and releases"): checks the tag matches the package version, runs the
+# tests, builds the package and attaches it to a release whose notes are the version's
+# CHANGELOG.md section. Zenodo archives each published release and gives it a DOI.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Check the tag matches the package version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG doesn't match pyproject.toml's version $version."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Build the package
+        run: uv build
+
+      - name: Take the release notes from CHANGELOG.md
+        run: |
+          awk -v head="## $TAG " 'index($0, head) == 1 { found = 1; next }
+                                  found && /^## / { exit }
+                                  found' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## $TAG ' section."
+            exit 1
+          fi
+          echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$TAG/CHANGELOG.md) for every version." >> notes.md
+
+      - name: Publish the release
+        run: gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

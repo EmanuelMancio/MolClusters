@@ -43,32 +43,42 @@ change for the package follows the same rule.
 
 ## Cutting a release
 
-On `main`, with `dev` merged in and the checks passing:
+Releases are cut by hand, when the changes on `dev` are worth one: nothing bumps the
+version on its own, and commits simply collect under *Unreleased* until then. When
+it's time, merge `dev` into `main` and, on `main` with the checks passing:
 
 ```bash
+uv run cz bump --dry-run   # optional: see the version and changelog it would make
 uv run cz bump
 ```
 
 Commitizen computes the next version from the commits since the last tag, updates
 `pyproject.toml`, `uv.lock`, `CITATION.cff` and `CHANGELOG.md`, and creates a
-GPG-signed commit (`chore: release vX -> vY [skip ci]`) and an annotated tag `vY`.
-Its pre-bump hooks refuse to run off `main` (`scripts/check_release_branch.py`),
-refresh `uv.lock`, and set `CITATION.cff`'s `version` and `date-released`
-(`scripts/update_citation.py`). Then push the branch and the tag, and publish a
-GitHub release for the tag:
+GPG-signed commit (`chore: release vX -> vY`) and an annotated tag `vY`. Its
+pre-bump hooks refuse to run off `main` (`scripts/check_release_branch.py`), refresh
+`uv.lock`, and set `CITATION.cff`'s `version` and `date-released`
+(`scripts/update_citation.py`). Then push the branch and the tag:
 
 ```bash
 git push origin main --follow-tags
-gh release create vY --verify-tag --title vY --generate-notes
 ```
 
-and merge `main` back into `dev`. Pushing to `main` also publishes this
-documentation site (see [Writing the docs](docs.md)).
+and merge `main` back into `dev`. The push to `main` runs the tests and publishes this
+documentation site (see [Writing the docs](docs.md)), and the tag runs the *Release*
+workflow (`.github/workflows/release.yml`): it checks the tag matches the package
+version, runs the tests, builds the package and publishes the GitHub release, with the
+wheel and sdist attached and the version's `CHANGELOG.md` section as its notes. If it
+fails for a passing reason (a network error), re-run it from the Actions tab; if the
+tagged code itself fails, don't move the tag: fix it on `dev` and cut the next
+version.
+
+The release commit must not carry `[skip ci]`: GitHub would then skip every workflow
+triggered by the push, the tag's included.
 
 ## DOIs (Zenodo)
 
-Each published GitHub release is archived on [Zenodo](https://zenodo.org/), which gives
-it a DOI; a tag alone isn't. Zenodo takes the record's title, description, authors
+Each published GitHub release, as the *Release* workflow makes, is archived on
+[Zenodo](https://zenodo.org/), which gives it a DOI; a tag alone isn't. Zenodo takes the record's title, description, authors
 (with their ORCID and affiliation), keywords and license from `CITATION.cff`, and the
 version from the release's tag, so the authors in `CITATION.cff` are the ones credited.
 A Zenodo record can't be deleted: check `CITATION.cff` before publishing a release.
