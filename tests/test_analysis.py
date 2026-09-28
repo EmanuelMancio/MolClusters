@@ -140,7 +140,7 @@ class TestRunAndFrame:
         self, make_universe: UniverseFactory, tmp_path: Path
     ):
         class Appender(FrameAnalysis):
-            outputs = (OutputFile("frames.txt", append=True),)
+            outputs = (OutputFile("frames.txt"),)
 
             def analyse(self, frame: Frame) -> None:
                 frame.output.append("frames.txt", f"{frame.index}\n")
@@ -364,7 +364,7 @@ class TestClusterCoordinates:
         outputs = ClusterCoordinates(["MOL"], follow=follow).outputs
 
         assert [out.name for out in outputs] == names
-        assert all(out.append for out in outputs)
+        assert all(out.is_pattern for out in outputs)
 
     @pytest.mark.parametrize(("folder", "where"), [("", "."), ("gro/all", "gro/all")])
     def test_writes_in_the_folder_given(

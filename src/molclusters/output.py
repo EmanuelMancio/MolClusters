@@ -27,13 +27,9 @@ class OutputFile:
         integer, e.g. ``cls-id<id>.gro`` for ``cls-id1.gro``, ``cls-id2.gro``, ...
         It may start with folders, separated by ``/`` (placeholders only go in
         the file name), relative to the output directory.
-    append : bool
-        Whether the file is appended to instead of overwritten, so that the
-        results of an earlier run in the same place would end up mixed in.
     """
 
     name: str
-    append: bool = False
 
     def matches(self, filename: str) -> bool:
         """Tell whether `filename` is this file, or one of this family of files.
@@ -51,6 +47,17 @@ class OutputFile:
         literal_parts = re.split(r"<[^<>]*>", self.name)
         pattern = r"\d+".join(re.escape(part) for part in literal_parts)
         return re.fullmatch(pattern, filename) is not None
+
+    @property
+    def is_pattern(self) -> bool:
+        """Whether `name` is a pattern, standing for a family of files.
+
+        Returns
+        -------
+        bool
+            True if `name` has a ``<placeholder>``.
+        """
+        return re.search(r"<[^<>]*>", self.name) is not None
 
     def existing(self, directory: Path) -> list[Path]:
         """Find the files of this declaration that already exist in `directory`.
@@ -85,6 +92,9 @@ class RunOutput:
     shared by every analysis of the run, and used as a context manager it is
     flushed on exit, even when the run is interrupted.
 
+    Every file starts over in a new run: the first flush of a file overwrites
+    it, so an earlier run's results are never mixed with this one's.
+
     Attributes
     ----------
     directory : Path
@@ -93,7 +103,7 @@ class RunOutput:
         The buffered size, in characters, that triggers a flush.
     """
 
-    __slots__ = ["directory", "max_chars", "_pending", "_size"]
+    __slots__ = ["directory", "max_chars", "_pending", "_size", "_written"]
 
     def __init__(self, directory: Path, max_chars: int = 64 * 2**20) -> None:
         """Initialize the output of a run.
@@ -109,6 +119,18 @@ class RunOutput:
         self.max_chars = max_chars
         self._pending: defaultdict[str, list[str]] = defaultdict(list)
         self._size = 0
+        self._written: set[str] = set()
+
+    @property
+    def written(self) -> frozenset[str]:
+        """The files written so far, named as given to `path` or `append`.
+
+        Returns
+        -------
+        frozenset[str]
+            The names of the files handed out by `path` or flushed by `flush`.
+        """
+        return frozenset(self._written)
 
     def path(self, name: str) -> Path:
         """Give the path to write the file `name` to.
@@ -123,6 +145,7 @@ class RunOutput:
         Path
             The file's path, in `directory`; its folders are created if missing.
         """
+        self._written.add(name)
         path = self.directory / name
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
@@ -143,9 +166,14 @@ class RunOutput:
             self.flush()
 
     def flush(self) -> None:
-        """Append the queued text to its files, opening each file once."""
+        """Append the queued text to its files, opening each file once.
+
+        A file flushed for the first time is overwritten instead: whatever it held
+        came from an earlier run.
+        """
         for name, chunks in self._pending.items():
-            with self.path(name).open("a+") as out:
+            mode = "a" if name in self._written else "w"
+            with self.path(name).open(mode) as out:
                 out.writelines(chunks)
         self._pending.clear()
         self._size = 0

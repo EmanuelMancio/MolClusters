@@ -42,9 +42,11 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   through `Run` (universe, config, `output`, `analysis(Type)` lookup of earlier analyses) and each
   frame through `Frame` (index, time, read-only clusters, `find`, `output`), never the tracker itself. All
   file writes go through `Run.output` (`output.py`'s `RunOutput`: `path(name)` for whole files,
-  buffered `append` for per-frame ones; names may include folders, created on demand, all
+  buffered `append` for per-frame ones, overwritten on their first flush of a run so runs never
+  mix; names may include folders, created on demand, all
   under the run's output directory, `--output-dir`), and each analysis declares its files in `outputs`
-  (`OutputFile`), which drives the earlier-run check and the end-of-run summary. Library users add
+  (`OutputFile`), which drives the earlier-run checks (what gets overwritten; files of a family
+  like `cls-id<id>.gro` that this run didn't rewrite) and the end-of-run summary. Library users add
   their own analyses with `MolClusters(..., analyses=[...])`, which run after the config-enabled
   built-ins; `Run` dispatches every hook through `Run._hook`, which
   notes which analysis raised an error (the CLI prints those notes), tags what's logged meanwhile

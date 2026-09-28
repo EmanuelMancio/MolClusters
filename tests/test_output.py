@@ -19,27 +19,31 @@ class TestOutputFile:
 
     @pytest.mark.parametrize("name", ["cls-id1.gro", "cls-id1042.gro"])
     def test_a_placeholder_matches_an_integer(self, name: str):
-        assert OutputFile("cls-id<id>.gro", append=True).matches(name)
+        assert OutputFile("cls-id<id>.gro").matches(name)
 
     @pytest.mark.parametrize(
         "name", ["cls-id.gro", "cls-idX.gro", "cls-id2-mine.gro", "cls-id2.gro.bak"]
     )
     def test_a_placeholder_matches_nothing_else(self, name: str):
-        assert not OutputFile("cls-id<id>.gro", append=True).matches(name)
+        assert not OutputFile("cls-id<id>.gro").matches(name)
 
     def test_a_name_in_a_folder_matches_only_in_that_folder(self):
-        out = OutputFile("gro/cls-id<id>.gro", append=True)
+        out = OutputFile("gro/cls-id<id>.gro")
 
         assert out.matches("gro/cls-id3.gro")
         assert not out.matches("cls-id3.gro")
         assert not out.matches("other/cls-id3.gro")
+
+    def test_a_placeholder_makes_it_a_pattern(self):
+        assert OutputFile("cls-id<id>.gro").is_pattern
+        assert not OutputFile("evo.txt").is_pattern
 
     def test_existing_finds_the_files_in_their_folder(self, tmp_path: Path):
         (tmp_path / "gro").mkdir()
         for name in ["gro/cls-id3.gro", "gro/cls-id10.gro", "gro/x.gro", "cls-id4.gro"]:
             (tmp_path / name).write_text("")
 
-        found = OutputFile("gro/cls-id<id>.gro", append=True).existing(tmp_path)
+        found = OutputFile("gro/cls-id<id>.gro").existing(tmp_path)
 
         assert found == [tmp_path / "gro/cls-id10.gro", tmp_path / "gro/cls-id3.gro"]
         assert OutputFile("none/cls-id<id>.gro").existing(tmp_path) == []
@@ -65,17 +69,37 @@ class TestRunOutput:
         assert not (tmp_path / "a.gro").exists()
 
     def test_flush_appends_each_file_in_order(self, tmp_path: Path):
-        (tmp_path / "a.gro").write_text("earlier\n")
         output = RunOutput(tmp_path)
 
         for text in ["1\n", "2\n"]:
             output.append("a.gro", f"a{text}")
             output.append("b.gro", f"b{text}")
-        output.flush()
+            output.flush()
         output.flush()  # nothing left to write
 
-        assert (tmp_path / "a.gro").read_text() == "earlier\na1\na2\n"
+        assert (tmp_path / "a.gro").read_text() == "a1\na2\n"
         assert (tmp_path / "b.gro").read_text() == "b1\nb2\n"
+
+    def test_the_first_flush_overwrites_an_earlier_runs_file(self, tmp_path: Path):
+        (tmp_path / "a.gro").write_text("earlier run\n")
+        output = RunOutput(tmp_path)
+
+        output.append("a.gro", "1\n")
+        output.flush()
+        output.append("a.gro", "2\n")
+        output.flush()
+
+        assert (tmp_path / "a.gro").read_text() == "1\n2\n"
+
+    def test_written_names_the_files_of_the_run(self, tmp_path: Path):
+        output = RunOutput(tmp_path)
+
+        output.path("whole.txt")
+        output.append("gro/a.gro", "x")
+        output.flush()
+        output.append("unflushed.gro", "x")
+
+        assert output.written == {"whole.txt", "gro/a.gro"}
 
     def test_a_full_buffer_flushes_itself(self, tmp_path: Path):
         output = RunOutput(tmp_path, max_chars=6)

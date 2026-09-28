@@ -176,40 +176,46 @@ class MolClusters:
                 )
 
     def __check_previous_outputs(self, directory: path.Path) -> None:
-        """Warn about output files left in the output directory by an earlier run.
-
-        The files appended to (e.g. the per-frame .gro files) would end up mixing an
-        earlier run's results with this one's; the other outputs are just overwritten.
+        """Tell which results of an earlier run in the output directory get overwritten.
 
         Parameters
         ----------
         directory : path.Path
             The directory this run writes to.
         """
-        outputs = self.__declared_outputs()
-
-        overwritten = [
-            out.name
-            for out in outputs
-            if not out.append and (directory / out.name).exists()
-        ]
+        overwritten = []
+        for out in self.__declared_outputs():
+            files = out.existing(directory)
+            if files:
+                overwritten.append(
+                    f"{out.name} ({len(files)} file(s))" if out.is_pattern else out.name
+                )
         if overwritten:
             logger.info(f"Overwriting results of an earlier run: {overwritten}")
 
-        appended = sorted(
+    def __check_leftover_outputs(self) -> None:
+        """Warn about an earlier run's output files that this run didn't overwrite.
+
+        Families of files (e.g. one .gro file per cluster id) needn't have the same
+        members from one run to the next, so some of the files in the output
+        directory may still be an earlier run's.
+        """
+        directory = self.output.directory
+        leftovers = sorted(
             {
-                file.relative_to(directory).as_posix()
-                for out in outputs
-                if out.append
+                name
+                for out in self.__declared_outputs()
                 for file in out.existing(directory)
+                if (name := file.relative_to(directory).as_posix())
+                not in self.output.written
             }
         )
-        if appended:
-            shown = ", ".join(appended[:5]) + (", ..." if len(appended) > 5 else "")
+        if leftovers:
+            shown = ", ".join(leftovers[:5]) + (", ..." if len(leftovers) > 5 else "")
             logger.warning(
-                f"{len(appended)} file(s) from an earlier run are in {directory} "
-                f"({shown}): this run appends to them, mixing both runs. "
-                "Move or delete them first to keep the runs apart."
+                f"{len(leftovers)} file(s) of an earlier run are left in {directory} "
+                f"({shown}): this run didn't write them. Delete them to keep only "
+                "this run's results."
             )
 
     def __declared_outputs(self) -> list[OutputFile]:
@@ -328,3 +334,4 @@ class MolClusters:
 
         outputs = ", ".join(out.name for out in self.__declared_outputs())
         logger.info(f"Results written to {self.output.directory}: {outputs}")
+        self.__check_leftover_outputs()

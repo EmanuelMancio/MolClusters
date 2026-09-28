@@ -345,20 +345,28 @@ class TestRun:
         for name in [
             "evo.txt",
             "coordinates/cls-n2.gro",
+            "coordinates/cls-n5.gro",
             "coordinates/solute-1.gro",
             "coordinates/cls-n2-mine.gro",
             "cls-n3.gro",  # outside the folder
         ]:
-            (tmp_path / name).write_text("")
+            (tmp_path / name).write_text("earlier run\n")
         molcls = analyze([[[1, 2]], [[1, 2]]], 2, solute=["MOL"])
 
         molcls.run()
 
-        assert "Overwriting results of an earlier run: ['evo.txt']\n" in captured_logs
         # solute-1.gro is only written when following solutes
-        (warning,) = [m for m in captured_logs if "file(s) from an" in m]
+        assert (
+            "Overwriting results of an earlier run: "
+            "['evo.txt', 'coordinates/cls-n<size>.gro (2 file(s))']\n"
+        ) in captured_logs
+        # started over, not appended to
+        gro = (tmp_path / "coordinates/cls-n2.gro").read_text()
+        assert gro.startswith("Cluster-1 - Time = 0")
+        # this run had no cluster of 5, so the earlier run's file is still there
+        (warning,) = [m for m in captured_logs if "file(s) of an earlier run" in m]
         assert warning.startswith("1 file(s)")
-        assert "(coordinates/cls-n2.gro)" in warning
+        assert "(coordinates/cls-n5.gro)" in warning
 
     def test_a_fresh_directory_reports_no_earlier_outputs(
         self,
@@ -401,7 +409,7 @@ class TestRun:
 class LargestCluster(FrameAnalysis):
     """A user analysis: the largest cluster of every frame, next to the built-ins."""
 
-    outputs = (OutputFile("largest.txt"), OutputFile("largest-<n>.log", append=True))
+    outputs = (OutputFile("largest.txt"), OutputFile("largest-<n>.log"))
 
     def prepare(self, run: Run) -> None:
         self.size = run.analysis(SizeEvolution)
@@ -440,15 +448,20 @@ class TestUserAnalyses:
         captured_logs: list[str],
     ):
         monkeypatch.chdir(tmp_path)
-        for name in ["largest.txt", "largest-7.log"]:
-            (tmp_path / name).write_text("")
+        for name in ["largest.txt", "largest-1.log", "largest-7.log"]:
+            (tmp_path / name).write_text("earlier run\n")
         molcls = analyze([[[1, 2]], [[1, 2]]], 2, analyses=[LargestCluster()])
 
         molcls.run()
 
-        overwriting = "Overwriting results of an earlier run: ['largest.txt']\n"
+        overwriting = (
+            "Overwriting results of an earlier run: "
+            "['largest.txt', 'largest-<n>.log (2 file(s))']\n"
+        )
         assert overwriting in captured_logs
-        (warning,) = [m for m in captured_logs if "file(s) from an" in m]
+        # started over, not appended to
+        assert (tmp_path / "largest-1.log").read_text() == "done\n"
+        (warning,) = [m for m in captured_logs if "file(s) of an earlier run" in m]
         assert warning.startswith("1 file(s)")
         assert "(largest-7.log)" in warning
         (summary,) = [m for m in captured_logs if m.startswith("Results written")]

@@ -67,11 +67,11 @@ class ClusterCoordinates(FrameAnalysis):
         self.follow_skipped: Counter[int] = Counter()
 
         self.outputs = (
-            OutputFile(self._file("cls-n<size>.gro"), append=True),
-            OutputFile(self._file("cls-id<id>.gro"), append=True),
+            OutputFile(self._file("cls-n<size>.gro")),
+            OutputFile(self._file("cls-id<id>.gro")),
         )
         if follow:
-            self.outputs += (OutputFile(self._file("solute-<resid>.gro"), append=True),)
+            self.outputs += (OutputFile(self._file("solute-<resid>.gro")),)
 
     def _file(self, name: str) -> str:
         """Place the file `name` in `folder`.

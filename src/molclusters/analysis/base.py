@@ -55,8 +55,8 @@ class FrameAnalysis(ABC):
     Attributes
     ----------
     outputs : tuple[OutputFile, ...]
-        The files the analysis writes, to warn about results of an earlier run
-        they would overwrite or be appended to, and to report them at the end.
+        The files the analysis writes, to tell which results of an earlier run
+        they overwrite (or leave behind), and to report them at the end.
         Usually a class attribute; an analysis whose files depend on its options
         sets it in ``__init__`` instead, since it's read before `prepare`.
     """
