@@ -535,6 +535,33 @@ class TestClusterIdentity:
         assert tracker.find(3) is None
         assert_membership_is_consistent(tracker)
 
+    def test_cluster_scattered_into_other_clusters_dies(self, track: Track):
+        # each of A's molecules joins a different cluster, none goes free
+        tracker = track(
+            [[[1, 2, 3], [4, 5], [6, 7], [8, 9]], [[1, 4, 5], [2, 6, 7], [3, 8, 9]]], 9
+        )
+        a = id_of(tracker, {1, 2, 3})
+        b, c, d = (id_of(tracker, g) for g in ({4, 5}, {6, 7}, {8, 9}))
+
+        step(tracker, 1)
+
+        assert snapshot(tracker) == {b: {1, 4, 5}, c: {2, 6, 7}, d: {3, 8, 9}}
+        assert a not in tracker.clusters
+        assert_membership_is_consistent(tracker)
+
+    def test_cluster_scattered_into_new_clusters_dies(self, track: Track):
+        # each of A's molecules pairs with a free molecule, so no pair carries A
+        tracker = track([[[1, 2, 3]], [[1, 10], [2, 11], [3, 12]]], 12)
+        a = id_of(tracker, {1, 2, 3})
+
+        step(tracker, 1)
+
+        ids = [id_of(tracker, g) for g in ({1, 10}, {2, 11}, {3, 12})]
+        assert a not in tracker.clusters
+        assert len(set(ids)) == 3
+        assert all(i > a for i in ids)
+        assert_membership_is_consistent(tracker)
+
     def test_merge_loser_remnant_is_a_new_cluster(self, track: Track):
         tracker = track(
             [
@@ -756,6 +783,36 @@ class TestTransition:
 
         assert t.dissolved == {a}
         assert t.destinations(a) == {b: 1, c: 1, 0: 1}
+
+    def test_cluster_scattered_into_other_clusters_dissolves(self, track: Track):
+        # its molecules all join other clusters, but none of them takes A in
+        tracker, before, _ = self.run(
+            track,
+            [[[1, 2, 3], [4, 5], [6, 7], [8, 9]], [[1, 4, 5], [2, 6, 7], [3, 8, 9]]],
+            9,
+        )
+        a = id_of_in(before, {1, 2, 3})
+        b, c, d = (id_of_in(before, g) for g in ({4, 5}, {6, 7}, {8, 9}))
+
+        t = tracker.transition
+
+        assert t.dissolved == {a}
+        assert dict(t.merged) == {}
+        assert t.born == frozenset()
+        assert t.destinations(a) == {b: 1, c: 1, d: 1}
+
+    def test_cluster_scattered_into_new_clusters_dissolves(self, track: Track):
+        tracker, before, _ = self.run(
+            track, [[[1, 2, 3]], [[1, 10], [2, 11], [3, 12]]], 12
+        )
+        (a,) = before
+
+        t = tracker.transition
+
+        assert t.dissolved == {a}
+        assert t.born == set(tracker.clusters)
+        assert t.destinations(a) == {new: 1 for new in t.born}
+        assert all(t.sources(new) == {a: 1, 0: 1} for new in t.born)
 
     def test_ignored_composition_counts_as_no_cluster(self, track: Track):
         resnames = ["MOL"] + ["SOL"] * 4 + ["MOL"]
