@@ -33,7 +33,8 @@ Arguments:
 Optional Arguments:
 -------------------
 - --traj-memory: Load the trajectory into memory.
-- --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
+- --in-memory-step: Keep only every N-th frame when loading into memory (requires
+  --traj-memory); the whole analysis then runs on those frames (default 1, every frame).
 - --log-level: Minimum level of the messages logged (default INFO).
 - --output-dir: Directory for the results and the log (default: current directory).
 - --version: Displays the version of the MolClusters library.
@@ -283,7 +284,8 @@ def main() -> None:
     - top: The topology file for the molecular dynamics simulation.
     - inp: The input YAML/JSON/TOML file containing analysis settings.
     - --traj-memory: Load the trajectory into memory.
-    - --in-memory-step: Step for in-memory trajectory loading (requires --traj-memory).
+    - --in-memory-step: Keep only every N-th frame when loading into memory (requires
+      --traj-memory); the whole analysis then runs on those frames (default 1, every frame).
     - --log-level: Minimum level of the messages logged (default INFO).
     - --output-dir: Directory for the results and the log (default: current directory).
     - --version: Displays the version of the MolClusters library.
@@ -311,7 +313,12 @@ def main() -> None:
         "--in-memory-step",
         type=int,
         default=1,
-        help="Step for in-memory trajectory loading. Default is 1.",
+        metavar="N",
+        help=(
+            "Keep only every N-th frame when loading the trajectory into memory "
+            "(requires --traj-memory); the whole analysis then runs on those frames, "
+            "with their original times. Default is 1 (every frame)."
+        ),
     )
     parser.add_argument(
         "--log-level",
