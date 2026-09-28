@@ -492,6 +492,10 @@ class MolClsConfig(BaseSettings):
 
     @model_validator(mode="after")
     def _build_rules(self) -> Self:
+        # each pair's rule and how it was written ("A:B ('cm 5.0')"): a rule
+        # applies both ways, so A:B and B:A are the same pair, and a conflict
+        # names both
+        given: SymmetricDict[str, tuple[Rule, str]] = SymmetricDict()
         for mi, neighbors in self.rules.items():
             for mj, spec in neighbors.items():
                 if "solute" in (mi, mj):
@@ -506,6 +510,14 @@ class MolClsConfig(BaseSettings):
                     # notes, so the rule has to be named in the message itself
                     raise ValueError(f"Invalid rule {mi}:{mj} ({spec!r}): {e}") from e
 
+                if (mi, mj) in given and given[mi, mj][0] != rule:
+                    raise ValueError(
+                        f"Conflicting rules {given[mi, mj][1]} and {mi}:{mj} "
+                        f"({spec!r}): a rule applies both ways, so give each "
+                        "pair one rule."
+                    )
+
+                given[mi, mj] = (rule, f"{mi}:{mj} ({spec!r})")
                 logger.trace(f"Using rule between {mi} and {mj}: {rule}")
                 self._rules[mi, mj] = rule
 

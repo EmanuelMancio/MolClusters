@@ -450,6 +450,22 @@ class TestRules:
         with pytest.raises(ValidationError, match="A:B"):
             MolClsConfig(rules={"A": {"B": "cm far"}})
 
+    def test_conflicting_rules_for_a_pair_given_both_ways_raise(self):
+        rules = {"A": {"B": "cm 5.0"}, "B": {"A": "hb"}}
+
+        with pytest.raises(
+            ValidationError,
+            match=r"Conflicting rules A:B \('cm 5.0'\) and B:A \('hb'\)",
+        ):
+            MolClsConfig(rules=rules)
+
+    def test_same_rule_for_a_pair_given_both_ways_is_accepted(self):
+        rules = {"A": {"B": "hb"}, "B": {"A": "hb a 150 d 3.5"}}
+
+        config = MolClsConfig(rules=rules)
+
+        assert dict(config._rules) == {("A", "B"): HBRule(dist=3.5, ang=150.0)}
+
     def test_solute_keyword_not_allowed_in_rules(self):
         with pytest.raises(ValueError, match="not supported in 'rules'"):
             MolClsConfig(rules={"solute": {"A": "cm 1.0"}})
