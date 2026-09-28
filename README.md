@@ -17,6 +17,12 @@ molecular dynamics trajectories (GROMACS, LAMMPS and any other format
 
 **Documentation: <https://emanuelmancio.github.io/MolClusters/>**
 
+> [!WARNING]
+> Versions up to and including v0.6.0 have errors in dipoles, volumes, densities and, in
+> some cases, cluster membership, fixed in v0.7.0. If you have results from them, see
+> [Known issues in earlier versions](https://emanuelmancio.github.io/MolClusters/user-guide/known-issues/)
+> ([source](docs/user-guide/known-issues.md)) for which are affected and how to correct them.
+
 ## Installation
 
 MolClusters needs Python 3.12 or newer, and is installed from this repository:

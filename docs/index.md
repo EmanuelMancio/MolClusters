@@ -10,6 +10,13 @@ LAMMPS, CHARMM/NAMD, AMBER, ...), takes the rules that connect molecules
 from a small YAML, JSON or TOML file, and writes plain CSV/text tables, per-cluster
 coordinate files and a compressed JSON Lines report of every cluster of every frame.
 
+!!! warning "Results from v0.6.0 or earlier?"
+
+    Those versions have errors in dipoles, volumes, densities and, in some cases,
+    cluster membership, fixed in v0.7.0. See
+    [Known issues in earlier versions](user-guide/known-issues.md) for which results
+    are affected and how to correct them.
+
 <div class="grid cards" markdown>
 
 -   :material-rocket-launch:{ .lg .middle } **Get started**

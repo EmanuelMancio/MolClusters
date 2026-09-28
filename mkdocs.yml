@@ -70,6 +70,7 @@ nav:
       - Using it from Python: user-guide/python.md
       - Writing your own analysis: user-guide/custom-analyses.md
       - Troubleshooting: user-guide/troubleshooting.md
+      - Known issues in earlier versions: user-guide/known-issues.md
   - Developer guide:
       - developer-guide/index.md
       - Development setup: developer-guide/setup.md
