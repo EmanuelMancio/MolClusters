@@ -12,7 +12,7 @@ interrupted run leaves every frame it analysed readable.
 
 The first line is the header::
 
-    {"format": "molclusters-report", "version": 3, "software": "MolClusters x.y.z",
+    {"format": "molclusters-report", "version": 4, "software": "MolClusters x.y.z",
      "trajectory": <absolute path, or null for an in-memory trajectory>,
      "topology": <absolute path, or null>, "n_frames": <frames in the run>,
      "decimals": 6, "units": {<quantity>: <unit>, ...},
@@ -36,6 +36,7 @@ and each cluster is::
         "mass": 402.260990,
         "volume": 834.555760,
         "radius": 5.840575,
+        "radius_of_gyration": 3.981872,
         "diameter": 11.681149,
         "density": 0.800390,
         "charge": 0.0,
@@ -49,7 +50,8 @@ with ``birth_time`` the time of the frame the cluster first appeared in (the
 run's first frame's for the clusters already there), and each connection a row of
 ``connection_columns``: the two resids, then the connection's distance (and, for
 H-bonds, the D-H-A angle and the number of H-bonds between the pair; null for "cm"
-rules).
+rules). ``radius`` is the equivalent sphere's (see `MolGroup.radius`), and
+``radius_of_gyration`` the mass-weighted Rg it derives from.
 
 Other analyses add fields of their own (see `FrameAnalysis.report_frame` and
 `report_cluster`), under their class name in a frame's or a cluster's record. The
@@ -100,8 +102,9 @@ from .cluster import Cluster, MolGroup
 from .config import ReportCompression
 
 FORMAT = "molclusters-report"
-# 1 was molclusters.json, a single JSON document; 2 had no clusters' birth_time
-VERSION = 3
+# 1 was molclusters.json, a single JSON document; 2 had no clusters' birth_time;
+# 3 had no radius_of_gyration
+VERSION = 4
 
 # decimal places of every float in the report: well below what the properties
 # are good for (e.g. 1e-6 angstrom), yet well under the 17 digits of a float
@@ -113,6 +116,7 @@ UNITS = {
     "mass": "amu",
     "volume": "angstrom^3",
     "radius": "angstrom",
+    "radius_of_gyration": "angstrom",
     "diameter": "angstrom",
     "density": "g/cm^3",
     "charge": "e",
@@ -256,6 +260,7 @@ def group_record(group: MolGroup) -> dict[str, Any]:
         "mass": _round(group.mass),
         "volume": _round(group.volume),
         "radius": _round(group.radius),
+        "radius_of_gyration": _round(group.radius_of_gyration),
         "diameter": _round(group.diameter),
         "density": _round(group.density),
         "charge": _round(group.charge),

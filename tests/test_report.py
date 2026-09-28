@@ -77,7 +77,7 @@ class TestEncoding:
         record = group_record(MolGroup(uni, [1, 2]))
 
         floats = [v for v in record.values() if isinstance(v, float)]
-        assert len(floats) == 9
+        assert len(floats) == 10
         assert all(v == round(v, DECIMALS) for v in floats)
         # as the property is, to the decimals kept
         assert record["radius"] == pytest.approx(MolGroup(uni, [1, 2]).radius, abs=1e-6)

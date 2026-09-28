@@ -66,6 +66,7 @@ PROPERTIES = [
     "mass",
     "charge",
     "radius",
+    "radius_of_gyration",
     "diameter",
     "volume",
     "density",
@@ -118,6 +119,7 @@ def reference(uni: mda.Universe, whole: np.ndarray, resids: Group) -> dict:
         "mass": mass,
         "charge": q.sum(),
         "radius": radius,
+        "radius_of_gyration": rg,
         "diameter": 2 * radius,
         "volume": volume,
         # amu/A^3 -> g/cm^3: 1 amu = 1.66053906660e-24 g, 1 A^3 = 1e-24 cm^3

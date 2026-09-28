@@ -425,6 +425,7 @@ class TestOutputUnits:
             "mass": "amu",
             "volume": "angstrom^3",
             "radius": "angstrom",
+            "radius_of_gyration": "angstrom",
             "diameter": "angstrom",
             "density": "g/cm^3",
             "charge": "e",
@@ -442,7 +443,13 @@ class TestOutputUnits:
             ((_, _, distance, _, _),) = cluster["connections"]
             assert distance == pytest.approx(3.0, abs=1e-4)
             # the geometric ones as the properties pinned above give them
-            for key in ["radius", "diameter", "volume", "density"]:
+            for key in [
+                "radius",
+                "radius_of_gyration",
+                "diameter",
+                "volume",
+                "density",
+            ]:
                 assert cluster[key] == pytest.approx(getattr(cluster_group, key))
 
             nuclei = cluster["Nucleus"]
