@@ -210,10 +210,7 @@ class ClusterTracker:
             MappingProxyType(flows), born=frozenset(self.clusters)
         )
 
-    # TODO: make a better name for this function
-    def _gen_origin_cluster_counter(
-        self, subconn: ConnectionTable._SubConnTable
-    ) -> Counter:
+    def _count_origins(self, subconn: ConnectionTable._SubConnTable) -> Counter:
         """Count where the molecules of a new connected group came from.
 
         Each molecule of `subconn` (a connected group of the current frame) is
@@ -263,7 +260,7 @@ class ClusterTracker:
         ----------
         conn_info : list[tuple[ConnectionTable._SubConnTable, Counter]]
             Every connected group of the current frame, largest first, each with its
-            origin counter (see `_gen_origin_cluster_counter`).
+            origin counter (see `_count_origins`).
 
         Returns
         -------
@@ -343,7 +340,7 @@ class ClusterTracker:
 
         The connection table is rebuilt for the current frame, and the previous
         clusters that the molecules of each connected group (ignored compositions
-        excluded) came from are counted (see `_gen_origin_cluster_counter`). Ids
+        excluded) came from are counted (see `_count_origins`). Ids
         are then assigned in two steps, each of which sees the whole frame:
 
         1. Each previous cluster picks its best group: the one holding the most of
@@ -376,7 +373,7 @@ class ClusterTracker:
         modified_clusters = set()
 
         conn_info = [
-            (sub, self._gen_origin_cluster_counter(sub))
+            (sub, self._count_origins(sub))
             for sub in self.conntab.subconntables()
             if not self.config.is_ignored_composition(sub.resnames)
         ]
