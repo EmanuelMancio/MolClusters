@@ -6,9 +6,11 @@ SPDX-License-Identifier: LGPL-3.0-or-later
 
 # MolClusters
 
+[![PyPI](https://img.shields.io/pypi/v/molclusters.svg)](https://pypi.org/project/molclusters/)
+[![Python versions](https://img.shields.io/pypi/pyversions/molclusters.svg)](https://pypi.org/project/molclusters/)
 [![Tests](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml/badge.svg?branch=dev)](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml)
 [![Docs](https://github.com/EmanuelMancio/MolClusters/actions/workflows/docs.yml/badge.svg)](https://emanuelmancio.github.io/MolClusters/)
-[![License: LGPL v3+](https://img.shields.io/badge/license-LGPL--3.0--or--later-blue.svg)](LICENSE)
+[![License: LGPL v3+](https://img.shields.io/badge/license-LGPL--3.0--or--later-blue.svg)](https://github.com/EmanuelMancio/MolClusters/blob/main/LICENSE)
 [![REUSE compliant](https://img.shields.io/badge/REUSE-compliant-green.svg)](https://reuse.software/)
 
 Track the formation, growth, splitting, merging and lifetime of molecular clusters in
@@ -17,21 +19,24 @@ molecular dynamics trajectories (GROMACS, LAMMPS and any other format
 
 **Documentation: <https://emanuelmancio.github.io/MolClusters/>**
 
-> [!WARNING]
-> Versions up to and including v0.6.0 have errors in dipoles, volumes, densities and, in
-> some cases, cluster membership, fixed in v0.7.0. If you have results from them, see
+> ⚠️ **Results from v0.6.0 or earlier?** Those versions have errors in dipoles, volumes,
+> densities and, in some cases, cluster membership, fixed in v0.7.0. See
 > [Known issues in earlier versions](https://emanuelmancio.github.io/MolClusters/user-guide/known-issues/)
-> ([source](docs/user-guide/known-issues.md)) for which are affected and how to correct them.
+> for which results are affected and how to correct them.
 
 ## Installation
 
-MolClusters needs Python 3.12 or newer, and is installed from this repository:
+MolClusters needs Python 3.12 or newer, and is published on
+[PyPI](https://pypi.org/project/molclusters/):
 
 ```bash
-uv tool install git+https://github.com/EmanuelMancio/MolClusters
+uv tool install molclusters   # the molclusters command, in an environment of its own
 # or
-pip install git+https://github.com/EmanuelMancio/MolClusters
+pip install molclusters       # into your current environment, e.g. to use it from Python
 ```
+
+The latest development version installs from this repository with
+`pip install git+https://github.com/EmanuelMancio/MolClusters@dev`.
 
 It depends on [MDAnalysis](https://www.mdanalysis.org/), [NetworkX](https://networkx.org/),
 [NumPy](https://numpy.org/), [pandas](https://pandas.pydata.org/),
@@ -50,20 +55,23 @@ lists the command-line options.
 ## Contributing
 
 Bug reports and pull requests are welcome; for major changes, please open an issue first to
-discuss what you would like to change. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+discuss what you would like to change. See
+[CONTRIBUTING.md](https://github.com/EmanuelMancio/MolClusters/blob/main/CONTRIBUTING.md) and the
 [developer guide](https://emanuelmancio.github.io/MolClusters/developer-guide/) for the
 development setup and conventions.
 
 ## Citing
 
-If you use MolClusters in your research, please cite it: [CITATION.cff](CITATION.cff) has the
+If you use MolClusters in your research, please cite it:
+[CITATION.cff](https://github.com/EmanuelMancio/MolClusters/blob/main/CITATION.cff) has the
 details, and GitHub's "Cite this repository" button formats them.
 
 ## License
 
 MolClusters is free software, licensed under the
 [GNU LGPL v3](https://choosealicense.com/licenses/lgpl-3.0/) or any later version; see
-[LICENSE](LICENSE) and, for the GNU GPL v3 it builds on, [COPYING](COPYING). You can use it
+[LICENSE](https://github.com/EmanuelMancio/MolClusters/blob/main/LICENSE) and, for the GNU
+GPL v3 it builds on, [COPYING](https://github.com/EmanuelMancio/MolClusters/blob/main/COPYING). You can use it
 as a library from software under any license; changes to MolClusters itself that you
 distribute must stay under the LGPL. Every file's license is declared per the
 [REUSE](https://reuse.software/) specification.

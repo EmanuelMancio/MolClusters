@@ -65,12 +65,33 @@ git push origin main --follow-tags
 
 and merge `main` back into `dev`. The push to `main` runs the tests and publishes this
 documentation site (see [Writing the docs](docs.md)), and the tag runs the *Release*
-workflow (`.github/workflows/release.yml`): it checks the tag matches the package
-version, runs the tests, builds the package and publishes the GitHub release, with the
-wheel and sdist attached and the version's `CHANGELOG.md` section as its notes. If it
-fails for a passing reason (a network error), re-run it from the Actions tab; if the
-tagged code itself fails, don't move the tag: fix it on `dev` and cut the next
-version.
+workflow (`.github/workflows/release.yml`):
+
+1. **build**: checks the tag matches the package version, runs the tests, builds the
+   wheel and sdist and checks their metadata (`twine check`);
+2. **pypi**: uploads them to [PyPI](https://pypi.org/project/molclusters/);
+3. **github-release**: publishes the GitHub release, with the same files attached and
+   the version's `CHANGELOG.md` section as its notes.
+
+If it fails for a passing reason (a network error), re-run it from the Actions tab; if
+the tagged code itself fails, don't move the tag: fix it on `dev` and cut the next
+version. A version uploaded to PyPI can never be uploaded again, even after deleting
+it, which is why the tests run before the upload.
+
+## PyPI
+
+The *pypi* job uses [trusted publishing](https://docs.pypi.org/trusted-publishers/):
+PyPI trusts this repository's workflow directly, so no API token is stored anywhere.
+It was set up once, before the first upload:
+
+1. On PyPI, *Your account → Publishing → Add a new pending publisher*, with project
+   name `molclusters`, owner `EmanuelMancio`, repository `MolClusters`, workflow
+   `release.yml` and environment `pypi`. The first upload then creates the project.
+2. On GitHub, *Settings → Environments → New environment* `pypi`; optionally with
+   yourself as required reviewer, so every upload waits for your approval.
+
+The PyPI page shows `README.md`, so its links must be absolute URLs: relative ones
+work on GitHub but not on PyPI.
 
 The release commit must not carry `[skip ci]`: GitHub would then skip every workflow
 triggered by the push, the tag's included.

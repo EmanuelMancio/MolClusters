@@ -2,10 +2,14 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
-# Publishes the GitHub release of a version tag pushed by `cz bump` (see the developer
-# guide's "Commits and releases"): checks the tag matches the package version, runs the
-# tests, builds the package and attaches it to a release whose notes are the version's
-# CHANGELOG.md section. Zenodo archives each published release and gives it a DOI.
+# Releases a version tag pushed by `cz bump` (see the developer guide's "Commits and
+# releases"): checks the tag matches the package version, runs the tests and builds the
+# package once, uploads it to PyPI, then publishes the GitHub release with the same
+# files and the version's CHANGELOG.md section as notes. Zenodo archives each published
+# GitHub release and gives it a DOI.
+#
+# PyPI uses trusted publishing (no token): the PyPI project must list this repository,
+# this workflow (release.yml) and the `pypi` environment as a trusted publisher.
 
 name: Release
 
@@ -20,13 +24,12 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  TAG: ${{ github.ref_name }}
+
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      TAG: ${{ github.ref_name }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -54,6 +57,9 @@ jobs:
       - name: Build the package
         run: uv build
 
+      - name: Check the package metadata
+        run: uvx twine check --strict dist/*
+
       - name: Take the release notes from CHANGELOG.md
         run: |
           awk -v head="## $TAG " 'index($0, head) == 1 { found = 1; next }
@@ -65,7 +71,56 @@ jobs:
           fi
           echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$TAG/CHANGELOG.md) for every version." >> notes.md
 
+      - name: Keep the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      - name: Keep the release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: notes
+          path: notes.md
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/molclusters/
+    permissions:
+      id-token: write  # trusted publishing
+    steps:
+      - name: Get the package
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Upload to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.2
+
+  github-release:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get the package
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Get the release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: notes
+
       - name: Publish the release
-        run: gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file notes.md
+        run: >-
+          gh release create "$TAG" dist/*
+          --repo "${{ github.repository }}" --verify-tag --title "$TAG" --notes-file notes.md
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,7 +1,7 @@
 # Installation
 
-MolClusters needs **Python 3.12 or newer**. It is installed from its GitHub
-repository (it isn't published on PyPI).
+MolClusters needs **Python 3.12 or newer**, and is published on
+[PyPI](https://pypi.org/project/molclusters/) from v0.7.0.
 
 !!! danger "Don't use cluster properties from MolClusters 0.6.0 or earlier"
     Versions up to 0.6.0 computed several cluster properties wrongly. Use a later
@@ -24,13 +24,16 @@ repository (it isn't published on PyPI).
     center of mass of molecules split across the periodic boundaries, which could
     connect molecules that weren't close, or miss ones that were.
 
+    [Known issues in earlier versions](known-issues.md) lists every error, the
+    outputs it affects and how to correct old results.
+
 === "uv (recommended)"
 
     [uv](https://docs.astral.sh/uv/) installs the `molclusters` command in an
     isolated environment of its own:
 
     ```bash
-    uv tool install git+https://github.com/EmanuelMancio/MolClusters
+    uv tool install molclusters
     molclusters --version
     ```
 
@@ -39,7 +42,7 @@ repository (it isn't published on PyPI).
 === "pipx"
 
     ```bash
-    pipx install git+https://github.com/EmanuelMancio/MolClusters
+    pipx install molclusters
     molclusters --version
     ```
 
@@ -49,13 +52,14 @@ repository (it isn't published on PyPI).
     environment), for instance to use MolClusters from Python as well:
 
     ```bash
-    python -m pip install git+https://github.com/EmanuelMancio/MolClusters
+    python -m pip install molclusters
     molclusters --version
     ```
 
-To install a given release rather than the latest code, add its tag,
-`git+https://github.com/EmanuelMancio/MolClusters@v<version>`. The releases and what
-changed in each are listed in the [changelog](../changelog.md).
+To install a given release, pin its version, e.g. `molclusters==0.7.0`; the releases
+and what changed in each are listed in the [changelog](../changelog.md). The latest
+development version, not yet released, installs from the repository's `dev` branch:
+`git+https://github.com/EmanuelMancio/MolClusters@dev` in place of `molclusters`.
 
 ## Dependencies
 

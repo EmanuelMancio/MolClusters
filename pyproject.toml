@@ -36,7 +36,6 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Physics",
-    "Private :: Do Not Upload",
 ]
 
 [project.urls]
