@@ -2,9 +2,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
+import gzip
+import io
+import zlib
 from pathlib import Path
 
 import pytest
+import zstandard
 
 from molclusters.output import OutputFile, RunOutput
 
@@ -120,3 +124,115 @@ class TestRunOutput:
             raise KeyboardInterrupt
 
         assert (tmp_path / "a.gro").read_text() == "frame\n"
+
+    def test_bytes_are_written_as_they_are(self, tmp_path: Path):
+        output = RunOutput(tmp_path)
+
+        output.append("a.bin", b"1\n")
+        output.append("a.bin", b"2\r\n")
+        output.flush()
+
+        assert (tmp_path / "a.bin").read_bytes() == b"1\n2\r\n"
+
+    @pytest.mark.parametrize(
+        ("first", "then"), [("text", b"bytes"), (b"bytes", "text")]
+    )
+    def test_a_file_takes_either_text_or_bytes(
+        self, tmp_path: Path, first: str | bytes, then: str | bytes
+    ):
+        output = RunOutput(tmp_path)
+        output.append("a.txt", first)
+
+        with pytest.raises(TypeError, match="a.txt was appended"):
+            output.append("a.txt", then)
+
+
+def decompress(data: bytes, suffix: str, *, across_frames: bool = True) -> bytes:
+    """Decompress a whole .gz or .zst file, every gzip member or zstd frame of it.
+
+    Returns
+    -------
+    bytes
+        The decompressed data (of the first zstd frame only, unless `across_frames`).
+    """
+    if suffix == ".gz":
+        return gzip.decompress(data)
+    reader = zstandard.ZstdDecompressor().stream_reader(
+        io.BytesIO(data), read_across_frames=across_frames
+    )
+    return reader.read()
+
+
+def decompress_unfinished(data: bytes, suffix: str) -> bytes:
+    """Decompress what a stream that was never finished holds so far.
+
+    Returns
+    -------
+    bytes
+        The data flushed into the stream.
+    """
+    if suffix == ".gz":
+        return zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(data)
+    return zstandard.ZstdDecompressor().decompressobj().decompress(data)
+
+
+@pytest.mark.parametrize("suffix", [".gz", ".zst"])
+class TestCompressedOutput:
+    def test_appends_are_compressed_into_one_stream(self, tmp_path: Path, suffix: str):
+        name = f"report.jsonl{suffix}"
+        with RunOutput(tmp_path) as output:
+            for i in range(3):
+                output.append(name, f"{i}\n".encode())
+                output.flush()
+
+        data = (tmp_path / name).read_bytes()
+        assert decompress(data, suffix, across_frames=False) == b"0\n1\n2\n"
+        if suffix == ".gz":
+            assert data[:2] == b"\x1f\x8b"
+        else:
+            assert data[:4] == b"\x28\xb5\x2f\xfd"
+
+    def test_text_is_compressed_as_utf8(self, tmp_path: Path, suffix: str):
+        name = f"a.txt{suffix}"
+        with RunOutput(tmp_path) as output:
+            output.append(name, "1 Å\n")
+            output.append(name, b"2\n")
+
+        assert decompress((tmp_path / name).read_bytes(), suffix) == "1 Å\n2\n".encode()
+
+    def test_what_was_flushed_is_readable_without_closing(
+        self, tmp_path: Path, suffix: str
+    ):
+        # a killed run never closes its output
+        name = f"a{suffix}"
+        output = RunOutput(tmp_path)
+        output.append(name, b"frame 0\n")
+        output.flush()
+        output.append(name, b"frame 1\n")
+        output.flush()
+
+        data = (tmp_path / name).read_bytes()
+        assert decompress_unfinished(data, suffix) == b"frame 0\nframe 1\n"
+
+    def test_the_first_flush_overwrites_an_earlier_runs_file(
+        self, tmp_path: Path, suffix: str
+    ):
+        name = f"a{suffix}"
+        with RunOutput(tmp_path) as output:
+            output.append(name, b"earlier\n")
+        with RunOutput(tmp_path) as output:
+            output.append(name, b"later\n")
+
+        assert decompress((tmp_path / name).read_bytes(), suffix) == b"later\n"
+
+    def test_appending_after_closing_starts_another_stream(
+        self, tmp_path: Path, suffix: str
+    ):
+        name = f"a{suffix}"
+        output = RunOutput(tmp_path)
+        output.append(name, b"1\n")
+        output.close()
+        output.append(name, b"2\n")
+        output.close()
+
+        assert decompress((tmp_path / name).read_bytes(), suffix) == b"1\n2\n"

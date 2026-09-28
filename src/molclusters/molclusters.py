@@ -293,7 +293,8 @@ class MolClusters:
         run = Run(self.uni, self.config, n_frames, self.output, self.analyses)
 
         # the appended files are buffered, so write what was already rendered even
-        # if the run is interrupted, as appending it frame by frame used to
+        # if the run is interrupted, as appending it frame by frame used to; the
+        # output is closed after `finish`, which may append too
         with self.output:
             run.prepare_analyses()
             run.analyse_frame(Frame(0, self.tracker, self.output))
@@ -313,15 +314,14 @@ class MolClusters:
                             f"{format_duration(time.perf_counter() - start)} elapsed"
                         )
 
-        elapsed = time.perf_counter() - start
-        logger.info(
-            f"Tracked {n_frames} frame(s) in {format_duration(elapsed)} "
-            f"({n_frames / max(elapsed, 1e-9):.1f} frames/s)"
-        )
-        self.__log_rule_connections(n_frames)
+            elapsed = time.perf_counter() - start
+            logger.info(
+                f"Tracked {n_frames} frame(s) in {format_duration(elapsed)} "
+                f"({n_frames / max(elapsed, 1e-9):.1f} frames/s)"
+            )
+            self.__log_rule_connections(n_frames)
 
-        run.finish_analyses()
-        self.output.flush()  # in case an analysis appended to a file in `finish`
+            run.finish_analyses()
 
         durations = ", ".join(
             f"{type(analysis).__name__} {format_duration(seconds)}"
