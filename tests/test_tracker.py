@@ -46,6 +46,18 @@ def id_of(tracker: ClusterTracker, members: set[int]) -> int:
     return matches[0]
 
 
+def id_of_in(clusters: dict[int, set[int]], members: set[int]) -> int:
+    """Return the id of the cluster made of exactly `members` in a snapshot.
+
+    Returns
+    -------
+    int
+        The matching cluster id.
+    """
+    (cid,) = [cid for cid, mols in clusters.items() if mols == members]
+    return cid
+
+
 def assert_membership_is_consistent(tracker: ClusterTracker) -> None:
     """Check that `mol_clt` maps exactly the clustered molecules to their cluster."""
     clusters = snapshot(tracker)
@@ -557,6 +569,215 @@ class TestClusterIdentity:
         step(tracker, 1)
 
         assert snapshot(tracker) == {cid: {1, 2, 6}}
+
+
+def assert_flows_add_up(tracker: ClusterTracker, before: dict[int, set[int]]) -> None:
+    """Check that the flows account for every molecule of both frames' clusters."""
+    t = tracker.transition
+    for cid, mols in before.items():
+        assert sum(t.destinations(cid).values()) == len(mols)
+    for cid, mols in snapshot(tracker).items():
+        assert sum(t.sources(cid).values()) == len(mols)
+
+
+class TestTransition:
+    """What `ClusterTracker.transition` says happened between two frames."""
+
+    def run(
+        self,
+        track: Track,
+        frames: list[Groups],
+        n_res: int,
+        **config: Any,  # noqa: ANN401
+    ) -> tuple[ClusterTracker, dict[int, set[int]], dict[int, set[int]]]:
+        """Track two frames; give the tracker and each frame's clusters.
+
+        Returns
+        -------
+        tuple[ClusterTracker, dict[int, set[int]], dict[int, set[int]]]
+            The tracker, at the second frame, and both frames' clusters.
+        """
+        tracker = track(frames, n_res, **config)
+        before = snapshot(tracker)
+        step(tracker, 1)
+        assert_flows_add_up(tracker, before)
+        return tracker, before, snapshot(tracker)
+
+    def test_first_frame_clusters_are_born_of_free_molecules(self, track: Track):
+        tracker = track([[[1, 2, 3], [4, 5]]], 6)
+        a, b = id_of(tracker, {1, 2, 3}), id_of(tracker, {4, 5})
+
+        t = tracker.transition
+
+        assert t.born == {a, b}
+        assert dict(t.flows) == {(0, a): 3, (0, b): 2}
+        assert (dict(t.merged), t.dissolved) == ({}, frozenset())
+
+    def test_unchanged_cluster_flows_to_itself(self, track: Track):
+        tracker, _, _ = self.run(track, [[[1, 2, 3]], [[1, 2, 3]]], 3)
+        (cid,) = tracker.clusters
+
+        t = tracker.transition
+
+        assert dict(t.flows) == {(cid, cid): 3}
+        assert (t.born, t.ended) == (frozenset(), frozenset())
+
+    def test_growth_and_shrinking_flow_from_and_to_no_cluster(self, track: Track):
+        tracker, _, _ = self.run(
+            track, [[[1, 2, 3], [4, 5, 6]], [[1, 2, 3, 7], [4, 5]]], 7
+        )
+        a, b = id_of(tracker, {1, 2, 3, 7}), id_of(tracker, {4, 5})
+
+        t = tracker.transition
+
+        assert dict(t.flows) == {(a, a): 3, (0, a): 1, (b, b): 2, (b, 0): 1}
+        assert t.sources(a) == {a: 3, 0: 1}
+        assert t.destinations(b) == {b: 2, 0: 1}
+
+    def test_formation_is_born_of_free_molecules(self, track: Track):
+        tracker, _, _ = self.run(track, [[], [[1, 2]]], 3)
+        (cid,) = tracker.clusters
+
+        t = tracker.transition
+
+        assert t.born == {cid}
+        assert t.sources(cid) == {0: 2}
+
+    def test_dissolution_ends_the_cluster(self, track: Track):
+        tracker, before, _ = self.run(track, [[[1, 2]], []], 3)
+        (cid,) = before
+
+        t = tracker.transition
+
+        assert t.dissolved == {cid}
+        assert t.ended == {cid}
+        assert t.destinations(cid) == {0: 2}
+
+    def test_split_fragment_is_born_of_the_cluster(self, track: Track):
+        tracker, before, _ = self.run(
+            track, [[[1, 2, 3, 4, 5]], [[1, 2, 3], [4, 5]]], 5
+        )
+        (cid,) = before
+        new = id_of(tracker, {4, 5})
+
+        t = tracker.transition
+
+        assert t.born == {new}
+        assert t.sources(new) == {cid: 2}
+        assert t.destinations(cid) == {cid: 3, new: 2}
+        assert t.ended == frozenset()
+
+    def test_split_into_many_gives_each_fragment_the_cluster_as_source(
+        self, track: Track
+    ):
+        tracker, before, _ = self.run(
+            track, [[list(range(1, 10))], [[1, 2, 3, 4], [5, 6, 7], [8, 9]]], 9
+        )
+        (cid,) = before
+        trimer, dimer = id_of(tracker, {5, 6, 7}), id_of(tracker, {8, 9})
+
+        t = tracker.transition
+
+        assert t.born == {trimer, dimer}
+        assert t.destinations(cid) == {cid: 4, trimer: 3, dimer: 2}
+
+    def test_merge_maps_the_absorbed_cluster_to_the_survivor(self, track: Track):
+        tracker, before, _ = self.run(
+            track, [[[1, 2], [3, 4, 5]], [[1, 2, 3, 4, 5]]], 5
+        )
+        small, big = id_of_in(before, {1, 2}), id_of_in(before, {3, 4, 5})
+
+        t = tracker.transition
+
+        assert dict(t.merged) == {small: big}
+        assert t.dissolved == frozenset()
+        assert t.sources(big) == {big: 3, small: 2}
+        assert t.absorbed(big) == [small]
+
+    def test_merge_of_many_maps_every_absorbed_cluster_to_the_survivor(
+        self, track: Track
+    ):
+        tracker, before, _ = self.run(
+            track, [[[1, 2], [4, 5, 6], [7, 8]], [[1, 2, 4, 5, 6, 7, 8]]], 8
+        )
+        a, b, c = (id_of_in(before, g) for g in ({1, 2}, {4, 5, 6}, {7, 8}))
+
+        t = tracker.transition
+
+        assert dict(t.merged) == {a: b, c: b}
+        assert t.absorbed(b) == sorted([a, c])
+        assert t.sources(b) == {a: 2, b: 3, c: 2}
+        assert t.ended == {a, c}
+
+    def test_new_cluster_of_pieces_of_many_has_each_as_source(self, track: Track):
+        # a trimer of one molecule from each cluster; the rest of each dissolves
+        tracker, before, _ = self.run(track, [[[1, 2], [3, 4], [5, 6]], [[1, 3, 5]]], 6)
+        (new,) = tracker.clusters
+
+        t = tracker.transition
+
+        assert t.sources(new) == {cid: 1 for cid in before}
+        assert t.born == {new}
+        assert t.dissolved == set(before)
+        assert dict(t.merged) == {}
+
+    def test_merge_and_split_of_several_clusters_in_one_frame(self, track: Track):
+        # A (6) and B (4) merge, keeping B's id, with 4 of A's molecules; A's other
+        # two leave with a newcomer, and C (3) splits into two new clusters
+        tracker, before, _ = self.run(
+            track,
+            [
+                [list(range(1, 7)), list(range(7, 15)), [20, 21, 22, 23]],
+                [[1, 2, 3, 4, *range(7, 15)], [5, 6, 30], [20, 21], [22, 23]],
+            ],
+            30,
+        )
+        a = id_of_in(before, set(range(1, 7)))
+        b = id_of_in(before, set(range(7, 15)))
+        c = id_of_in(before, {20, 21, 22, 23})
+        remnant = id_of(tracker, {5, 6, 30})
+
+        t = tracker.transition
+
+        assert dict(t.merged) == {a: b}
+        assert t.sources(remnant) == {a: 2, 0: 1}
+        assert id_of(tracker, {20, 21}) == c
+        (piece,) = t.born - {remnant}
+        assert t.destinations(c) == {c: 2, piece: 2}
+
+    def test_cluster_absorbed_one_molecule_at_a_time_dissolves(self, track: Track):
+        tracker, before, _ = self.run(
+            track, [[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 4, 5, 6], [2, 7, 8, 9]]], 9
+        )
+        a = id_of_in(before, {1, 2, 3})
+        b, c = id_of(tracker, {1, 4, 5, 6}), id_of(tracker, {2, 7, 8, 9})
+
+        t = tracker.transition
+
+        assert t.dissolved == {a}
+        assert t.destinations(a) == {b: 1, c: 1, 0: 1}
+
+    def test_ignored_composition_counts_as_no_cluster(self, track: Track):
+        resnames = ["MOL"] + ["SOL"] * 4 + ["MOL"]
+        tracker, before, _ = self.run(
+            track,
+            [[[1, 2, 3, 4, 5]], [[1, 2, 6], [3, 4, 5]]],
+            6,
+            resnames=resnames,
+            rules=ALL_PAIRS_RULES,
+            ignore_composition=[["SOL"]],
+        )
+        (cid,) = before
+
+        assert tracker.transition.destinations(cid) == {cid: 2, 0: 3}
+
+    def test_is_read_only(self, track: Track):
+        tracker = track([[[1, 2]]], 2)
+
+        with pytest.raises(TypeError):
+            tracker.transition.flows[0, 99] = 1  # type: ignore[index]
+        with pytest.raises(AttributeError):
+            tracker.transition.born = frozenset()  # type: ignore[misc]
 
 
 class TestIds:

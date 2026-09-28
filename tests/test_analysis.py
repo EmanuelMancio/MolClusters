@@ -127,6 +127,20 @@ class TestRunAndFrame:
         assert frame.find(2) == cid
         assert frame.find(4) is None
 
+    def test_frame_gives_the_transition_from_the_previous_frame(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        uni = make_universe([[[1, 2, 3]], [[1, 2], [3, 4]]], 4)
+        tracker = ClusterTracker(uni, MolClsConfig(rules=MOL_RULES))
+        uni.trajectory[1]
+        tracker.update()
+
+        frame = Frame(1, tracker, RunOutput(tmp_path))
+
+        assert frame.transition is tracker.transition
+        (new,) = frame.transition.born
+        assert frame.transition.sources(new) == {1: 1, 0: 1}
+
     def test_frame_clusters_are_read_only(
         self, make_universe: UniverseFactory, tmp_path: Path
     ):

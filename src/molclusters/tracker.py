@@ -11,10 +11,14 @@ Classes:
 --------
 - ClusterTracker: Finds the clusters of the current frame and keeps their ids stable
   across formation, growth, split, merge and dissolution events.
+- Transition: How the clusters of a frame came from those of the frame before.
 """
 
 from collections import Counter, defaultdict
+from collections.abc import Mapping
+from dataclasses import dataclass
 from itertools import count
+from types import MappingProxyType
 
 import MDAnalysis as mda
 from MDAnalysis import core
@@ -22,6 +26,103 @@ from MDAnalysis import core
 from .cluster import Cluster
 from .config import MolClsConfig
 from .conntable import ConnectionTable
+
+
+@dataclass(frozen=True, slots=True)
+class Transition:
+    """How the clusters of a frame came from those of the frame before.
+
+    Merges and splits may involve any number of clusters. A merge ends every
+    cluster that `merged` maps to the same survivor. A split shows as the new
+    clusters whose `sources` include a previous cluster, however many: a cluster
+    breaking into several pieces has a new cluster per piece but the one it
+    continues in, and a new cluster made of pieces of several clusters has each
+    of them as a source.
+
+    For the first frame, every cluster is `born`, of free molecules.
+
+    Attributes
+    ----------
+    flows : Mapping[tuple[int, int], int]
+        (previous cluster id, current cluster id) -> how many molecules went from
+        the one to the other, id ``0`` standing for no cluster (free molecules, or
+        a group of an ignored composition). A cluster that carries on keeps its
+        own molecules as a flow to itself; molecules free in both frames aren't
+        counted.
+    born : frozenset[int]
+        The clusters new in this frame.
+    merged : Mapping[int, int]
+        Each previous cluster that ended in a merge -> the cluster that absorbed it
+        (both chose the same group, and the other continues in it; see
+        `ClusterTracker.update`).
+    dissolved : frozenset[int]
+        The previous clusters that ended without merging: no group held two or
+        more of their molecules.
+    """
+
+    flows: Mapping[tuple[int, int], int]
+    born: frozenset[int] = frozenset()
+    merged: Mapping[int, int] = MappingProxyType({})
+    dissolved: frozenset[int] = frozenset()
+
+    @property
+    def ended(self) -> frozenset[int]:
+        """The previous clusters that ended in this frame, merged or dissolved.
+
+        Returns
+        -------
+        frozenset[int]
+            Their ids.
+        """
+        return self.dissolved | self.merged.keys()
+
+    def sources(self, cluster_id: int) -> dict[int, int]:
+        """Tell where the molecules of a current cluster came from.
+
+        Parameters
+        ----------
+        cluster_id : int
+            A cluster of the current frame.
+
+        Returns
+        -------
+        dict[int, int]
+            Previous cluster id (``0`` for free molecules) -> how many of its
+            molecules the cluster holds; a cluster that carries on counts its own.
+        """
+        return {prev: n for (prev, cur), n in self.flows.items() if cur == cluster_id}
+
+    def destinations(self, cluster_id: int) -> dict[int, int]:
+        """Tell where the molecules of a previous cluster went.
+
+        Parameters
+        ----------
+        cluster_id : int
+            A cluster of the previous frame.
+
+        Returns
+        -------
+        dict[int, int]
+            Current cluster id (``0`` for none) -> how many of its molecules went
+            there; a cluster that carries on counts its own.
+        """
+        return {cur: n for (prev, cur), n in self.flows.items() if prev == cluster_id}
+
+    def absorbed(self, cluster_id: int) -> list[int]:
+        """Tell which previous clusters merged into a current one.
+
+        Parameters
+        ----------
+        cluster_id : int
+            A cluster of the current frame.
+
+        Returns
+        -------
+        list[int]
+            The ids of the clusters it absorbed, in increasing order (empty if
+            none).
+        """
+        return sorted(lost for lost, into in self.merged.items() if into == cluster_id)
 
 
 class ClusterTracker:
@@ -45,9 +146,21 @@ class ClusterTracker:
         A dictionary of detected clusters, keyed by cluster ID.
     mol_clt : dict[int, int]
         A mapping of molecule IDs to their respective cluster IDs.
+    transition : Transition
+        How the current clusters came from the previous frame's (on the first
+        frame, every cluster is born).
     """
 
-    __slots__ = ["uni", "config", "sels", "conntab", "clusters", "mol_clt", "_ids"]
+    __slots__ = [
+        "uni",
+        "config",
+        "sels",
+        "conntab",
+        "clusters",
+        "mol_clt",
+        "transition",
+        "_ids",
+    ]
 
     def __init__(self, universe: mda.Universe, config: MolClsConfig) -> None:
         """Initialize the tracker with the clusters of the current frame.
@@ -82,14 +195,20 @@ class ClusterTracker:
 
     def _start_clusters(self) -> None:
         """Initialize clusters at the beginning of the analysis."""
+        flows = {}
         for subconn in self.conntab.subconntables():
             if self.config.is_ignored_composition(subconn.resnames):
                 continue
 
             cls_id = self._create_new_cluster(subconn)
+            flows[0, cls_id] = len(subconn)
 
             for mol in subconn:
                 self.mol_clt[mol] = cls_id
+
+        self.transition = Transition(
+            MappingProxyType(flows), born=frozenset(self.clusters)
+        )
 
     # TODO: make a better name for this function
     def _gen_origin_cluster_counter(
@@ -247,7 +366,9 @@ class ClusterTracker:
         So a mixed dimer (one molecule from each origin) is always new, and each id
         continues in at most one group. Previous clusters that no connected group
         continues are dropped, along with the `mol_clt` entries of molecules that
-        are now free.
+        are now free. What happened is kept in `transition`: where each cluster's
+        molecules came from, which clusters are new, and which ended, merged into
+        another or dissolved.
         """
         self.conntab.update()
 
@@ -264,12 +385,21 @@ class ClusterTracker:
         for cls_id, i in self._best_groups(conn_info).items():
             candidates[i].append(cls_id)
 
+        flows: Counter[tuple[int, int]] = Counter()
+        born = set()
+        merged = {}
         for i, (subconn, origin_clusters) in enumerate(conn_info):
             if candidates[i]:
                 id = self._get_older_cluster(candidates[i], origin_clusters)
                 self.clusters[id]._update(subconn)
+                # every other cluster that chose this group merged into it
+                merged.update((lost, id) for lost in candidates[i] if lost != id)
             else:
                 id = self._create_new_cluster(subconn)
+                born.add(id)
+
+            for origin, n in origin_clusters.items():
+                flows[origin, id] = n
 
             for mol in subconn:
                 self.mol_clt[mol] = id
@@ -278,11 +408,19 @@ class ClusterTracker:
             modified_mols.update(subconn)
 
         for mol in set(self.mol_clt.keys()).difference(modified_mols):
-            self.mol_clt.pop(mol)
+            flows[self.mol_clt.pop(mol), 0] += 1
 
-        # TODO: deal with clusters that weren't modified. Needs to consider that some clusters merged (for log filing)  # noqa: E501
-        for cls in set(self.clusters.keys()).difference(modified_clusters):
+        # the merged clusters continue in no group, so they end here too
+        ended = set(self.clusters.keys()).difference(modified_clusters)
+        for cls in ended:
             self.clusters.pop(cls)
+
+        self.transition = Transition(
+            MappingProxyType(dict(flows)),
+            born=frozenset(born),
+            merged=MappingProxyType(merged),
+            dissolved=frozenset(ended.difference(merged)),
+        )
 
     def find(self, mol: int) -> int | None:
         """Find the cluster ID for a given molecule.

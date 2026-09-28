@@ -25,6 +25,7 @@ Exports
 -------
     MolClusters: The primary class for performing cluster analysis.
     ClusterTracker: Follows the clusters of a trajectory, without analysing them.
+    Transition: How the clusters of a frame came from those of the frame before.
     FrameAnalysis: The base class of an analysis, to pass to `MolClusters`.
     Frame, Run: What an analysis sees of the current frame and of the run.
     OutputFile: The declaration of a file an analysis writes.
@@ -48,7 +49,7 @@ from .cluster import Cluster, MolGroup
 from .log import start_logging
 from .molclusters import MolClusters
 from .output import OutputFile
-from .tracker import ClusterTracker
+from .tracker import ClusterTracker, Transition
 from .version import __version__, version
 
 __all__ = [
@@ -57,6 +58,7 @@ __all__ = [
     "start_logging",
     "MolClusters",
     "ClusterTracker",
+    "Transition",
     "FrameAnalysis",
     "Frame",
     "Run",

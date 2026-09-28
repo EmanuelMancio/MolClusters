@@ -24,7 +24,7 @@ from loguru import logger
 from ..cluster import Cluster
 from ..config import MolClsConfig
 from ..output import OutputFile, RunOutput
-from ..tracker import ClusterTracker
+from ..tracker import ClusterTracker, Transition
 
 
 class FrameAnalysis(ABC):
@@ -340,6 +340,19 @@ class Frame:
             A read-only view of the clusters; the clusters must not be modified.
         """
         return MappingProxyType(self._tracker.clusters)
+
+    @property
+    def transition(self) -> Transition:
+        """How the frame's clusters came from the previous frame's.
+
+        Returns
+        -------
+        Transition
+            Where each cluster's molecules came from, which clusters are new, and
+            which ended, merged or dissolved (on the run's first frame, every
+            cluster is new).
+        """
+        return self._tracker.transition
 
     def find(self, mol: int) -> int | None:
         """Find the id of the cluster a molecule belongs to.
