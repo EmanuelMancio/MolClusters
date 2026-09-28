@@ -48,7 +48,7 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   (`OutputFile`), which drives the earlier-run checks (what gets overwritten; files of a family
   like `cls-id<id>.gro` that this run didn't rewrite) and the end-of-run summary. Library users add
   their own analyses with `MolClusters(..., analyses=[...])`, which run after the config-enabled
-  built-ins; `Run` dispatches every hook through `Run._hook`, which
+  built-ins but before the report (`Builtin.last`, placed by `build_builtins`); `Run` dispatches every hook through `Run._hook`, which
   notes which analysis raised an error (the CLI prints those notes), tags what's logged meanwhile
   with the analysis' name (`logger.contextualize(analysis=...)`, shown as a `[Name]` prefix by
   `log._formatter`) and adds up its time in `Run.durations`, logged at the end of the run next to the tracker's.
@@ -62,7 +62,7 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   option it `needs`, are errors. A new built-in is one `BUILTINS` line, in this order:
   `SizeEvolution` (evo.txt), `SoluteSolvent` (solute_solvent.csv), `ClusterCoordinates`
   (coordinates/cls-n/cls-id/solute-*.gro), `Nucleus` (nucleus_data.csv; its `nuclei` per cluster id are for
-  later analyses), `JsonReport` (molclusters.jsonl.zst, see below).
+  later analyses), `JsonReport` (molclusters.jsonl.zst, see below; `last`).
 - The report (`report.py` holds its format, encoders and reader; `analysis/report.py` the
   `JsonReport` that writes it): JSON Lines, a header line then one line per frame, appended
   through `RunOutput` as each frame is analysed, so nothing accumulates in memory and an
@@ -73,7 +73,12 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   `report.read_report` reads it back frame by frame (compression told from the magic bytes),
   warning when it ends before the header's `n_frames`, or as pandas tables. Its schema is in
   `report.py`'s docstring; changing it bumps `VERSION`. Derived fields (diameter, volume,
-  density) are kept on purpose, for users reading the file without the reader.
+  density) are kept on purpose, for users reading the file without the reader. Any analysis adds
+  to it by overriding `FrameAnalysis.report_frame`/`report_cluster`: `JsonReport` finds those
+  that do through `Run.analyses` (it runs last, so it sees them all), files what they return
+  under their class name (two of one name are an error), rounded by `report.rounded`, and lists
+  them in the header's `contributors`. `Nucleus` adds its nuclei that way; the report itself
+  knows no other analysis.
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
   properties computed on the group made whole across PBC (`whole()`; never
   moves the shared Universe for good; residues are placed along a spanning tree, a `Cluster`'s

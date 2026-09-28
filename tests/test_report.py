@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from molclusters.analysis import Frame, FrameAnalysis, JsonReport, Nucleus
-from molclusters.cluster import MolGroup
+from molclusters.cluster import Cluster, MolGroup
 from molclusters.config import MolClsConfig
 from molclusters.molclusters import MolClusters
 from molclusters.output import RunOutput
@@ -20,11 +20,13 @@ from molclusters.report import (
     DECIMALS,
     FORMAT,
     VERSION,
+    Report,
     connection_rows,
     dumps,
     group_record,
     read_report,
     report_name,
+    rounded,
 )
 from molclusters.tracker import ClusterTracker
 
@@ -263,3 +265,119 @@ class TestTables:
         ]
         assert table["n_hbonds"].dtype == pd.Int64Dtype()
         assert table["n_hbonds"].isna().all()
+
+
+class Sizes(FrameAnalysis):
+    """A user analysis adding to the report: frame counts and cluster centers."""
+
+    def analyse(self, frame: Frame) -> None:
+        pass
+
+    def report_frame(self, frame: Frame) -> dict[str, object]:
+        sizes = [c.size for c in frame.clusters.values()]
+        return {"largest": max(sizes, default=0), "n": np.int64(len(sizes))}
+
+    def report_cluster(self, frame: Frame, cluster: Cluster) -> dict | None:
+        if cluster.size < 3:
+            return None  # adds nothing
+        return {"center": cluster.center_of_mass, "thirds": (1 / 3, [2 / 3])}
+
+
+class TestContributions:
+    def run(
+        self,
+        make_universe: UniverseFactory,
+        directory: Path,
+        analyses: list[FrameAnalysis],
+        **config: object,
+    ) -> Report:
+        uni = make_universe(FRAMES, 4)
+        config = MolClsConfig(rules=MOL_RULES, **config)
+        MolClusters(uni, config, analyses).run(directory)
+        return read_report(directory / "molclusters.jsonl.zst")
+
+    def test_go_under_the_analysis_name(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        report = self.run(make_universe, tmp_path, [Sizes()])
+
+        assert report.header["contributors"] == ["Sizes"]
+        first, second, third = report.frames()
+        assert first["Sizes"] == {"largest": 3, "n": 1}
+        assert third["Sizes"] == {"largest": 0, "n": 0}
+        (cluster,) = first["clusters"]
+        center, thirds = cluster["Sizes"]["center"], cluster["Sizes"]["thirds"]
+        assert len(center) == 3
+        assert all(value == round(value, DECIMALS) for value in center)
+        assert thirds == [0.333333, [0.666667]]
+        # None adds nothing
+        assert all("Sizes" not in cluster for cluster in second["clusters"])
+
+    def test_come_after_the_builtins(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        report = self.run(make_universe, tmp_path, [Sizes()], nucleus=["MOL"])
+
+        assert report.header["contributors"] == ["Nucleus", "Sizes"]
+        (cluster,) = next(report.frames())["clusters"]
+        assert list(cluster)[-2:] == ["Nucleus", "Sizes"]
+
+    def test_an_analysis_not_adding_is_no_contributor(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        report = self.run(make_universe, tmp_path, [Interrupt(frame=-1)])
+
+        assert report.header["contributors"] == []
+
+    def test_what_cant_be_written_is_blamed_on_its_analysis(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        class Unwritable(FrameAnalysis):
+            def analyse(self, frame: Frame) -> None:
+                pass
+
+            def report_cluster(self, frame: Frame, cluster: Cluster) -> dict:
+                return {"members": set(cluster)}
+
+        with pytest.raises(TypeError, match="A set can't be written") as err:
+            self.run(make_universe, tmp_path, [Unwritable()])
+
+        assert err.value.__notes__ == [
+            "In Unwritable.report_cluster(), for the report",
+            "Raised by JsonReport.analyse() on frame 0",
+        ]
+
+    def test_two_of_one_name_are_refused(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        with pytest.raises(ValueError, match="More than one Sizes analysis"):
+            self.run(make_universe, tmp_path, [Sizes(), Sizes()])
+
+
+class TestRounded:
+    def test_rounds_every_float_however_nested(self):
+        value = {"a": [1 / 3, (2 / 3, {"b": np.float32(0.1234567)})], "c": "x"}
+
+        expected = {"a": [0.333333, [0.666667, {"b": 0.123457}]], "c": "x"}
+        assert rounded(value) == expected
+
+    def test_keeps_whole_numbers_and_arrays(self):
+        ints = np.arange(3)[::2]  # not contiguous
+
+        assert rounded(np.int64(2)) == 2
+        assert rounded(None) is None
+        assert rounded(True) is True
+        np.testing.assert_array_equal(rounded(ints), [0, 2])
+        np.testing.assert_array_equal(rounded(np.array([1 / 3])), [0.333333])
+        assert dumps({"a": rounded(ints)}) == b'{"a":[0,2]}\n'
+
+    def test_integer_keys_become_strings(self):
+        assert rounded({1: "a", np.int64(2): "b"}) == {"1": "a", "2": "b"}
+
+    def test_refuses_what_json_cant_hold(self):
+        with pytest.raises(TypeError, match="A set can't be written"):
+            rounded({"a": {1, 2}})
+        with pytest.raises(TypeError, match="A tuple key can't be written"):
+            rounded({(1, 2): 0.5})
+        with pytest.raises(TypeError, match="A bool key can't be written"):
+            rounded({True: 0.5})

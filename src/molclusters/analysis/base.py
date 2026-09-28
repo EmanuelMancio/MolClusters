@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from types import MappingProxyType
+from typing import Any
 
 import MDAnalysis as mda
 from loguru import logger
@@ -51,6 +52,11 @@ class FrameAnalysis(ABC):
       (``logger.debug("cluster {}: ...", cls.id)``) rather than an f-string: a
       message filtered out by the log level is then never built.
     - A warning that could repeat is only logged once.
+
+    An analysis adds its own fields to the JSON report (`JsonReport`, which runs
+    after every other analysis) by overriding `report_frame`, `report_cluster`, or
+    both: what they return goes in each frame's, or each cluster's, record under
+    the analysis' class name, its floats rounded as the report's are.
 
     Attributes
     ----------
@@ -90,6 +96,47 @@ class FrameAnalysis(ABC):
         run : Run
             The run that just ended.
         """
+
+    def report_frame(self, frame: "Frame") -> Mapping[str, Any] | None:
+        """Give what to add to the report's record of the current frame.
+
+        Called by `JsonReport` after every analysis has analysed the frame.
+
+        Parameters
+        ----------
+        frame : Frame
+            The current frame.
+
+        Returns
+        -------
+        Mapping[str, Any] | None
+            The fields to add under the analysis' class name: JSON types, and numpy
+            scalars or arrays. None adds nothing (the default).
+        """
+        return None
+
+    def report_cluster(
+        self, frame: "Frame", cluster: Cluster
+    ) -> Mapping[str, Any] | None:
+        """Give what to add to the report's record of a cluster of the current frame.
+
+        Called by `JsonReport`, for every cluster of the frame, after every analysis
+        has analysed the frame.
+
+        Parameters
+        ----------
+        frame : Frame
+            The current frame.
+        cluster : Cluster
+            The cluster.
+
+        Returns
+        -------
+        Mapping[str, Any] | None
+            The fields to add under the analysis' class name: JSON types, and numpy
+            scalars or arrays. None adds nothing (the default).
+        """
+        return None
 
 
 class Run:
@@ -176,6 +223,17 @@ class Run:
         for i, analysis in enumerate(self._analyses):
             with self._hook(i, "finish"):
                 analysis.finish(self)
+
+    @property
+    def analyses(self) -> tuple[FrameAnalysis, ...]:
+        """The analyses of the run, in order; while preparing, only those before.
+
+        Returns
+        -------
+        tuple[FrameAnalysis, ...]
+            The analyses whose results `analysis` finds (see there).
+        """
+        return tuple(self._analyses[: self._visible])
 
     def analysis[T: FrameAnalysis](self, kind: type[T]) -> T | None:
         """Find the first analysis of the run of type `kind`, for its results.

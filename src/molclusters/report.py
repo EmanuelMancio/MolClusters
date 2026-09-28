@@ -17,6 +17,7 @@ The first line is the header::
      "topology": <absolute path, or null>, "n_frames": <frames in the run>,
      "decimals": 6, "units": {<quantity>: <unit>, ...},
      "connection_columns": ["i", "j", "distance", "angle", "n_hbonds"],
+     "contributors": [<the analyses that add fields, see below>],
      "config": <the effective configuration>}
 
 Then one line per frame::
@@ -44,13 +45,16 @@ and each cluster is::
 
 with each connection a row of ``connection_columns``: the two resids, then the
 connection's distance (and, for H-bonds, the D-H-A angle and the number of H-bonds
-between the pair; null for "cm" rules). When the `Nucleus` analysis runs, each
-cluster also has ``"Nucleus": {"nuclei": [<group>, ...], "combined_dipole_moment":
-<dipole of all its nuclei together, or null>}``, a group being a cluster without
-its ``id`` and ``connections``.
+between the pair; null for "cm" rules).
 
-Floats are rounded to `DECIMALS` decimal places, and NaN is written as null (a
-bare NaN isn't valid JSON). Units are those of `UNITS`.
+Other analyses add fields of their own (see `FrameAnalysis.report_frame` and
+`report_cluster`), under their class name in a frame's or a cluster's record. The
+`Nucleus` analysis adds to each cluster ``"Nucleus": {"nuclei": [<group>, ...],
+"combined_dipole_moment": <dipole of all its nuclei together, or null>}``, a group
+being a cluster without its ``id`` and ``connections``.
+
+Floats are rounded to `DECIMALS` decimal places, what other analyses add included,
+and NaN is written as null (a bare NaN isn't valid JSON). Units are those of `UNITS`.
 
 Classes:
 --------
@@ -61,17 +65,19 @@ Functions:
 - read_report: Open a report file.
 - report_name: The report's file name for a compression.
 - dumps: Encode a record as one line of the report.
+- rounded: Round every float in a value, as the report's are.
 - group_record: Encode a group of molecules and its properties.
 - cluster_record: Encode a cluster, its properties and connections.
 """
 
 import gzip
 import io
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, BinaryIO
 
+import numpy as np
 import orjson
 import pandas as pd
 import zstandard
@@ -152,6 +158,67 @@ def _round(value: float) -> float:
         The rounded value, a Python float (NaN stays NaN, written as null).
     """
     return round(float(value), DECIMALS)
+
+
+def _key(key: object) -> str:
+    """Give a mapping's key as a JSON object's: a string.
+
+    Returns
+    -------
+    str
+        The key, an integer one (e.g. a resid) written in decimal, as the json
+        module does.
+
+    Raises
+    ------
+    TypeError
+        If the key is neither a string nor an integer.
+    """
+    match key:
+        case str():
+            return key
+        case int() | np.integer() if not isinstance(key, bool):
+            return str(int(key))
+    raise TypeError(f"A {type(key).__name__} key can't be written to the report.")
+
+
+def rounded(value: Any) -> Any:  # noqa: ANN401 (any JSON-able value)
+    """Round every float in a value to `DECIMALS` decimal places, however nested.
+
+    For what analyses add to the report, whose floats are rounded as the report's
+    own are.
+
+    Parameters
+    ----------
+    value : Any
+        JSON types (mappings, sequences, numbers, strings, None), numpy scalars or
+        arrays.
+
+    Returns
+    -------
+    Any
+        The value, mappings as dicts, other sequences as lists, float arrays
+        rounded.
+
+    Raises
+    ------
+    TypeError
+        If the value holds something that can't be written as JSON.
+    """
+    match value:
+        case float() | np.floating():
+            return _round(value)
+        case None | bool() | int() | str() | np.integer() | np.bool_():
+            return value
+        case np.ndarray() if value.dtype.kind == "f":
+            return np.round(value, DECIMALS)
+        case np.ndarray() if value.dtype.kind in "biu":
+            return np.ascontiguousarray(value)  # orjson takes contiguous arrays
+        case Mapping():
+            return {_key(key): rounded(item) for key, item in value.items()}
+        case list() | tuple() | np.ndarray():
+            return [rounded(item) for item in value]
+    raise TypeError(f"A {type(value).__name__} can't be written to the report.")
 
 
 def group_record(group: MolGroup) -> dict[str, Any]:

@@ -427,7 +427,7 @@ class LargestCluster(FrameAnalysis):
 
 
 class TestUserAnalyses:
-    def test_run_after_the_builtins_and_see_every_frame(
+    def test_run_after_the_builtins_but_the_report_and_see_every_frame(
         self, analyze: Analyze, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         largest = LargestCluster()
@@ -436,7 +436,8 @@ class TestUserAnalyses:
 
         molcls.run()
 
-        assert molcls.analyses[-1] is largest
+        # the report comes last, for every analysis to add to it
+        assert molcls.analyses[-2:] == [largest, molcls.analysis(JsonReport)]
         assert largest.largest == [3, 0, 2]
         # a built-in's results are found, and complete for the frames seen
         assert largest.size is molcls.analysis(SizeEvolution)
@@ -469,7 +470,7 @@ class TestUserAnalyses:
         assert "(largest-7.log)" in warning
         (summary,) = [m for m in captured_logs if m.startswith("Results written")]
         assert summary.endswith(
-            ": evo.txt, molclusters.jsonl.zst, largest.txt, largest-<n>.log\n"
+            ": evo.txt, largest.txt, largest-<n>.log, molclusters.jsonl.zst\n"
         )
 
     def test_none_are_added_by_default(self, analyze: Analyze):

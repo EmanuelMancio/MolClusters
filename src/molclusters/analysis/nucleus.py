@@ -4,14 +4,18 @@
 
 """Provides `Nucleus`, the nuclei inside the clusters (nucleus_data.csv)."""
 
+import operator
 from collections.abc import Iterable
+from functools import reduce
+from typing import Any
 
 import networkx as nx
 import numpy as np
 import pandas as pd
 
-from ..cluster import MolGroup
+from ..cluster import Cluster, MolGroup
 from ..output import OutputFile
+from ..report import group_record
 from .base import Frame, FrameAnalysis, Run
 
 COLUMNS = [
@@ -31,7 +35,8 @@ class Nucleus(FrameAnalysis):
     """Finds the nuclei inside the clusters, frame by frame.
 
     A nucleus is a connected group, inside a cluster, of molecules with one of the
-    nucleus residue names.
+    nucleus residue names. Each cluster's nuclei also go in the report (see
+    `report_cluster`).
 
     Attributes
     ----------
@@ -125,6 +130,30 @@ class Nucleus(FrameAnalysis):
         row[6] = np.nan if len(n_nucleus) == 0 else np.average(dipole)
         row[7] = np.nan if len(n_nucleus) == 0 else np.average(sphericity)
         row[8] = np.nan if len(n_nucleus) == 0 else np.average(shape)
+
+    def report_cluster(self, frame: Frame, cluster: Cluster) -> dict[str, Any]:
+        """Give the nuclei of a cluster, for the report.
+
+        Parameters
+        ----------
+        frame : Frame
+            The current frame.
+        cluster : Cluster
+            The cluster.
+
+        Returns
+        -------
+        dict[str, Any]
+            ``nuclei``, one `report.group_record` per nucleus, and
+            ``combined_dipole_moment``, the dipole moment of all of them together
+            (None without nuclei).
+        """
+        nuclei = self.nuclei.get(cluster.id, [])
+        combined = reduce(operator.add, nuclei).dipole_moment if nuclei else None
+        return {
+            "nuclei": [group_record(nucleus) for nucleus in nuclei],
+            "combined_dipole_moment": combined,
+        }
 
     def finish(self, run: Run) -> None:
         """Write the record to nucleus_data.csv.

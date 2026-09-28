@@ -14,10 +14,11 @@ Functions:
 
 A built-in runs unless the config's `analyses` turns it off (by class name),
 and only when the config options it needs are set. Adding one takes a line in
-`BUILTINS`; the config checks `analyses` against it.
+`BUILTINS`; the config checks `analyses` against it. They run in its order, the
+report last (after the analyses given to `MolClusters` too).
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from ..config import MolClsConfig
@@ -41,11 +42,15 @@ class Builtin:
         Builds the analysis from the config, once the options it needs are set.
     needs : tuple[str, ...]
         The config options it needs, without which it doesn't run.
+    last : bool
+        Whether it runs after every other analysis, the ones given to
+        `MolClusters` included: the report, which the others add to.
     """
 
     kind: type[FrameAnalysis]
     build: Callable[[MolClsConfig], FrameAnalysis]
     needs: tuple[str, ...] = ()
+    last: bool = False
 
     @property
     def name(self) -> str:
@@ -76,7 +81,6 @@ class Builtin:
         )
 
 
-# `JsonReport` records the nuclei of `Nucleus` when that one runs, so it comes after it
 BUILTINS: tuple[Builtin, ...] = (
     Builtin(SizeEvolution, lambda c: SizeEvolution()),
     Builtin(
@@ -88,21 +92,31 @@ BUILTINS: tuple[Builtin, ...] = (
         needs=("solute",),
     ),
     Builtin(Nucleus, lambda c: Nucleus(c.nucleus), needs=("nucleus",)),
-    Builtin(JsonReport, lambda c: JsonReport(c.report_compression)),
+    Builtin(JsonReport, lambda c: JsonReport(c.report_compression), last=True),
 )
 
 
-def build_builtins(config: MolClsConfig) -> list[FrameAnalysis]:
-    """Build the built-in analyses a config runs, in the order they run.
+def build_builtins(
+    config: MolClsConfig, extra: Iterable[FrameAnalysis] = ()
+) -> list[FrameAnalysis]:
+    """Build the built-in analyses a config runs, and order them with `extra`.
 
     Parameters
     ----------
     config : MolClsConfig
         The analysis configuration, with the topology-dependent defaults filled in.
+    extra : Iterable[FrameAnalysis]
+        Other analyses to run, after the built-ins but those that run `last`.
 
     Returns
     -------
     list[FrameAnalysis]
-        The analyses of `BUILTINS` the config runs (see `Builtin.runs`).
+        The analyses in the order they run: the built-ins the config runs (see
+        `Builtin.runs`), then `extra`, then the built-ins that run last.
     """
-    return [builtin.build(config) for builtin in BUILTINS if builtin.runs(config)]
+    built = [(b.last, b.build(config)) for b in BUILTINS if b.runs(config)]
+    return [
+        *(analysis for last, analysis in built if not last),
+        *extra,
+        *(analysis for last, analysis in built if last),
+    ]

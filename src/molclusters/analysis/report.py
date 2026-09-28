@@ -4,9 +4,7 @@
 
 """Provides `JsonReport`, every cluster of every frame and its properties (molclusters.jsonl)."""
 
-import operator
 import pathlib as path
-from functools import reduce
 from typing import Any
 
 from ..config import ReportCompression
@@ -19,12 +17,11 @@ from ..report import (
     VERSION,
     cluster_record,
     dumps,
-    group_record,
     report_name,
+    rounded,
 )
 from ..version import __version__
 from .base import Frame, FrameAnalysis, Run
-from .nucleus import Nucleus
 
 
 def _source(obj: object) -> str | None:
@@ -39,12 +36,53 @@ def _source(obj: object) -> str | None:
     return str(path.Path(filename).absolute()) if filename else None
 
 
+def _overrides(analysis: FrameAnalysis, hook: str) -> bool:
+    """Tell whether an analysis overrides one of `FrameAnalysis`'s report hooks.
+
+    Returns
+    -------
+    bool
+        True if `hook` is the analysis' own, not the base class' (which adds
+        nothing).
+    """
+    return getattr(type(analysis), hook) is not getattr(FrameAnalysis, hook)
+
+
+def _contribution(
+    analysis: FrameAnalysis, hook: str, *args: object
+) -> dict[str, Any] | None:
+    """Get what an analysis adds to a record, rounded as the report's floats are.
+
+    Parameters
+    ----------
+    analysis : FrameAnalysis
+        The analysis.
+    hook : str
+        Its hook to call: "report_frame" or "report_cluster".
+    *args : object
+        The hook's arguments.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        The fields, or None if the analysis adds nothing.
+    """
+    try:
+        fields = getattr(analysis, hook)(*args)
+        return None if fields is None else rounded(fields)
+    except Exception as err:
+        # the run notes JsonReport's hook, not the one it called
+        err.add_note(f"In {type(analysis).__name__}.{hook}(), for the report")
+        raise
+
+
 class JsonReport(FrameAnalysis):
-    """Records every cluster of every frame, with its properties and nuclei.
+    """Records every cluster of every frame, with its properties.
 
     The report is written frame by frame, as JSON Lines, compressed as asked; its
-    format is described in `molclusters.report`, which also reads it back. The
-    nuclei come from the `Nucleus` analysis, when it runs before this one.
+    format is described in `molclusters.report`, which also reads it back. Every
+    other analysis of the run can add fields to it (see
+    `FrameAnalysis.report_frame` and `report_cluster`), so it runs after them all.
 
     Attributes
     ----------
@@ -65,7 +103,8 @@ class JsonReport(FrameAnalysis):
         self.compression = compression
         self.name = report_name(compression)
         self.outputs = (OutputFile(self.name),)
-        self._nucleus: Nucleus | None = None
+        self._frame_contributors: list[tuple[str, FrameAnalysis]] = []
+        self._cluster_contributors: list[tuple[str, FrameAnalysis]] = []
 
     def prepare(self, run: Run) -> None:
         """Start the report with its header: the run's inputs and configuration.
@@ -74,8 +113,38 @@ class JsonReport(FrameAnalysis):
         ----------
         run : Run
             The run about to start.
+
+        Raises
+        ------
+        ValueError
+            If two analyses of the same class name would add to the report.
         """
-        self._nucleus = run.analysis(Nucleus)
+        contributors = [
+            analysis
+            for analysis in run.analyses
+            if _overrides(analysis, "report_frame")
+            or _overrides(analysis, "report_cluster")
+        ]
+        names = [type(analysis).__name__ for analysis in contributors]
+        repeated = sorted({name for name in names if names.count(name) > 1})
+        if repeated:
+            # their fields would go under the same key
+            raise ValueError(
+                f"More than one {' and '.join(repeated)} analysis would add to the "
+                "report: run only one of each."
+            )
+
+        self._frame_contributors = [
+            (name, analysis)
+            for name, analysis in zip(names, contributors, strict=True)
+            if _overrides(analysis, "report_frame")
+        ]
+        self._cluster_contributors = [
+            (name, analysis)
+            for name, analysis in zip(names, contributors, strict=True)
+            if _overrides(analysis, "report_cluster")
+        ]
+
         header = {
             "format": FORMAT,
             "version": VERSION,
@@ -86,6 +155,7 @@ class JsonReport(FrameAnalysis):
             "decimals": DECIMALS,
             "units": UNITS,
             "connection_columns": CONNECTION_COLUMNS,
+            "contributors": names,
             "config": run.config.model_dump(mode="json"),
         }
         run.output.append(self.name, dumps(header))
@@ -101,8 +171,10 @@ class JsonReport(FrameAnalysis):
         clusters = []
         for cls in frame.clusters.values():
             record = cluster_record(cls)
-            if self._nucleus is not None:
-                record["Nucleus"] = self._nuclei(cls.id)
+            for name, analysis in self._cluster_contributors:
+                fields = _contribution(analysis, "report_cluster", frame, cls)
+                if fields is not None:
+                    record[name] = fields
             clusters.append(record)
 
         record = {
@@ -110,30 +182,8 @@ class JsonReport(FrameAnalysis):
             "time": round(float(frame.time), DECIMALS),
             "clusters": clusters,
         }
+        for name, analysis in self._frame_contributors:
+            fields = _contribution(analysis, "report_frame", frame)
+            if fields is not None:
+                record[name] = fields
         frame.output.append(self.name, dumps(record))
-
-    def _nuclei(self, cluster_id: int) -> dict[str, Any]:
-        """Encode the nuclei of a cluster.
-
-        Parameters
-        ----------
-        cluster_id : int
-            The cluster's id.
-
-        Returns
-        -------
-        dict[str, Any]
-            ``nuclei``, one `group_record` per nucleus, and
-            ``combined_dipole_moment``, the dipole moment of all of them together
-            (None without nuclei).
-        """
-        nuclei = self._nucleus.nuclei.get(cluster_id, [])
-        combined = (
-            round(float(reduce(operator.add, nuclei).dipole_moment), DECIMALS)
-            if nuclei
-            else None
-        )
-        return {
-            "nuclei": [group_record(nucleus) for nucleus in nuclei],
-            "combined_dipole_moment": combined,
-        }

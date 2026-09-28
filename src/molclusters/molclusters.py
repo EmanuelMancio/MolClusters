@@ -41,7 +41,8 @@ class MolClusters:
 
     It tracks the clusters frame by frame and runs the analyses on them: the
     built-ins the config enables (cluster sizes, solute-solvent, coordinates,
-    nuclei, the JSON report; see `analysis.builtins`), then the ones given to it.
+    nuclei; see `analysis.builtins`), then the ones given to it, then the JSON
+    report, which every other analysis can add to.
     A built-in runs when the config options it needs are set, unless the
     config's `analyses` turns it off.
 
@@ -57,7 +58,7 @@ class MolClusters:
         `run` (None before), and left at the last frame.
     analyses : list[FrameAnalysis]
         The analyses run on the clusters of every frame: the built-ins the config
-        enables, then the given ones (see `analysis` to find one).
+        enables, then the given ones, then the report (see `analysis` to find one).
     output : RunOutput
         Where the last run wrote its files.
     """
@@ -89,7 +90,7 @@ class MolClusters:
             The analysis configuration.
         analyses : Iterable[FrameAnalysis]
             Analyses to run in addition to the ones the config enables, after them
-            and in the order given.
+            (but before the report) and in the order given.
 
         Raises
         ------
@@ -126,7 +127,7 @@ class MolClusters:
 
         self.tracker: ClusterTracker | None = None  # created by run()
 
-        self.analyses: list[FrameAnalysis] = [*build_builtins(config), *extra]
+        self.analyses: list[FrameAnalysis] = build_builtins(config, extra)
         if not self.analyses:
             logger.warning(
                 "Every analysis is turned off ('analyses' in the config): the clusters "
