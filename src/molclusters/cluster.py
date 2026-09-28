@@ -30,6 +30,7 @@ import weakref
 from collections import Counter
 from contextlib import contextmanager
 from functools import wraps
+from types import MappingProxyType
 from typing import Callable, Iterable, Iterator, Self
 
 import MDAnalysis as mda
@@ -89,6 +90,80 @@ def _vdw_radii(universe: mda.Universe) -> np.ndarray:
     return _VDW_RADII[universe]
 
 
+def _readonly[T](value: T) -> T:
+    """Make an array, or the arrays of a tuple, read-only, in place.
+
+    A group's arrays describe it, so they can't be changed in place: a caller
+    wanting to change one works on a copy (``array.copy()``).
+
+    Parameters
+    ----------
+    value : T
+        An array, a tuple possibly holding arrays, or anything else (left as is).
+
+    Returns
+    -------
+    T
+        `value` itself.
+    """
+    if isinstance(value, np.ndarray):
+        value.flags.writeable = False
+    elif isinstance(value, tuple):
+        for item in value:
+            _readonly(item)
+    return value
+
+
+def _own_residues(ix: np.ndarray, universe: mda.Universe) -> core.groups.ResidueGroup:
+    """Build a ResidueGroup over its own copy of the residues' indices.
+
+    An MDAnalysis group's `ix` is its own index array (which can't be made
+    read-only: MDAnalysis needs it writable), so a group sharing it with another
+    would have its molecules swapped by ``other.ix[0] = ...``.
+
+    Parameters
+    ----------
+    ix : np.ndarray
+        The residues' indices in the topology (copied).
+    universe : mda.Universe
+        The Universe the residues belong to.
+
+    Returns
+    -------
+    core.groups.ResidueGroup
+        The residues.
+    """
+    return core.groups.ResidueGroup(np.array(ix, dtype=np.intp), universe)
+
+
+def _frozen_graph(graph: nx.Graph) -> nx.Graph:
+    """Copy a graph into one that can't be modified, attributes included.
+
+    `nx.freeze` only stops nodes and edges from being added or removed, and leaves
+    their attribute dicts (and the graph's own) writable, so those are swapped for
+    read-only views. Reading, subgraph views and copies (``nx.Graph(graph)``,
+    ``graph.copy()``, which are modifiable) work as usual.
+
+    Parameters
+    ----------
+    graph : nx.Graph
+        The graph to copy.
+
+    Returns
+    -------
+    nx.Graph
+        The frozen copy.
+    """
+    frozen = nx.Graph(graph)
+    frozen.graph = MappingProxyType(frozen.graph)
+    for node, attrs in list(frozen._node.items()):
+        frozen._node[node] = MappingProxyType(attrs)
+    for u, v, attrs in list(frozen.edges(data=True)):
+        # one dict per edge, shared by both directions
+        frozen._adj[u][v] = frozen._adj[v][u] = MappingProxyType(attrs)
+    return nx.freeze(frozen)
+
+
 def _on_whole[T](method: Callable[..., T]) -> Callable[..., T]:
     """Run `method` with the group's atoms temporarily made whole (see `whole`).
 
@@ -109,8 +184,8 @@ def _on_whole[T](method: Callable[..., T]) -> Callable[..., T]:
 def _per_frame[T](method: Callable[["MolGroup"], T]) -> Callable[["MolGroup"], T]:
     """Compute `method` once per frame and residue set (see `MolGroup._frame_cache`).
 
-    Only for immutable values (numbers): a cached array could be modified in place
-    by a caller and be handed, changed, to the next one.
+    Every caller gets the same value, so arrays (also inside a tuple) are made
+    read-only (see `_readonly`): one caller can't change what the next one reads.
 
     Returns
     -------
@@ -123,7 +198,7 @@ def _per_frame[T](method: Callable[["MolGroup"], T]) -> Callable[["MolGroup"], T
     def wrapper(self: "MolGroup") -> T:
         cache = self._frame_cache()
         if name not in cache:
-            cache[name] = method(self)
+            cache[name] = _readonly(method(self))
         return cache[name]
 
     return wrapper
@@ -135,19 +210,25 @@ class MolGroup:
     Geometric properties are computed on the group made whole across periodic
     boundaries (see `whole`), and always for the Universe's current frame.
 
+    The group describes its residues, so it can't be changed through what it hands
+    out: its arrays are read-only (to change one, work on a copy:
+    ``array.copy()``), and `residues` is a new group every time. Positions and
+    topology attributes belong to the shared Universe, not the group, and changing
+    them changes every group.
+
     Attributes
     ----------
-    uni : MDAnalysis.Universe
+    _uni : MDAnalysis.Universe
         The MDAnalysis Universe object associated with the group.
     _rg : MDAnalysis.core.groups.ResidueGroup
-        The group's residues.
+        The group's residues, over indices no one else holds.
     __cache_key : tuple[int, bytes] | None
         Frame and residue indices that `__cache` holds values for.
     __cache : dict[str, object]
         Values computed for the current frame and residues (see `_frame_cache`).
     """
 
-    __slots__ = ["uni", "_rg", "__cache_key", "__cache"]
+    __slots__ = ["_uni", "_rg", "__cache_key", "__cache"]
 
     def __init__(
         self, universe: mda.Universe, residues: Iterable[int] | core.groups.ResidueGroup
@@ -163,12 +244,13 @@ class MolGroup:
             ResidueGroup. Residue IDs are taken as positions in the topology plus
             one, so they must be numbered 1 to N (see `conntable.check_resids`).
         """
-        self.uni = universe
+        self._uni = universe
 
         if isinstance(residues, core.groups.ResidueGroup):
-            self._rg = residues
+            ix = residues.ix
         else:
-            self._rg = core.groups.ResidueGroup(np.array(residues) - 1, self.uni)
+            ix = np.array(residues) - 1
+        self._rg = _own_residues(ix, universe)
 
         self.__cache_key: tuple[int, bytes] | None = None
         self.__cache: dict[str, object] = {}
@@ -186,7 +268,7 @@ class MolGroup:
         dict[str, object]
             The cache, emptied if the frame or residues changed since last call.
         """
-        key = (self.uni.trajectory.ts.frame, self._rg.ix.tobytes())
+        key = (self._uni.trajectory.ts.frame, self._rg.ix.tobytes())
         if self.__cache_key != key:
             self.__cache = {}
             self.__cache_key = key
@@ -226,7 +308,7 @@ class MolGroup:
         atoms = self._rg.atoms
         original = atoms.positions  # a copy
         try:
-            boxcenter = np.sum(self.uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
+            boxcenter = np.sum(self._uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
             ref_mol_cm = self._rg[:1].center_of_mass(unwrap=True)
             shift = boxcenter - ref_mol_cm
             atoms.positions += shift
@@ -254,7 +336,7 @@ class MolGroup:
         positions : np.ndarray
             Their positions, each residue whole and wrapped into the box.
         """
-        box = self.uni.dimensions
+        box = self._uni.dimensions
         if box is None or not np.any(box[:3]):
             return
         # each atom's residue, as its row in self._rg
@@ -390,11 +472,22 @@ class MolGroup:
             A new MolGroup with the residues of both.
         """
         if isinstance(other, core.groups.ResidueGroup):
-            return MolGroup(self.uni, self._rg + other)
+            return MolGroup(self._uni, self._rg + other)
         elif isinstance(other, MolGroup):
-            return MolGroup(self.uni, self._rg + other.residues)
+            return MolGroup(self._uni, self._rg + other.residues)
 
         return NotImplemented
+
+    @property
+    def universe(self) -> mda.Universe:
+        """The Universe the group belongs to.
+
+        Returns
+        -------
+        mda.Universe
+            The group's Universe.
+        """
+        return self._uni
 
     @property
     def residues(self) -> core.groups.ResidueGroup:
@@ -403,9 +496,10 @@ class MolGroup:
         Returns
         -------
         core.groups.ResidueGroup
-            The residues of the group.
+            The residues of the group, as a new group: changing its indices
+            (``ix``) in place leaves the group's own residues as they are.
         """
-        return self._rg
+        return _own_residues(self._rg.ix, self._uni)
 
     @property
     def atoms(self) -> core.groups.AtomGroup:
@@ -431,26 +525,26 @@ class MolGroup:
         return len(self)
 
     @property
-    def resnames(self) -> list[str]:
+    def resnames(self) -> np.ndarray:
         """The residue names of the group.
 
         Returns
         -------
-        list[str]
-            A list of residue names in the group.
+        np.ndarray
+            The residue names in the group (read-only).
         """
-        return self._rg.resnames
+        return _readonly(self._rg.resnames)
 
     @property
-    def resids(self) -> list[int]:
+    def resids(self) -> np.ndarray:
         """The residue IDs of the group.
 
         Returns
         -------
-        list[int]
-            A list of residue IDs in the group.
+        np.ndarray
+            The residue IDs in the group (read-only).
         """
-        return self._rg.resids
+        return _readonly(self._rg.resids)
 
     @property
     def composition(self) -> Counter[str]:
@@ -475,6 +569,7 @@ class MolGroup:
         return self._rg.total_mass()
 
     @property
+    @_per_frame
     def center_of_mass(self) -> np.ndarray:
         """Calculate the center of mass of the group, made whole.
 
@@ -485,12 +580,12 @@ class MolGroup:
         Returns
         -------
         np.ndarray
-            The center of mass, wrapped into the primary unit cell.
+            The center of mass, wrapped into the primary unit cell (read-only).
         """
         with self.whole() as atoms:
             center = atoms.center_of_mass()
         _, shift = self.__whole()
-        return apply_PBC(center - shift, self.uni.dimensions)
+        return apply_PBC(center - shift, self._uni.dimensions)
 
     @property
     @_per_frame
@@ -530,6 +625,7 @@ class MolGroup:
         return self._rg.atoms.dipole_moment() * EA2D
 
     @property
+    @_per_frame
     @_on_whole
     def dipole(self) -> np.ndarray:
         """Calculate the dipole vector of the group, about its center of mass.
@@ -539,7 +635,7 @@ class MolGroup:
         Returns
         -------
         np.ndarray
-            The dipole vector of the group in Debye (D).
+            The dipole vector of the group in Debye (D) (read-only).
         """
         return self._rg.atoms.dipole_vector() * EA2D
 
@@ -557,6 +653,7 @@ class MolGroup:
         return self._rg.shape_parameter()
 
     @property
+    @_per_frame
     @_on_whole
     def bsphere(self) -> tuple[float, np.ndarray]:
         """Calculate the bounding sphere of the group.
@@ -564,8 +661,8 @@ class MolGroup:
         Returns
         -------
         tuple[float, np.ndarray,]
-            The radius and center of the bounding sphere, the center in the
-            group's whole positions (see `whole`).
+            The radius and center of the bounding sphere, the center (read-only)
+            in the group's whole positions (see `whole`).
         """
         return self._rg.bsphere()
 
@@ -605,7 +702,7 @@ class MolGroup:
             radius in MDAnalysis' table.
         """
         atoms = self._rg.atoms
-        radii = _vdw_radii(self.uni)[atoms.ix]
+        radii = _vdw_radii(self._uni)[atoms.ix]
         if np.isnan(radii).any():
             unknown = sorted(set(atoms.elements[np.isnan(radii)]))
             raise ValueError(
@@ -716,7 +813,8 @@ class Cluster(MolGroup):
 
     A `MolGroup` with an id, a birth time and the graph of the connections between
     its molecules. Clusters are created and updated by a `ClusterTracker` and are
-    otherwise read-only: the graph is frozen, and a new one replaces it every frame.
+    otherwise read-only: the graph is frozen, attributes included, and a new one
+    replaces it every frame; its arrays are read-only (see `MolGroup`).
 
     A Cluster is the same object for as long as it lives, and its properties are
     those of the Universe's current frame, so it describes a given frame only while
@@ -761,7 +859,7 @@ class Cluster(MolGroup):
             `ClusterTracker`).
         """
         self._birth_time: float = universe.coord.time
-        self._graph: nx.Graph = nx.freeze(nx.Graph(subconntab.graph))
+        self._graph: nx.Graph = _frozen_graph(subconntab.graph)
         self._id = cluster_id
         self._wrap_reported = False
 
@@ -844,8 +942,8 @@ class Cluster(MolGroup):
         subconntab : ConnTable._SubConnTable
             The connected group of molecules the cluster is now made of.
         """
-        self._graph = nx.freeze(nx.Graph(subconntab.graph))
-        self._rg = core.groups.ResidueGroup(np.array(self._graph) - 1, self.uni)
+        self._graph = _frozen_graph(subconntab.graph)
+        self._rg = _own_residues(np.array(self._graph) - 1, self._uni)
 
     @property
     def id(self) -> int:
@@ -870,7 +968,9 @@ class Cluster(MolGroup):
         Returns
         -------
         nx.Graph
-            The graph of the cluster, which can't be modified.
+            The graph of the cluster, which can't be modified, nor can the
+            attributes of its edges, nodes or itself (``nx.Graph(graph)`` gives a
+            modifiable copy).
         """
         return self._graph
 
@@ -894,7 +994,7 @@ class Cluster(MolGroup):
         float
             The age of the cluster at the Universe's current frame.
         """
-        return self.uni.coord.time - self._birth_time
+        return self._uni.coord.time - self._birth_time
 
     def neighbors(self, ref: int, *, level: int | None = None) -> set[int]:
         """Get the neighbors of a molecule in the cluster.

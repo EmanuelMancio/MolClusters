@@ -4,6 +4,7 @@
 
 from collections import Counter
 from contextlib import AbstractContextManager
+from typing import Callable
 
 import networkx as nx
 import numpy as np
@@ -84,7 +85,7 @@ class TestCluster:
             chain + "not a residue group"
 
     def test_adding_to_a_cluster_gives_a_plain_group(self, chain: Cluster):
-        combined = chain + chain.uni.residues[[3]]
+        combined = chain + chain.universe.residues[[3]]
 
         assert type(combined) is MolGroup
         assert members(combined) == [1, 2, 3, 4]
@@ -356,7 +357,7 @@ class TestWholePositions:
         # works if MDAnalysis's getter copies (it indexes the timestep array with
         # an index array). If an MDAnalysis upgrade returns a view, fail here
         # instead of silently skipping the restore.
-        ts_positions = chain.uni.trajectory.ts.positions
+        ts_positions = chain.universe.trajectory.ts.positions
         positions = chain.atoms.positions
         before = ts_positions.copy()
 
@@ -366,11 +367,11 @@ class TestWholePositions:
         np.testing.assert_array_equal(ts_positions, before)
 
     def test_properties_leave_the_universe_positions_untouched(self, chain: Cluster):
-        before = chain.uni.atoms.positions
+        before = chain.universe.atoms.positions
 
         read_geometry(chain)
 
-        np.testing.assert_array_equal(chain.uni.atoms.positions, before)
+        np.testing.assert_array_equal(chain.universe.atoms.positions, before)
 
     def test_overlapping_group_does_not_change_the_cluster_geometry(
         self, make_universe: UniverseFactory
@@ -399,7 +400,7 @@ class TestWholePositions:
         assert split.radius_of_gyration == pytest.approx(
             reference.radius_of_gyration, rel=1e-5
         )
-        np.testing.assert_allclose(split.uni.atoms.positions, shifted)
+        np.testing.assert_allclose(split.universe.atoms.positions, shifted)
 
     def test_center_of_mass_of_a_split_group_is_that_of_the_whole_group(
         self, make_universe: UniverseFactory
@@ -408,7 +409,7 @@ class TestWholePositions:
         # the whole chain's center of mass, moved like the chain and wrapped
         expected = apply_PBC(
             reference.atoms.center_of_mass() - [95.0, 81.0, 95.0],
-            split.uni.dimensions,
+            split.universe.dimensions,
         )
 
         np.testing.assert_allclose(split.center_of_mass, expected, atol=1e-4)
@@ -416,12 +417,12 @@ class TestWholePositions:
         assert abs(split.atoms.center_of_mass()[1] - expected[1]) > 5.0
 
     def test_whole_restores_positions_on_error(self, chain: Cluster):
-        before = chain.uni.atoms.positions
+        before = chain.universe.atoms.positions
 
         with pytest.raises(RuntimeError), chain.whole():
             raise RuntimeError
 
-        np.testing.assert_array_equal(chain.uni.atoms.positions, before)
+        np.testing.assert_array_equal(chain.universe.atoms.positions, before)
 
     def test_cache_follows_a_change_of_residues(self, make_universe: UniverseFactory):
         uni = make_universe([[[1, 2], [3, 4]]], 4)
@@ -437,7 +438,7 @@ class TestWholePositions:
 
 
 class TestFrameCache:
-    """Scalar properties are computed once per frame and residue set."""
+    """Geometric properties are computed once per frame and residue set."""
 
     @pytest.mark.parametrize(
         "name",
@@ -447,6 +448,9 @@ class TestFrameCache:
             "sphericity",
             "dipole_moment",
             "shape_parameter",
+            "center_of_mass",
+            "dipole",
+            "bsphere",
         ],
     )
     def test_value_is_computed_once_per_frame(
@@ -463,7 +467,7 @@ class TestFrameCache:
 
         first = getattr(chain, name)
 
-        assert getattr(chain, name) == first
+        assert getattr(chain, name) is first
         assert len(entries) == 1
 
     def test_radius_is_computed_once_for_everything_built_on_it(
@@ -483,6 +487,56 @@ class TestFrameCache:
         assert len(lookups) == 1
 
 
+class TestReadOnly:
+    """What a group hands out can't change the group."""
+
+    @pytest.mark.parametrize(
+        "read",
+        [
+            lambda g: g.resids,
+            lambda g: g.resnames,
+            lambda g: g.center_of_mass,
+            lambda g: g.dipole,
+            lambda g: g.bsphere[1],
+        ],
+        ids=["resids", "resnames", "center_of_mass", "dipole", "bsphere"],
+    )
+    def test_arrays_are_read_only(self, chain: Cluster, read: Callable) -> None:
+        array = read(chain)
+
+        with pytest.raises(ValueError, match="read-only"):
+            array[0] = array[1]
+
+        assert array.copy().flags.writeable  # a copy is the caller's own
+
+    def test_residue_indices_changed_in_place_leave_the_group_alone(
+        self, chain: Cluster
+    ):
+        residues = chain.residues
+        residues.ix[0] = 4
+
+        assert members(chain) == [1, 2, 3]
+        assert chain.residues is not residues
+
+    def test_a_residue_group_it_was_built_from_leaves_it_alone(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[]], 3)
+        residues = uni.residues[[0, 2]]
+        group = MolGroup(uni, residues)
+
+        residues.ix[0] = 1
+
+        assert members(group) == [1, 3]
+
+    def test_universe_can_be_read_not_replaced(self, chain: Cluster):
+        universe = chain.universe
+
+        with pytest.raises(AttributeError):
+            chain.universe = universe  # type: ignore[misc]
+        assert chain.residues.universe is universe
+
+
 class TestClusterGraph:
     def test_built_from_subconntable(self, chain: Cluster):
         assert chain.size == 3
@@ -498,15 +552,53 @@ class TestClusterGraph:
 
         assert members(chain) == [1, 2, 3]
 
+    @pytest.mark.parametrize(
+        "attrs",
+        [
+            lambda g: g[1][2],
+            lambda g: g[2][1],
+            lambda g: g.edges[1, 2],
+            lambda g: g.nodes[1],
+            lambda g: g.graph,
+        ],
+        ids=["edge", "reversed edge", "edges view", "node", "graph"],
+    )
+    def test_graph_attributes_are_frozen(self, chain: Cluster, attrs: Callable):
+        distance = chain.distance(1, 2)
+
+        with pytest.raises(TypeError):
+            attrs(chain.graph)["distance"] = 0.0
+
+        assert chain.distance(1, 2) == distance
+
+    def test_graph_copies_can_be_modified(self, chain: Cluster):
+        distance = chain.distance(1, 2)
+
+        for copy in (nx.Graph(chain.graph), chain.graph.copy()):
+            copy[1][2]["distance"] = 0.0
+            copy.nodes[1]["label"] = "first"
+            copy.add_edge(1, 5)
+
+        assert chain.distance(1, 2) == distance
+        assert sorted(chain) == [1, 2, 3]
+
+    def test_subgraphs_read_the_attributes(self, chain: Cluster):
+        sub = nx.induced_subgraph(chain.graph, [1, 2])
+
+        assert sub[1][2]["distance"] == chain.distance(1, 2)
+
     def test_update_replaces_the_graph_and_residues(self, chain: Cluster):
         old_graph = chain.graph
-        (everything,) = connected_groups(chain.uni, cutoff=60.0)
+        (everything,) = connected_groups(chain.universe, cutoff=60.0)
 
         chain._update(everything)
 
         assert members(chain) == [1, 2, 3, 4, 5]
         assert sorted(chain.graph) == [1, 2, 3, 4, 5]
         assert nx.is_frozen(chain.graph)
+        u, v = next(iter(chain.graph.edges))
+        with pytest.raises(TypeError):
+            chain.graph[u][v]["distance"] = 0.0
         # a graph read before the update keeps describing the old frame
         assert sorted(old_graph) == [1, 2, 3]
 
@@ -533,15 +625,15 @@ class TestClusterGraph:
         assert cls.age == 1.0
 
     def test_equality_and_hash_are_by_identity(self, chain: Cluster):
-        (group,) = connected_groups(chain.uni)
-        twin = Cluster(chain.uni, group, cluster_id=1)
+        (group,) = connected_groups(chain.universe)
+        twin = Cluster(chain.universe, group, cluster_id=1)
         seen = {chain}
 
         assert twin != chain
         assert twin not in seen
 
         # the same object, whatever its later frames hold
-        (everything,) = connected_groups(chain.uni, cutoff=60.0)
+        (everything,) = connected_groups(chain.universe, cutoff=60.0)
         chain._update(everything)
         assert chain == chain
         assert chain in seen

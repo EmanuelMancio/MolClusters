@@ -84,13 +84,18 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   moves the shared Universe for good; residues are placed along a spanning tree, a `Cluster`'s
   own graph or a plain group's minimum spanning tree, so groups wider than half the box stay
   whole, and a cluster wrapping around the box is warned about once). The whole positions and
-  the scalar properties (`@_per_frame`: `radius`, Rg, sphericity, dipole moment, shape) are
-  computed once per frame and residue set (`_frame_cache`), since analyses read them repeatedly
-  (`diameter`/`volume`/`density` all go through `radius`); arrays aren't cached, as callers
-  could modify them in place. Its `radius` (and so `diameter`, `volume`, `density`)
+  the geometric properties (`@_per_frame`: `radius`, Rg, sphericity, dipole moment, shape,
+  center of mass, dipole, `bsphere`) are computed once per frame and residue set
+  (`_frame_cache`), since analyses read them repeatedly (`diameter`/`volume`/`density` all go
+  through `radius`). A group can't be changed through what it hands out: every array it
+  returns is read-only (`_readonly`; callers change a `.copy()`), `residues` is a new group
+  over a copy of its indices each time (a group's `ix` can't be made read-only: MDAnalysis'
+  Cython code needs it writable), and its `universe` is a read-only property. Its `radius`
+  (and so `diameter`, `volume`, `density`)
   is an equivalent sphere's: sqrt(5/3)·Rg (a uniform sphere's) plus `radius_buffer`, half the
   atoms' mean van der Waals radius by element, for the atoms' size; `radius_of_gyration` is Rg
-  itself. `Cluster(MolGroup)` adds the id, a frozen `graph`,
+  itself. `Cluster(MolGroup)` adds the id, a frozen `graph` (`_frozen_graph`: `nx.freeze` plus
+  read-only views of the edge, node and graph attribute dicts),
   `birth_time`/`age`, `neighbors` and `distance`. Clusters are read-only outside the tracker:
   its only mutator is `Cluster._update`, which `ClusterTracker.update` calls to swap in the new
   frame's frozen graph. The objects are live, so they describe the current frame only.
