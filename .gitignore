@@ -138,5 +138,17 @@ dmypy.json
 # Top-level scratch data directory (not tests/data/, which holds test fixtures)
 /data/
 
+# Trajectories are too large to commit (test fixtures use small .pdb/.tpr/.lammpsdump
+# files), and MDAnalysis caches their frame offsets next to them.
+*.trr
+*.xtc
+*.dcd
+*.nc
+.*_offsets.npz
+.*_offsets.lock
+
+# MolClusters reports (run output; logs are covered by *.log)
+molclusters.jsonl*
+
 # CLAUDE
 .claude/
