@@ -4,9 +4,16 @@ SPDX-FileCopyrightText: © 2024 Emanuel Mancio <emanuelmancio@usp.br>
 SPDX-License-Identifier: GPL-3.0-only
 -->
 
-# Molecular Clusters
+# MolClusters
 
-Module to analyze formation and life-time of molecular clusters from a molecular dynamics simulation
+[![Tests](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml/badge.svg?branch=dev)](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml)
+[![Docs](https://github.com/EmanuelMancio/MolClusters/actions/workflows/docs.yml/badge.svg)](https://emanuelmancio.github.io/MolClusters/)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+[![REUSE compliant](https://img.shields.io/badge/REUSE-compliant-green.svg)](https://reuse.software/)
+
+Track the formation, growth, splitting, merging and lifetime of molecular clusters in
+molecular dynamics trajectories (GROMACS, LAMMPS and any other format
+[MDAnalysis](https://www.mdanalysis.org/) reads).
 
 **Documentation: <https://emanuelmancio.github.io/MolClusters/>**
 
@@ -36,13 +43,21 @@ lists the command-line options.
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-See the [developer guide](https://emanuelmancio.github.io/MolClusters/developer-guide/) for the
+Bug reports and pull requests are welcome; for major changes, please open an issue first to
+discuss what you would like to change. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[developer guide](https://emanuelmancio.github.io/MolClusters/developer-guide/) for the
 development setup and conventions.
+
+## Citing
+
+If you use MolClusters in your research, please cite it: [CITATION.cff](CITATION.cff) has the
+details, and GitHub's "Cite this repository" button formats them.
 
 ## License
 
-This script is licensed under the [GNU GPLv3](https://choosealicense.com/licenses/gpl-3.0/) license - see [LICENSE](LICENSE) for more details
+MolClusters is free software, licensed under the
+[GNU GPL v3](https://choosealicense.com/licenses/gpl-3.0/) only; see [LICENSE](LICENSE).
+Every file's license is declared per the [REUSE](https://reuse.software/) specification.
 
 ## Authorship
 

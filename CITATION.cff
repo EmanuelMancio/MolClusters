@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+cff-version: 1.2.0
+message: "If you use MolClusters in your research, please cite it as below."
+type: software
+title: MolClusters
+abstract: >-
+  Track the formation, growth, splitting, merging and lifetime of molecular
+  clusters in molecular dynamics trajectories.
+authors:
+  - family-names: Mancio
+    given-names: Emanuel Fernandes Dias
+    email: emanuelmancio@usp.br
+    affiliation: Universidade de São Paulo
+    orcid: "https://orcid.org/0000-0002-0262-711X"
+  - family-names: Coutinho
+    given-names: Kaline
+    affiliation: Universidade de São Paulo
+    orcid: "https://orcid.org/0000-0002-7586-3324"
+version: 0.6.0
+date-released: "2026-09-22"
+license: GPL-3.0-only
+repository-code: "https://github.com/EmanuelMancio/MolClusters"
+url: "https://emanuelmancio.github.io/MolClusters/"
+keywords:
+  - molecular dynamics
+  - molecular clusters
+  - nucleation
+  - MDAnalysis

@@ -5,7 +5,7 @@ right Python, the dependencies pinned in `uv.lock` and the package itself in
 editable mode.
 
 ```bash
-git clone git@github.com:EmanuelMancio/MolClusters.git
+git clone https://github.com/EmanuelMancio/MolClusters.git
 cd MolClusters
 git switch dev
 uv sync                       # runtime + dev dependencies (pytest, ruff, ...)
