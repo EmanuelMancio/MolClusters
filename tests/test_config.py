@@ -59,6 +59,28 @@ class TestFollowSolute:
         assert f"'follow' entries {unused} have no effect" in warning
 
 
+class TestSolvent:
+    def test_defaults_to_every_non_solute_resname_in_the_rules(self):
+        config = MolClsConfig(
+            rules={"MOL": {"MOL": "cm 5", "SOL": "cm 5"}, "ION": {"SOL": "cm 5"}},
+            solute=["MOL"],
+        )
+
+        assert config.solvent == ["ION", "SOL"]
+
+    def test_given_solvent_is_kept(self):
+        config = MolClsConfig(
+            rules={"MOL": {"SOL": "cm 5", "ION": "cm 5"}},
+            solute=["MOL"],
+            solvent=["SOL"],
+        )
+
+        assert config.solvent == ["SOL"]
+
+    def test_no_default_without_solute(self):
+        assert MolClsConfig(rules={"A": {"B": "cm 5"}}).solvent is None
+
+
 class TestDescribe:
     def test_shows_what_the_analysis_runs_with(self):
         config = MolClsConfig(

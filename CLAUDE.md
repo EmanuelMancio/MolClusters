@@ -94,8 +94,9 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   `birth_time`/`age`, `neighbors` and `distance`. Clusters are read-only outside the tracker:
   its only mutator is `Cluster._update`, which `ClusterTracker.update` calls to swap in the new
   frame's frozen graph. The objects are live, so they describe the current frame only.
-- `MolClusters` (`molclusters.py`) is the runner: the constructor fills in the topology-dependent
-  config defaults on a copy (the solvent), checks resnames and builds the analyses;
+- `MolClusters` (`molclusters.py`) is the runner: the constructor checks resnames and builds the
+  analyses (the config fills in its own defaults, e.g. `solvent`: the rules' residue names
+  other than the solute, since only those can cluster);
   `run()` rewinds the trajectory, creates a fresh `ClusterTracker` (`MolClusters.tracker`, None
   before the first run), calls `tracker.update()` frame by frame and drives the analyses, so
   running again gives the same results (analyses start over in `prepare`). Results are read from

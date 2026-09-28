@@ -578,6 +578,15 @@ class MolClsConfig(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _default_solvent(self) -> Self:
+        # only residues named in the rules can join a cluster, so any other
+        # residue is no solvent of theirs
+        if self.solvent is None and self.solute is not None:
+            self.solvent = sorted(self._rules.all_keys() - set(self.solute))
+
+        return self
+
+    @model_validator(mode="after")
     def _check_analyses(self) -> Self:
         from .analysis.builtins import BUILTINS  # the analysis package imports this one
 

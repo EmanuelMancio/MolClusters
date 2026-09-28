@@ -60,27 +60,6 @@ def analyze(make_universe: UniverseFactory) -> Analyze:
 
 
 class TestConfigResolution:
-    def test_solvent_defaults_to_every_non_solute_resname(
-        self, analyze: Analyze, captured_logs: list[str]
-    ):
-        molcls = analyze(
-            [[]], 3, ["MOL", "SOL", "ION"], rules=ALL_PAIRS_RULES, solute=["MOL"]
-        )
-
-        assert molcls.config.solvent == ["ION", "SOL"]
-        assert any("No 'solvent' configured" in m for m in captured_logs)
-
-    def test_the_given_config_is_left_as_it_is(self, make_universe: UniverseFactory):
-        uni = make_universe([[]], 3, ["MOL", "SOL", "ION"])
-        config = MolClsConfig(rules=ALL_PAIRS_RULES, solute=["MOL"])
-
-        molcls = MolClusters(uni, config)
-
-        assert config.solvent is None
-        assert molcls.config is not config
-        # the copy keeps what validation derived
-        assert molcls.config._rules.all_keys() == config._rules.all_keys()
-
     def test_effective_configuration_is_logged(
         self, analyze: Analyze, captured_logs: list[str]
     ):

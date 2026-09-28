@@ -339,7 +339,7 @@ class TestMain:
         (log_file,) = log_files
         assert log_file.parent == Path("out/run1")
 
-    def test_solvent_defaults_to_every_non_solute_resname(
+    def test_solvent_defaults_to_every_non_solute_resname_in_the_rules(
         self, cli_env: RunCli, fake_universe: FakeUniverse, tmp_path: Path
     ):
         cli_env("traj.xtc", "top.tpr", str(write_config(tmp_path)))

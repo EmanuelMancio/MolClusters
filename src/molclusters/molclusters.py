@@ -51,8 +51,7 @@ class MolClusters:
     uni : mda.Universe
         The MDAnalysis Universe object associated with the simulation.
     config : MolClsConfig
-        The analysis configuration, with the defaults that depend on the
-        topology filled in (the solvent).
+        The analysis configuration.
     tracker : ClusterTracker | None
         Follows the clusters frame by frame, keeping their ids stable; created by
         `run` (None before), and left at the last frame.
@@ -109,15 +108,6 @@ class MolClusters:
                 raise TypeError(
                     f"Analyses must be FrameAnalysis instances, got {analysis!r}{hint}."
                 )
-
-        if config.solvent is None and config.solute is not None:
-            # on a copy: the caller's config may be reused with another topology
-            solvent = sorted(set(universe.residues.resnames) - set(config.solute))
-            config = config.model_copy(update={"solvent": solvent})
-            logger.info(
-                "No 'solvent' configured: using every non-solute residue name in the "
-                f"topology: {config.solvent}"
-            )
 
         self.uni = universe
         self.config = config
