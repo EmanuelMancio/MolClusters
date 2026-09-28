@@ -17,6 +17,7 @@ The first line is the header::
      "topology": <absolute path, or null>, "n_frames": <frames in the run>,
      "decimals": 6, "units": {<quantity>: <unit>, ...},
      "connection_columns": ["i", "j", "distance", "angle", "n_hbonds"],
+     "analyses": [<every analysis of the run, in the order they ran>],
      "contributors": [<the analyses that add fields, see below>],
      "config": <the effective configuration>}
 

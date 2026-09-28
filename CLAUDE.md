@@ -77,7 +77,7 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   to it by overriding `FrameAnalysis.report_frame`/`report_cluster`: `JsonReport` finds those
   that do through `Run.analyses` (it runs last, so it sees them all), files what they return
   under their class name (two of one name are an error), rounded by `report.rounded`, and lists
-  them in the header's `contributors`. `Nucleus` adds its nuclei that way; the report itself
+  them in the header's `contributors` (`analyses` lists every analysis of the run). `Nucleus` adds its nuclei that way; the report itself
   knows no other analysis.
 - What analyses read (`cluster.py`): `MolGroup` is any set of residues (a nucleus, say), with
   properties computed on the group made whole across PBC (`whole()`; never

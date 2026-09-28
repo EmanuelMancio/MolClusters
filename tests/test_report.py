@@ -117,6 +117,7 @@ class TestHeader:
         header = read_report(tmp_path / "molclusters.jsonl.zst").header
         assert (header["format"], header["version"]) == (FORMAT, VERSION)
         assert header["n_frames"] == 3
+        assert header["analyses"] == ["JsonReport"]
         assert header["decimals"] == DECIMALS
         assert header["trajectory"] == str(Path("synthetic.traj").absolute())
         assert header["topology"] == str(Path("synthetic.top").absolute())
@@ -318,6 +319,12 @@ class TestContributions:
     ):
         report = self.run(make_universe, tmp_path, [Sizes()], nucleus=["MOL"])
 
+        assert report.header["analyses"] == [
+            "SizeEvolution",
+            "Nucleus",
+            "Sizes",
+            "JsonReport",
+        ]
         assert report.header["contributors"] == ["Nucleus", "Sizes"]
         (cluster,) = next(report.frames())["clusters"]
         assert list(cluster)[-2:] == ["Nucleus", "Sizes"]
@@ -327,6 +334,8 @@ class TestContributions:
     ):
         report = self.run(make_universe, tmp_path, [Interrupt(frame=-1)])
 
+        # it ran all the same
+        assert report.header["analyses"] == ["SizeEvolution", "Interrupt", "JsonReport"]
         assert report.header["contributors"] == []
 
     def test_what_cant_be_written_is_blamed_on_its_analysis(

@@ -155,6 +155,8 @@ class JsonReport(FrameAnalysis):
             "decimals": DECIMALS,
             "units": UNITS,
             "connection_columns": CONNECTION_COLUMNS,
+            # this one runs last, so the run's analyses are those before it, and it
+            "analyses": [type(a).__name__ for a in (*run.analyses, self)],
             "contributors": names,
             "config": run.config.model_dump(mode="json"),
         }
