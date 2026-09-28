@@ -334,6 +334,31 @@ class TestLineage:
         assert self.events(tmp_path) == first
         assert len(lineage.lifetimes()) == 4
 
+    def test_adds_each_frame_transition_to_the_report(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        run_analyses([Lineage(), JsonReport()], make_universe, self.FRAMES, 7, tmp_path)
+
+        report = read_report(tmp_path / "molclusters.jsonl.zst")
+        assert report.header["contributors"] == ["Lineage"]
+        first, second, *_ = report.frames()
+        assert first["Lineage"] == {
+            "flows": [[0, 1, 3], [0, 2, 2]],
+            "born": [1, 2],
+            "merged": [],
+            "dissolved": [],
+        }
+        assert second["Lineage"] == {
+            "flows": [[0, 3, 2], [1, 1, 3], [2, 1, 2]],
+            "born": [3],
+            "merged": [[2, 1]],
+            "dissolved": [],
+        }
+        assert [(c["id"], c["birth_time"]) for c in second["clusters"]] == [
+            (1, 0.0),
+            (3, 1.0),
+        ]
+
     def test_declares_its_files(self):
         assert [out.name for out in Lineage.outputs] == [
             "cluster_events.csv",

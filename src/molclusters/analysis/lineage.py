@@ -12,6 +12,7 @@ end and lifetime.
 import math
 from collections import Counter
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -74,7 +75,8 @@ class Lineage(FrameAnalysis):
     Events are read from each frame's `Frame.transition` and stamped with the
     first frame that shows them, so a cluster's `DeathTime` is the time of the
     first frame it's gone from, and its lifetime, ``DeathTime - BirthTime``, a
-    whole number of frame spacings (a cluster seen in a single frame lived one).
+    whole number of frame spacings (a cluster seen in a single frame lived one
+    spacing).
 
     cluster_events.csv has one row per event (see `EVENT_COLUMNS`); ``Other`` is
     the other cluster involved, if any, and ``NMols`` the molecules it concerns:
@@ -99,6 +101,9 @@ class Lineage(FrameAnalysis):
     clusters born at the start or alive at the end are censored: they lived at
     least that long. One alive at the end has no ``DeathTime``, and its
     ``Lifetime`` is up to the last frame.
+
+    Each frame's `Frame.transition` also goes in the report (see
+    `report_frame`), for the flows of molecules between clusters.
 
     Attributes
     ----------
@@ -191,6 +196,31 @@ class Lineage(FrameAnalysis):
             frame.output.append(
                 EVENTS, f"{number},{time!r},{event},{cid},{other_text},{n}\n"
             )
+
+    def report_frame(self, frame: Frame) -> dict[str, Any]:
+        """Give how the frame's clusters came from the previous frame's, for the report.
+
+        Parameters
+        ----------
+        frame : Frame
+            The current frame.
+
+        Returns
+        -------
+        dict[str, Any]
+            The frame's `Frame.transition`, sorted: ``flows``, rows of (previous
+            id, current id, molecules), id 0 for no cluster; ``born``; ``merged``,
+            rows of (absorbed id, id it merged into); and ``dissolved``.
+        """
+        transition = frame.transition
+        return {
+            "flows": [
+                [prev, cur, n] for (prev, cur), n in sorted(transition.flows.items())
+            ],
+            "born": sorted(transition.born),
+            "merged": [list(pair) for pair in sorted(transition.merged.items())],
+            "dissolved": sorted(transition.dissolved),
+        }
 
     def _end(
         self, cid: int, time: float, fate: str, merged_into: int | None = None

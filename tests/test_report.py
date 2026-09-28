@@ -21,6 +21,7 @@ from molclusters.report import (
     FORMAT,
     VERSION,
     Report,
+    cluster_record,
     connection_rows,
     dumps,
     group_record,
@@ -88,6 +89,18 @@ class TestEncoding:
 
         assert record["resids"] == [1, 2, 3]
         assert record["composition"] == {"SOL": 2, "MOL": 1}
+
+    def test_a_cluster_has_its_birth_time(self, make_universe: UniverseFactory):
+        uni = make_universe([[], [[1, 2]]], 2)
+        tracker = ClusterTracker(uni, MolClsConfig(rules=MOL_RULES))
+        uni.trajectory[1]
+        tracker.update()
+        (cluster,) = tracker.clusters.values()
+
+        record = cluster_record(cluster)
+
+        assert list(record)[:3] == ["id", "birth_time", "size"]
+        assert record["birth_time"] == 1.0
 
     def test_cm_connections_have_no_angle_or_count(
         self, make_universe: UniverseFactory, tmp_path: Path
@@ -302,7 +315,7 @@ class TestContributions:
     ):
         report = self.run(make_universe, tmp_path, [Sizes()])
 
-        assert report.header["contributors"] == ["Sizes"]
+        assert report.header["contributors"] == ["Lineage", "Sizes"]
         first, second, third = report.frames()
         assert first["Sizes"] == {"largest": 3, "n": 1}
         assert third["Sizes"] == {"largest": 0, "n": 0}
@@ -326,7 +339,7 @@ class TestContributions:
             "Sizes",
             "JsonReport",
         ]
-        assert report.header["contributors"] == ["Nucleus", "Sizes"]
+        assert report.header["contributors"] == ["Lineage", "Nucleus", "Sizes"]
         (cluster,) = next(report.frames())["clusters"]
         assert list(cluster)[-2:] == ["Nucleus", "Sizes"]
 
@@ -342,7 +355,7 @@ class TestContributions:
             "Interrupt",
             "JsonReport",
         ]
-        assert report.header["contributors"] == []
+        assert report.header["contributors"] == ["Lineage"]
 
     def test_what_cant_be_written_is_blamed_on_its_analysis(
         self, make_universe: UniverseFactory, tmp_path: Path

@@ -12,7 +12,7 @@ interrupted run leaves every frame it analysed readable.
 
 The first line is the header::
 
-    {"format": "molclusters-report", "version": 2, "software": "MolClusters x.y.z",
+    {"format": "molclusters-report", "version": 3, "software": "MolClusters x.y.z",
      "trajectory": <absolute path, or null for an in-memory trajectory>,
      "topology": <absolute path, or null>, "n_frames": <frames in the run>,
      "decimals": 6, "units": {<quantity>: <unit>, ...},
@@ -29,6 +29,7 @@ and each cluster is::
 
     {
         "id": 3,
+        "birth_time": 120.0,
         "size": 3,
         "resids": [107, 169, 171],
         "composition": {"MAL": 3},
@@ -44,15 +45,26 @@ and each cluster is::
         "connections": [[169, 107, 2.684737, 171.434846, 1], ...],
     }
 
-with each connection a row of ``connection_columns``: the two resids, then the
-connection's distance (and, for H-bonds, the D-H-A angle and the number of H-bonds
-between the pair; null for "cm" rules).
+with ``birth_time`` the time of the frame the cluster first appeared in (the
+run's first frame's for the clusters already there), and each connection a row of
+``connection_columns``: the two resids, then the connection's distance (and, for
+H-bonds, the D-H-A angle and the number of H-bonds between the pair; null for "cm"
+rules).
 
 Other analyses add fields of their own (see `FrameAnalysis.report_frame` and
 `report_cluster`), under their class name in a frame's or a cluster's record. The
 `Nucleus` analysis adds to each cluster ``"Nucleus": {"nuclei": [<group>, ...],
 "combined_dipole_moment": <dipole of all its nuclei together, or null>}``, a group
-being a cluster without its ``id`` and ``connections``.
+being a cluster without its ``id``, ``birth_time`` and ``connections``. The
+`Lineage` analysis adds to each frame how its clusters came from the previous
+frame's (see `tracker.Transition`)::
+
+    "Lineage": {"flows": [[<previous id>, <current id>, <molecules>], ...],
+                "born": [<id>, ...], "merged": [[<absorbed id>, <into id>], ...],
+                "dissolved": [<id>, ...]}
+
+where id 0 in a flow stands for no cluster (free molecules), and on the first
+frame every cluster is born.
 
 Floats are rounded to `DECIMALS` decimal places, what other analyses add included,
 and NaN is written as null (a bare NaN isn't valid JSON). Units are those of `UNITS`.
@@ -88,7 +100,8 @@ from .cluster import Cluster, MolGroup
 from .config import ReportCompression
 
 FORMAT = "molclusters-report"
-VERSION = 2  # 1 was molclusters.json, a single JSON document
+# 1 was molclusters.json, a single JSON document; 2 had no clusters' birth_time
+VERSION = 3
 
 # decimal places of every float in the report: well below what the properties
 # are good for (e.g. 1e-6 angstrom), yet well under the 17 digits of a float
@@ -96,6 +109,7 @@ DECIMALS = 6
 
 UNITS = {
     "time": "ps",
+    "birth_time": "ps",
     "mass": "amu",
     "volume": "angstrom^3",
     "radius": "angstrom",
@@ -297,10 +311,11 @@ def cluster_record(cluster: Cluster) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Its id, then `group_record`, then its connections.
+        Its id and birth time, then `group_record`, then its connections.
     """
     return {
         "id": cluster.id,
+        "birth_time": _round(cluster.birth_time),
         **group_record(cluster),
         "connections": connection_rows(cluster),
     }

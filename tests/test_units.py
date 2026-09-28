@@ -309,6 +309,9 @@ class TestTimeUnits:
         (life,) = pd.read_csv(tmp_path / "cluster_lifetimes.csv").itertuples()
         assert (life.BirthTime, life.DeathTime) == pytest.approx((2.0, 6.0))
         assert life.Lifetime == pytest.approx(4.0)
+        frames = list(read_report(tmp_path / "molclusters.jsonl.zst").frames())
+        (cluster,) = frames[2]["clusters"]
+        assert cluster["birth_time"] == pytest.approx(2.0)
 
 
 class TestLammpsTimeUnits:
@@ -418,6 +421,7 @@ class TestOutputUnits:
         # the units the header declares are those the values are in
         assert report.header["units"] == {
             "time": "ps",
+            "birth_time": "ps",
             "mass": "amu",
             "volume": "angstrom^3",
             "radius": "angstrom",
