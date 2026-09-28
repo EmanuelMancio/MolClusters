@@ -21,6 +21,7 @@ Density                   g/cm³
 Connection distance       Å (center-of-mass or donor-acceptor distance)
 H-bond angle              degrees
 Time, birth time, age     ps (for LAMMPS dumps, given `lammps_timestep`)
+Death time, lifetime      ps
 ========================  ==============================================
 
 The first classes check the properties; `TestOutputUnits` checks that a run
@@ -279,10 +280,12 @@ class TestConnectionUnits:
 
 
 class TestTimeUnits:
+    APART = [SPCE_SITES + 10.0, SPCE_SITES + [30.0, 10.0, 10.0]]
+    TOGETHER = [SPCE_SITES + 10.0, SPCE_SITES + [13.0, 10.0, 10.0]]
+
     def test_birth_time_and_age_are_in_ps(self, tmp_path: Path):
         # frame 0 the waters are apart; from frame 1 (t = 2 ps) they form a cluster
-        apart = [SPCE_SITES + 10.0, SPCE_SITES + [30.0, 10.0, 10.0]]
-        together = [SPCE_SITES + 10.0, SPCE_SITES + [13.0, 10.0, 10.0]]
+        apart, together = self.APART, self.TOGETHER
         uni = waters([apart, together, together, together], ["WAT"] * 2, dt=2.0)
         molcls = MolClusters(uni, MolClsConfig(rules={"WAT": {"WAT": "cm 3.5"}}))
         molcls.run(output_dir=tmp_path)
@@ -292,6 +295,20 @@ class TestTimeUnits:
         assert uni.trajectory.time == pytest.approx(6.0)
         assert cluster.birth_time == pytest.approx(2.0)
         assert cluster.age == pytest.approx(4.0)
+
+    def test_event_times_and_lifetimes_are_in_ps(self, tmp_path: Path):
+        # the waters pair up at t = 2 ps and part at t = 6 ps: they lived 4 ps
+        apart, together = self.APART, self.TOGETHER
+        uni = waters([apart, together, together, apart], ["WAT"] * 2, dt=2.0)
+        config = MolClsConfig(rules={"WAT": {"WAT": "cm 3.5"}})
+        MolClusters(uni, config).run(output_dir=tmp_path)
+
+        events = pd.read_csv(tmp_path / "cluster_events.csv")
+        assert events["Event"].tolist() == ["formation", "dissolution"]
+        assert events["Time"].tolist() == pytest.approx([2.0, 6.0])
+        (life,) = pd.read_csv(tmp_path / "cluster_lifetimes.csv").itertuples()
+        assert (life.BirthTime, life.DeathTime) == pytest.approx((2.0, 6.0))
+        assert life.Lifetime == pytest.approx(4.0)
 
 
 class TestLammpsTimeUnits:

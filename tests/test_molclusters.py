@@ -16,6 +16,7 @@ from molclusters.analysis import (
     Frame,
     FrameAnalysis,
     JsonReport,
+    Lineage,
     Nucleus,
     Run,
     SizeEvolution,
@@ -247,6 +248,8 @@ class TestRun:
         molcls.run(output_dir=out)
 
         assert sorted(p.name for p in out.iterdir()) == [
+            "cluster_events.csv",
+            "cluster_lifetimes.csv",
             "evo.txt",
             "molclusters.jsonl.zst",
         ]
@@ -279,7 +282,13 @@ class TestRun:
             RUN_FRAMES, 10, RUN_RESNAMES, rules=ALL_PAIRS_RULES, nucleus=["MOL"]
         )
         monkeypatch.chdir(tmp_path)
-        files = ["evo.txt", "molclusters.jsonl.zst", "nucleus_data.csv"]
+        files = [
+            "evo.txt",
+            "cluster_events.csv",
+            "cluster_lifetimes.csv",
+            "molclusters.jsonl.zst",
+            "nucleus_data.csv",
+        ]
 
         molcls.run()
         first = {name: (tmp_path / name).read_bytes() for name in files}
@@ -313,7 +322,7 @@ class TestRun:
         # then the built-ins the config enables, in order
         assert re.fullmatch(
             r"Time spent tracking the clusters: [\d.]+s; in each analysis: "
-            r"SizeEvolution [\d.]+s, JsonReport [\d.]+s\s*",
+            r"SizeEvolution [\d.]+s, Lineage [\d.]+s, JsonReport [\d.]+s\s*",
             durations,
         )
 
@@ -470,13 +479,18 @@ class TestUserAnalyses:
         assert "(largest-7.log)" in warning
         (summary,) = [m for m in captured_logs if m.startswith("Results written")]
         assert summary.endswith(
-            ": evo.txt, largest.txt, largest-<n>.log, molclusters.jsonl.zst\n"
+            ": evo.txt, cluster_events.csv, cluster_lifetimes.csv, largest.txt, "
+            "largest-<n>.log, molclusters.jsonl.zst\n"
         )
 
     def test_none_are_added_by_default(self, analyze: Analyze):
         molcls = analyze([[[1, 2]]], 2)
 
-        assert [type(a) for a in molcls.analyses] == [SizeEvolution, JsonReport]
+        assert [type(a) for a in molcls.analyses] == [
+            SizeEvolution,
+            Lineage,
+            JsonReport,
+        ]
 
 
 class TestBuiltins:
@@ -493,16 +507,17 @@ class TestBuiltins:
 
         assert [type(a) for a in molcls.analyses] == [
             SizeEvolution,
+            Lineage,
             SoluteSolvent,
             ClusterCoordinates,
             Nucleus,
             JsonReport,
         ]
-        solute, coordinates = molcls.analyses[1:3]
+        solute, coordinates = molcls.analyses[2:4]
         assert solute.solutes == {"MOL"}
         assert solute.solvents == {"SOL"}
         assert coordinates.follow is True
-        assert molcls.analysis(Nucleus) is molcls.analyses[3]
+        assert molcls.analysis(Nucleus) is molcls.analyses[4]
 
     def test_the_config_turns_them_off(
         self,
@@ -523,6 +538,7 @@ class TestBuiltins:
 
         assert [type(a) for a in molcls.analyses] == [
             SizeEvolution,
+            Lineage,
             SoluteSolvent,
             JsonReport,
         ]
@@ -538,7 +554,11 @@ class TestBuiltins:
         config = MolClsConfig(rules=MOL_RULES, analyses={"SizeEvolution": True})
         molcls = MolClusters(make_universe([[]], 2), config)
 
-        assert [type(a) for a in molcls.analyses] == [SizeEvolution, JsonReport]
+        assert [type(a) for a in molcls.analyses] == [
+            SizeEvolution,
+            Lineage,
+            JsonReport,
+        ]
 
     def test_every_one_turned_off_warns(
         self,
@@ -548,7 +568,8 @@ class TestBuiltins:
         captured_logs: list[str],
     ):
         config = MolClsConfig(
-            rules=MOL_RULES, analyses={"SizeEvolution": False, "JsonReport": False}
+            rules=MOL_RULES,
+            analyses={"SizeEvolution": False, "Lineage": False, "JsonReport": False},
         )
         molcls = MolClusters(make_universe([[[1, 2]]], 2), config)
         monkeypatch.chdir(tmp_path)

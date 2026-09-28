@@ -16,6 +16,7 @@ from molclusters.analysis import (
     Frame,
     FrameAnalysis,
     JsonReport,
+    Lineage,
     Nucleus,
     Run,
     SizeEvolution,
@@ -217,6 +218,127 @@ class TestSizeEvolution:
 
     def test_declares_evo(self):
         assert [out.name for out in SizeEvolution.outputs] == ["evo.txt"]
+
+
+class TestLineage:
+    # ids: {1, 2, 3} is 1 and {4, 5} is 2; 2 merges into 1 as {6, 7} forms (3),
+    # then 1 splits {4, 5} off again (4), and both 3 and 4 dissolve
+    FRAMES = [
+        [[1, 2, 3], [4, 5]],
+        [[1, 2, 3, 4, 5], [6, 7]],
+        [[1, 2, 3], [4, 5], [6, 7]],
+        [[1, 2, 3]],
+    ]
+
+    @staticmethod
+    def events(directory: Path) -> list[str]:
+        return (directory / "cluster_events.csv").read_text().splitlines()
+
+    def test_writes_every_event_of_every_frame_but_the_first(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        run_analyses([Lineage()], make_universe, self.FRAMES, 7, tmp_path)
+
+        assert self.events(tmp_path) == [
+            "Frame,Time,Event,Cluster,Other,NMols",
+            "1,1.0,formation,3,,2",
+            "1,1.0,merge,1,2,2",
+            "2,2.0,split,4,1,2",
+            "3,3.0,dissolution,3,,2",
+            "3,3.0,dissolution,4,,2",
+        ]
+
+    def test_records_each_cluster_birth_end_and_lifetime(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        lineage = Lineage()
+
+        run_analyses([lineage], make_universe, self.FRAMES, 7, tmp_path)
+
+        table = lineage.lifetimes()
+        assert table.drop(columns=["DeathTime", "MergedInto"]).to_dict("list") == {
+            "Id": [1, 2, 3, 4],
+            "BirthTime": [0.0, 0.0, 1.0, 2.0],
+            # the one alive at the end, up to the last frame
+            "Lifetime": [3.0, 1.0, 2.0, 1.0],
+            "NFrames": [4, 1, 2, 1],
+            "BornAtStart": [True, True, False, False],
+            "AliveAtEnd": [True, False, False, False],
+            "Origin": ["initial", "initial", "formation", "split"],
+            "Parents": ["", "", "", "1"],
+            "Fate": ["alive", "merge", "dissolution", "dissolution"],
+            "BirthSize": [3, 2, 2, 2],
+            "MaxSize": [5, 2, 2, 2],
+            "LastSize": [3, 2, 2, 2],
+        }
+        assert table["DeathTime"].tolist()[1:] == [1.0, 3.0, 3.0]
+        assert np.isnan(table["DeathTime"][0])
+        assert table["MergedInto"].tolist() == [pd.NA, 1, pd.NA, pd.NA]
+        written = pd.read_csv(tmp_path / "cluster_lifetimes.csv")
+        assert list(written.columns) == list(table.columns)
+        assert written["Lifetime"].tolist() == table["Lifetime"].tolist()
+
+    def test_merges_and_splits_of_several_clusters_give_a_row_each(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        # 2 and 3 merge into 1; 1 splits into three pieces (4 and 5 new); then one
+        # molecule of 4 and one of 5 pair up (6), and the rest of both dissolves
+        frames = [
+            [[1, 2], [3, 4, 5], [6, 7, 8, 9]],
+            [list(range(1, 10))],
+            [[1, 2, 3, 4], [5, 6, 7], [8, 9]],
+            [[1, 2, 3, 4], [7, 9]],
+        ]
+        lineage = Lineage()
+
+        run_analyses([lineage], make_universe, frames, 9, tmp_path)
+
+        assert self.events(tmp_path)[1:] == [
+            "1,1.0,merge,1,2,3",
+            "1,1.0,merge,1,3,2",
+            "2,2.0,split,4,1,3",
+            "2,2.0,split,5,1,2",
+            "3,3.0,split,6,4,1",
+            "3,3.0,split,6,5,1",
+            "3,3.0,dissolution,4,,3",
+            "3,3.0,dissolution,5,,2",
+        ]
+        table = lineage.lifetimes().set_index("Id")
+        assert table.loc[6, "Parents"] == "4;5"
+        assert table["MergedInto"].tolist()[:3] == [pd.NA, 1, 1]
+
+    def test_finish_logs_a_summary(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        captured_logs: list[str],
+    ):
+        run_analyses([Lineage()], make_universe, self.FRAMES, 7, tmp_path)
+
+        (summary,) = [m for m in captured_logs if m.startswith("Cluster lineage")]
+        assert summary == (
+            "Cluster lineage: 1 cluster(s) formed of free molecules and 1 split off "
+            "others; 1 merged into another and 2 dissolved. The 2 born and ended "
+            "within the run lived 1.5 ps (median); 1 of them for a single frame.\n"
+        )
+
+    def test_starts_over_on_every_run(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        lineage = Lineage()
+
+        run_analyses([lineage], make_universe, self.FRAMES, 7, tmp_path)
+        first = self.events(tmp_path)
+        run_analyses([lineage], make_universe, self.FRAMES, 7, tmp_path)
+
+        assert self.events(tmp_path) == first
+        assert len(lineage.lifetimes()) == 4
+
+    def test_declares_its_files(self):
+        assert [out.name for out in Lineage.outputs] == [
+            "cluster_events.csv",
+            "cluster_lifetimes.csv",
+        ]
 
 
 class TestSoluteSolvent:

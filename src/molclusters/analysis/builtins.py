@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from ..config import MolClsConfig
 from .base import FrameAnalysis
 from .coordinates import ClusterCoordinates
+from .lineage import Lineage
 from .nucleus import Nucleus
 from .report import JsonReport
 from .size import SizeEvolution
@@ -83,6 +84,7 @@ class Builtin:
 
 BUILTINS: tuple[Builtin, ...] = (
     Builtin(SizeEvolution, lambda c: SizeEvolution()),
+    Builtin(Lineage, lambda c: Lineage()),
     Builtin(
         SoluteSolvent, lambda c: SoluteSolvent(c.solute, c.solvent), needs=("solute",)
     ),

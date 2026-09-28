@@ -40,8 +40,8 @@ class MolClusters:
     """A class for analyzing molecular clusters in molecular dynamics simulations.
 
     It tracks the clusters frame by frame and runs the analyses on them: the
-    built-ins the config enables (cluster sizes, solute-solvent, coordinates,
-    nuclei; see `analysis.builtins`), then the ones given to it, then the JSON
+    built-ins the config enables (cluster sizes, lineage, solute-solvent,
+    coordinates, nuclei; see `analysis.builtins`), then the ones given to it, then the JSON
     report, which every other analysis can add to.
     A built-in runs when the config options it needs are set, unless the
     config's `analyses` turns it off.

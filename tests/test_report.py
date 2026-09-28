@@ -321,6 +321,7 @@ class TestContributions:
 
         assert report.header["analyses"] == [
             "SizeEvolution",
+            "Lineage",
             "Nucleus",
             "Sizes",
             "JsonReport",
@@ -335,7 +336,12 @@ class TestContributions:
         report = self.run(make_universe, tmp_path, [Interrupt(frame=-1)])
 
         # it ran all the same
-        assert report.header["analyses"] == ["SizeEvolution", "Interrupt", "JsonReport"]
+        assert report.header["analyses"] == [
+            "SizeEvolution",
+            "Lineage",
+            "Interrupt",
+            "JsonReport",
+        ]
         assert report.header["contributors"] == []
 
     def test_what_cant_be_written_is_blamed_on_its_analysis(

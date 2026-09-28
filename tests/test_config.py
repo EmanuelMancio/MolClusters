@@ -84,8 +84,8 @@ class TestDescribe:
             "follow: solute (one solute-<resid>.gro per solute)",
             "ignore_composition: A + B; B",
             "distance_backend: OpenMP (cm rules only)",
-            "analyses: SizeEvolution, SoluteSolvent, ClusterCoordinates, Nucleus, "
-            "JsonReport",
+            "analyses: SizeEvolution, Lineage, SoluteSolvent, ClusterCoordinates, "
+            "Nucleus, JsonReport",
             "report_compression: gzip (molclusters.jsonl.gz)",
             "lammps_resnames: A = 1-10, B = 11-20",
             "lammps_timestep: 0.002 ps",
@@ -103,7 +103,7 @@ class TestDescribe:
             "follow: none",
             "ignore_composition: none",
             "distance_backend: serial (cm rules only)",
-            "analyses: SizeEvolution, JsonReport",
+            "analyses: SizeEvolution, Lineage, JsonReport",
             "report_compression: zstd (molclusters.jsonl.zst)",
             "lammps_resnames: none",
             "lammps_timestep: none (LAMMPS dump times are step numbers)",
@@ -134,7 +134,7 @@ class TestAnalyses:
             ln for ln in config.describe().splitlines() if ln.startswith("analyses")
         ]
         assert line == (
-            "analyses: SizeEvolution, SoluteSolvent "
+            "analyses: SizeEvolution, Lineage, SoluteSolvent "
             "(turned off: ClusterCoordinates, JsonReport)"
         )
 
