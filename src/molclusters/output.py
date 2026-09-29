@@ -12,7 +12,7 @@ Classes:
 Constants:
 ----------
 - COMPRESSED_SUFFIXES: The file suffixes `RunOutput.append` compresses, and how.
-- FLUSH_THREADS: How many files `RunOutput.flush` writes at once.
+- FLUSH_THREADS: How many files `RunOutput.flush` writes at once, by default.
 """
 
 import os
@@ -73,9 +73,11 @@ COMPRESSED_SUFFIXES: dict[str, type[_GzipStream | _ZstdStream]] = {
     ".zst": _ZstdStream,
 }
 
-# How many files `RunOutput.flush` writes at once. Measured flushing 2,771 small
-# files on Windows 11: 2.9 s one at a time, 2.2 s with 4 threads, and no faster
-# with more (the file system and antivirus serialize much of the file creation).
+# How many files `RunOutput.flush` writes at once by default (the config's
+# `flush_threads`). Measured flushing 2,771 small files on Windows 11: 2.9 s one at
+# a time, 2.2 s with 4 threads, and no faster with more (the file system and
+# antivirus serialize much of the file creation). A network file system may gain
+# from more.
 FLUSH_THREADS = 4
 
 
@@ -225,11 +227,14 @@ class RunOutput:
         The directory the files are written to.
     max_chars : int
         The buffered size, in characters (or bytes), that triggers a flush.
+    flush_threads : int
+        How many files `flush` writes at once.
     """
 
     __slots__ = [
         "directory",
         "max_chars",
+        "flush_threads",
         "_pending",
         "_size",
         "_written",
@@ -238,7 +243,12 @@ class RunOutput:
         "_folders",
     ]
 
-    def __init__(self, directory: Path, max_chars: int = 64 * 2**20) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        max_chars: int = 64 * 2**20,
+        flush_threads: int = FLUSH_THREADS,
+    ) -> None:
         """Initialize the output of a run.
 
         Parameters
@@ -247,9 +257,19 @@ class RunOutput:
             The directory the files are written to.
         max_chars : int
             The buffered size, in characters (or bytes), that triggers a flush.
+        flush_threads : int
+            How many files `flush` writes at once (1: one after another).
+
+        Raises
+        ------
+        ValueError
+            If `flush_threads` is less than 1.
         """
+        if flush_threads < 1:
+            raise ValueError(f"flush_threads must be at least 1, not {flush_threads}.")
         self.directory = directory
         self.max_chars = max_chars
+        self.flush_threads = flush_threads
         self._pending: defaultdict[str, list[str | bytes]] = defaultdict(list)
         self._size = 0
         self._written: set[str] = set()
@@ -326,11 +346,11 @@ class RunOutput:
         A file flushed for the first time is overwritten instead: whatever it held
         came from an earlier run.
 
-        The files are written by up to `FLUSH_THREADS` threads at once: opening a
-        file waits on the system (on Windows, much of it on the antivirus), not on
-        Python, so a run with many files (e.g. one .gro file per cluster) opens
-        some side by side. Each file is written by one thread, so its data keeps
-        its order.
+        The files are written by up to `flush_threads` threads at once: opening a
+        file waits on the system (on Windows, much of it on the antivirus; on a
+        network file system, on the server), not on Python, so a run with many
+        files (e.g. one .gro file per cluster) opens some side by side. Each file
+        is written by one thread, so its data keeps its order.
         """
         # which file gets what, and how, is settled here; the threads only write
         writes = []
@@ -338,10 +358,11 @@ class RunOutput:
             mode = "a" if name in self._written else "w"  # before `path` marks it
             stream = self.__stream(name)
             writes.append((self.path(name), mode, self._binary[name], stream, chunks))
-        if len(writes) == 1:
-            _write(*writes[0])
+        if len(writes) == 1 or self.flush_threads == 1:
+            for write in writes:
+                _write(*write)
         elif writes:
-            with ThreadPoolExecutor(min(FLUSH_THREADS, len(writes))) as pool:
+            with ThreadPoolExecutor(min(self.flush_threads, len(writes))) as pool:
                 # consumed, so the first write that failed raises here
                 list(pool.map(_write, *zip(*writes, strict=True)))
         self._pending.clear()

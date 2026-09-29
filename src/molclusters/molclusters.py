@@ -292,7 +292,7 @@ class MolClusters:
         self.tracker = ClusterTracker(self.uni, self.config)
         tracking = time.perf_counter() - start  # the analyses' time is kept by `run`
 
-        self.output = RunOutput(directory)
+        self.output = RunOutput(directory, flush_threads=self.config.flush_threads)
         run = Run(self.uni, self.config, n_frames, self.output, self.analyses)
 
         # the appended files are buffered, so write what was already rendered even

@@ -5,11 +5,13 @@
 import gzip
 import io
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 import zstandard
 
+from molclusters import output as output_module
 from molclusters.output import FLUSH_THREADS, OutputFile, RunOutput
 
 
@@ -170,6 +172,35 @@ class TestRunOutput:
             else:
                 text = file.read_text()
             assert text == "".join(f"{name} {i}\n" for i in range(3))
+
+    def test_the_thread_count_is_the_one_given(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pools = []
+        real_pool = output_module.ThreadPoolExecutor
+
+        def pool(max_workers: int) -> ThreadPoolExecutor:
+            pools.append(max_workers)
+            return real_pool(max_workers)
+
+        monkeypatch.setattr(output_module, "ThreadPoolExecutor", pool)
+
+        for threads, expected in [(2, [2]), (1, [])]:  # 1: no pool at all
+            pools.clear()
+            output = RunOutput(tmp_path / str(threads), flush_threads=threads)
+            for i in range(5):
+                output.append(f"{i}.gro", f"{i}\n")
+            output.flush()
+
+            assert pools == expected
+            assert [
+                (tmp_path / str(threads) / f"{i}.gro").read_text() for i in range(5)
+            ] == [f"{i}\n" for i in range(5)]
+
+    @pytest.mark.parametrize("threads", [0, -2])
+    def test_fewer_than_one_thread_is_rejected(self, tmp_path: Path, threads: int):
+        with pytest.raises(ValueError, match="at least 1"):
+            RunOutput(tmp_path, flush_threads=threads)
 
     def test_a_write_that_fails_raises(self, tmp_path: Path):
         output = RunOutput(tmp_path)

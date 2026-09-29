@@ -222,6 +222,16 @@ class TestRun:
             assert "make sure" in warnings[0]
             assert "dipole moments" in warnings[0]
 
+    def test_the_output_writes_as_many_files_at_once_as_configured(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        uni = make_universe([[[1, 2]]], 2)
+        molcls = MolClusters(uni, MolClsConfig(rules=MOL_RULES, flush_threads=7))
+
+        molcls.run(tmp_path)
+
+        assert molcls.output.flush_threads == 7
+
     def test_report_records_nuclei(self, full_run: Path):
         first = next(read_report(full_run / "molclusters.jsonl.zst").frames())
 
