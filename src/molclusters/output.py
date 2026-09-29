@@ -15,11 +15,13 @@ Constants:
 - FLUSH_THREADS: How many files `RunOutput.flush` writes at once.
 """
 
+import os
 import re
 import zlib
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path, PurePosixPath
 
 import zstandard
@@ -110,6 +112,24 @@ def _write(
             out.writelines(chunks)
 
 
+@cache
+def _pattern(name: str) -> re.Pattern[str]:
+    """Compile the regular expression an `OutputFile` name stands for.
+
+    Parameters
+    ----------
+    name : str
+        The name, where each ``<placeholder>`` stands for an integer.
+
+    Returns
+    -------
+    re.Pattern[str]
+        The pattern, to match whole names with.
+    """
+    literal_parts = re.split(r"<[^<>]*>", name)
+    return re.compile(r"\d+".join(re.escape(part) for part in literal_parts))
+
+
 @dataclass(frozen=True, slots=True)
 class OutputFile:
     """A file, or a family of files, that an analysis writes.
@@ -138,9 +158,7 @@ class OutputFile:
         bool
             True if `filename` is (one of) the declared file(s).
         """
-        literal_parts = re.split(r"<[^<>]*>", self.name)
-        pattern = r"\d+".join(re.escape(part) for part in literal_parts)
-        return re.fullmatch(pattern, filename) is not None
+        return _pattern(self.name).fullmatch(filename) is not None
 
     @property
     def is_pattern(self) -> bool:
@@ -166,14 +184,20 @@ class OutputFile:
         list[Path]
             The existing files, sorted.
         """
-        folder = directory / PurePosixPath(self.name).parent
-        if not folder.is_dir():
+        # placeholders only go in the file name, so the folder is known; listing it
+        # with scandir needs no system call per file for `is_file` on Windows
+        name = PurePosixPath(self.name)
+        folder = directory / name.parent
+        pattern = _pattern(name.name)
+        try:
+            with os.scandir(folder) as entries:
+                return sorted(
+                    folder / entry.name
+                    for entry in entries
+                    if pattern.fullmatch(entry.name) and entry.is_file()
+                )
+        except (FileNotFoundError, NotADirectoryError):
             return []
-        return sorted(
-            file
-            for file in folder.iterdir()
-            if file.is_file() and self.matches(file.relative_to(directory).as_posix())
-        )
 
 
 class RunOutput:
@@ -211,6 +235,7 @@ class RunOutput:
         "_written",
         "_binary",
         "_streams",
+        "_folders",
     ]
 
     def __init__(self, directory: Path, max_chars: int = 64 * 2**20) -> None:
@@ -232,6 +257,8 @@ class RunOutput:
         self._binary: dict[str, bool] = {}
         # compressed file name -> its compression stream, until `close`
         self._streams: dict[str, _GzipStream | _ZstdStream] = {}
+        # the folders `path` has created (or found)
+        self._folders: set[Path] = set()
 
     @property
     def written(self) -> frozenset[str]:
@@ -259,7 +286,10 @@ class RunOutput:
         """
         self._written.add(name)
         path = self.directory / name
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # once per folder: a system call per file adds up over thousands of files
+        if path.parent not in self._folders:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._folders.add(path.parent)
         return path
 
     def append(self, name: str, data: str | bytes) -> None:

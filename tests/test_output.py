@@ -46,11 +46,17 @@ class TestOutputFile:
         (tmp_path / "gro").mkdir()
         for name in ["gro/cls-id3.gro", "gro/cls-id10.gro", "gro/x.gro", "cls-id4.gro"]:
             (tmp_path / name).write_text("")
+        (tmp_path / "gro/cls-id5.gro").mkdir()  # named like one, but not a file
 
         found = OutputFile("gro/cls-id<id>.gro").existing(tmp_path)
 
         assert found == [tmp_path / "gro/cls-id10.gro", tmp_path / "gro/cls-id3.gro"]
+        assert OutputFile("cls-id<id>.gro").existing(tmp_path) == [
+            tmp_path / "cls-id4.gro"
+        ]
         assert OutputFile("none/cls-id<id>.gro").existing(tmp_path) == []
+        # the folder is a file
+        assert OutputFile("cls-id4.gro/cls-id<id>.gro").existing(tmp_path) == []
 
 
 class TestRunOutput:
@@ -64,6 +70,17 @@ class TestRunOutput:
         output.flush()
 
         assert (tmp_path / "a" / "b" / "c.gro").read_text() == "x\n"
+
+    def test_a_folder_removed_after_its_first_file_is_not_made_again(
+        self, tmp_path: Path
+    ):
+        # folders are created once per run, not once per file
+        output = RunOutput(tmp_path)
+        output.path("gro/a.gro")
+        (tmp_path / "gro").rmdir()
+
+        assert output.path("gro/b.gro") == tmp_path / "gro/b.gro"
+        assert not (tmp_path / "gro").exists()
 
     def test_nothing_is_appended_before_a_flush(self, tmp_path: Path):
         output = RunOutput(tmp_path)
