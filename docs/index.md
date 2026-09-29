@@ -78,6 +78,16 @@ For every frame of the trajectory, MolClusters
 molclusters traj.xtc topol.tpr config.yml --output-dir results
 ```
 
+## Citing
+
+If you use MolClusters in your research, please cite it. Every release is archived on
+Zenodo with its own DOI: cite the version you used, listed on the
+[Zenodo record](https://doi.org/10.5281/zenodo.23023320), or
+[10.5281/zenodo.23023320](https://doi.org/10.5281/zenodo.23023320) for MolClusters as a
+whole (it resolves to the latest version). The repository's
+[CITATION.cff](https://github.com/EmanuelMancio/MolClusters/blob/main/CITATION.cff) has
+the details, and GitHub's "Cite this repository" button formats them.
+
 ## Authorship and acknowledgments
 
 MolClusters was written by Emanuel Fernandes Dias Mancio[:fontawesome-brands-orcid:](https://orcid.org/0000-0002-0262-711X){ .profile title="ORCID" aria-label="ORCID" }[:academicons-lattes:](http://lattes.cnpq.br/3118069372734394){ .profile title="Lattes CV" aria-label="Lattes CV" },

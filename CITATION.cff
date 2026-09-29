@@ -21,6 +21,9 @@ authors:
     orcid: "https://orcid.org/0000-0002-7586-3324"
 version: 0.7.0
 date-released: "2026-09-28"
+# Zenodo's concept DOI: it resolves to the latest version, and each version's own DOI
+# is listed on its Zenodo record.
+doi: 10.5281/zenodo.23023320
 license: LGPL-3.0-or-later
 repository-code: "https://github.com/EmanuelMancio/MolClusters"
 url: "https://emanuelmancio.github.io/MolClusters/"

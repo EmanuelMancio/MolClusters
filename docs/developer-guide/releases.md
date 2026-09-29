@@ -104,6 +104,8 @@ Each published GitHub release, as the *Release* workflow makes, is archived on
 version from the release's tag, so the authors in `CITATION.cff` are the ones credited.
 A Zenodo record can't be deleted: check `CITATION.cff` before publishing a release.
 
-The first archived release also creates a *concept DOI*, which always resolves to the
-latest version. Add it to `CITATION.cff` as `doi:` and as a badge in the README, so that
-citations can use the concept DOI or a specific version's one.
+The first archived release (v0.7.0) also created the *concept DOI*,
+[10.5281/zenodo.23023320](https://doi.org/10.5281/zenodo.23023320), which always
+resolves to the latest version; it's in `CITATION.cff` (`doi:`), the README badge and
+the documentation home page. Each release's own DOI is listed on its Zenodo record and
+needs no change in the repository.
