@@ -103,7 +103,9 @@ Clusters are also live: their properties are those of the current frame. To keep
 data about a cluster across frames, key it by `cluster.id`, not by the object.
 
 Any group of molecules can get the same properties as a `MolGroup`:
-`MolGroup(frame.universe, [resid, ...])`.
+`MolGroup(frame.universe, [resid, ...])`. For a part of a cluster (as the nuclei
+are), `cluster.subgroup([resid, ...])` is faster: it keeps the place its molecules
+have in the cluster, made whole already, instead of making them whole again.
 
 ## Writing files
 

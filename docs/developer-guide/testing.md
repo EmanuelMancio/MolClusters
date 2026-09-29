@@ -23,7 +23,7 @@ which feeds the README's coverage badge.
 | `test_properties.py` | properties and outputs of a real system (`tests/data/met-mal`) |
 | `test_analysis.py` | `FrameAnalysis`, `Run` and `Frame`, each built-in analysis, errors and logging |
 | `test_molclusters.py` | the runner: configuration defaults, runs, user analyses, built-ins |
-| `test_output.py` | `RunOutput` buffering, overwriting, compression |
+| `test_output.py` | `RunOutput` buffering, overwriting, compression, parallel flush |
 | `test_report.py` | the report format and the reader |
 | `test_main.py` | the command line, LAMMPS handling, in-memory loading |
 | `test_log.py`, `test_symdict.py` | logging, `SymmetricDict` |

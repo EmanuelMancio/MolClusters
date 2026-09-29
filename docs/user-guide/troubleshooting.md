@@ -123,7 +123,9 @@ switch the rule to `cm`.
 - Every cluster's properties are computed every frame for the report and the
   tables; turn off the analyses you don't need with
   [`analyses`](configuration.md#analyses). `ClusterCoordinates` in particular writes
-  many files.
+  many files. Writing them on a network file system (an HPC cluster's shared scratch
+  space) may go faster with a higher [`flush_threads`](configuration.md#flush_threads),
+  or write to a local disk and copy the results afterwards.
 - For a first look at a long trajectory, analyse every N-th frame with
   `--traj-memory --in-memory-step N`.
 - The end of the log says how long the tracking and each analysis took.

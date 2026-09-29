@@ -132,7 +132,10 @@ Every file write goes through `RunOutput` (`output.py`), reached as `Run.output`
   and flushed when the buffer is full and at the end. A file's first flush in a run
   overwrites it, so runs never mix. Names ending in `.gz`/`.zst` are compressed into
   one stream per run, ending a block at every flush, so a killed run leaves
-  everything flushed readable.
+  everything flushed readable. A flush writes up to `flush_threads` files at once
+  (a config key, default `FLUSH_THREADS` = 4), each by one thread so its data keeps
+  its order; which file gets what, and in which mode, is settled beforehand. Folders
+  are created once per run.
 
 Each analysis declares its files in `outputs` (`OutputFile`, with `<placeholder>`
 patterns for families like `cls-id<id>.gro`). The declarations drive the checks
@@ -183,3 +186,12 @@ in `describe()`, and a section in the [configuration docs](../user-guide/configu
   `_single_frame`, `_ts`), checked at construction by `_check_hb_private_api` so an
   MDAnalysis upgrade that removes them fails early rather than mid-run.
 - The log ends with the time spent tracking and in each analysis; start there.
+- Most of a run is the analyses, not the tracking, and most of that is MDAnalysis'
+  Python overhead on small groups, which threads can't overlap (the GIL): making
+  groups whole (`__unwrap_along_bonds`) is the largest single cost. Nuclei reuse
+  their cluster's whole positions (`subgroup`), and `ClusterCoordinates` formats
+  `.gro` frames itself (`gro_frame`), byte for byte what MDAnalysis' GRO writer
+  writes, several times faster.
+- Opening files is the cost at the end of a run with many `.gro` files. On Windows
+  the file system and antivirus serialize much of it: 2,771 files take 2.9 s one at a
+  time and 2.2 s with 4 threads, no faster with more.
