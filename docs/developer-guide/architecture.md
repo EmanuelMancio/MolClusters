@@ -85,6 +85,13 @@ never moves the shared Universe for good: residues are placed along a spanning t
 groups wider than half the box stay whole, and a cluster wrapping around the box is
 warned about once.
 
+Each residue is made whole along its bonds or, when the topology has none (`_has`,
+logged once), by minimum image around its first atom
+(`conntable._whole_residue_offsets`), as the `cm` rule does; that warns once when a
+molecule reaches 80% of the minimum-image limit (`_check_reach`). Bonded runs keep
+their exact output. Without a box (`_has_box`), positions are taken as they are;
+without partial charges, `charge`, `dipole` and `dipole_moment` are NaN, warned once.
+
 The whole positions and the geometric properties (`@_per_frame`: `radius`, Rg,
 sphericity, dipole moment, shape, center of mass, dipole, `bsphere`) are computed
 once per frame and residue set (`_frame_cache`), since analyses read them
