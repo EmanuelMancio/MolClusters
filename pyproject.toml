@@ -5,8 +5,12 @@
 [project]
 name = "MolClusters"
 version = "0.7.0"
-description = "Tool to analyze cluster formation in molecular dynamics simulations"
-authors = [{ name = "Emanuel Mancio", email = "emanuelmancio@usp.br" }]
+description = "Track the formation, growth, splitting, merging and lifetime of molecular clusters in molecular dynamics trajectories"
+# the same authors, description and keywords as CITATION.cff, which Zenodo credits
+authors = [
+    { name = "Emanuel Fernandes Dias Mancio", email = "emanuelmancio@usp.br" },
+    { name = "Kaline Coutinho" },
+]
 license = "LGPL-3.0-or-later"
 license-files = ["LICENSE", "COPYING", "LICENSES/*.txt"]
 readme = "README.md"
@@ -25,7 +29,7 @@ dependencies = [
     "orjson>=3.11.0,<4.0.0",
     "zstandard>=0.25.0,<1.0.0",
 ]
-keywords = ["molecular dynamics", "clusters", "nucleation", "MDAnalysis"]
+keywords = ["molecular dynamics", "molecular clusters", "nucleation", "MDAnalysis"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -44,6 +48,8 @@ documentation = "https://emanuelmancio.github.io/MolClusters/"
 repository = "https://github.com/EmanuelMancio/MolClusters"
 issues = "https://github.com/EmanuelMancio/MolClusters/issues"
 changelog = "https://github.com/EmanuelMancio/MolClusters/blob/main/CHANGELOG.md"
+# Zenodo's concept DOI, which resolves to the latest version
+doi = "https://doi.org/10.5281/zenodo.23023320"
 
 [project.scripts]
 molclusters = "molclusters.main:main"
