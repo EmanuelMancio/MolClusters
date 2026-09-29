@@ -13,11 +13,11 @@ authors:
   - family-names: Mancio
     given-names: Emanuel Fernandes Dias
     email: emanuelmancio@usp.br
-    affiliation: Universidade de São Paulo
+    affiliation: "Instituto de Física, Universidade de São Paulo, São Paulo, Brasil"
     orcid: "https://orcid.org/0000-0002-0262-711X"
   - family-names: Coutinho
     given-names: Kaline
-    affiliation: Universidade de São Paulo
+    affiliation: "Instituto de Física, Universidade de São Paulo, São Paulo, Brasil"
     orcid: "https://orcid.org/0000-0002-7586-3324"
 version: 0.7.0
 date-released: "2026-09-28"
