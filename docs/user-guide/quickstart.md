@@ -5,10 +5,11 @@ This walks through a complete analysis of a mixture of two species, malic acid
 
 ## 1. What you need
 
-- A **topology** with residue names, masses, partial charges and bonds: a GROMACS
-  `.tpr`, a CHARMM/NAMD `.psf` or a LAMMPS DATA file (`atom_style full`) has them
-  all; a `.gro` or `.pdb` doesn't. The residues must be numbered 1 to N in topology
-  order (see [Troubleshooting](troubleshooting.md#residues-numbered-otherwise)).
+- A **topology** with residue names, masses and partial charges, and bonds for `hb`
+  rules: a GROMACS `.tpr`, a CHARMM/NAMD `.psf` or a LAMMPS DATA file
+  (`atom_style full`) has them all; a `.gro` or `.pdb` has no charges or bonds.
+  The residues must be numbered 1 to N in topology order (see
+  [Troubleshooting](troubleshooting.md#residues-numbered-otherwise)).
 - A **trajectory** MDAnalysis can read (`.xtc`, `.trr`, `.dcd`, a LAMMPS dump, ...),
   with the box, so distances respect periodic boundary conditions.
 - A **configuration file** saying which molecules connect to which.

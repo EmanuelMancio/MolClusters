@@ -6,7 +6,10 @@ group **made whole** across the periodic boundaries: its molecules are placed ne
 to each other along the cluster's connections (or, for a nucleus, a minimum spanning
 tree of its molecules' centers), so a cluster wider than half the box stays whole.
 A cluster connected to its own periodic image (e.g. a slab spanning the box) cannot
-be made whole; the log warns once per such cluster.
+be made whole; the log warns once per such cluster. Each molecule is itself made
+whole along its bonds, or, in a topology without bonds (e.g. a `.gro` or `.pdb`), by
+taking each atom at its nearest image to the molecule's first atom, which holds for
+molecules spanning less than half the box.
 
 | Property | Report field | Table column | Unit |
 | --- | --- | --- | --- |

@@ -19,8 +19,8 @@ usage: molclusters [-h] [--traj-memory] [--in-memory-step N]
     LAMMPS dumps.
 
 `top`
-:   The topology, with residue names, masses, partial charges and bonds (e.g. a
-    GROMACS `.tpr`). See [Quick start](quickstart.md#1-what-you-need).
+:   The topology, with residue names, masses and partial charges, and bonds for `hb`
+    rules (e.g. a GROMACS `.tpr`). See [Quick start](quickstart.md#1-what-you-need).
 
 `inp`
 :   The [configuration file](configuration.md) (YAML, JSON or TOML).

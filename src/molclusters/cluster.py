@@ -42,7 +42,7 @@ from MDAnalysis.exceptions import NoDataError
 from MDAnalysis.guesser.tables import vdwradii
 from MDAnalysis.lib.distances import apply_PBC, distance_array, minimize_vectors
 
-from .conntable import ConnectionTable
+from .conntable import ConnectionTable, _whole_residue_offsets
 
 # 1 D = 0.2081943 e·Å (e·Å, not the atomic unit e·a0: 1 D = 0.3934303 e·a0)
 EA2D = 1 / 0.2081943
@@ -51,6 +51,47 @@ EA2D = 1 / 0.2081943
 _VDW_RADII: "weakref.WeakKeyDictionary[mda.Universe, np.ndarray]" = (
     weakref.WeakKeyDictionary()
 )
+
+# Universe -> topology attribute -> whether the topology has it (see `_has`)
+_TOPOLOGY_HAS: "weakref.WeakKeyDictionary[mda.Universe, dict[str, bool]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+# what a topology without the attribute gets instead, logged once (see `_has`)
+_WITHOUT = {
+    # groups are made whole along bonds when there are some (see `MolGroup.whole`)
+    "bonds": (
+        "INFO",
+        "The topology has no bonds: molecules are made whole by minimum image "
+        "around their first atom, so each must span less than half the box.",
+    ),
+}
+
+
+def _has(universe: mda.Universe, attr: str) -> bool:
+    """Check whether a Universe's topology has an attribute, noting once if not.
+
+    Coordinate-only topologies (``.gro``, ``.pdb``) have no bonds.
+
+    Parameters
+    ----------
+    universe : mda.Universe
+        The Universe to check.
+    attr : str
+        A topology attribute listed in `_WITHOUT`.
+
+    Returns
+    -------
+    bool
+        Whether the topology has it (bonds possibly none at all, e.g. only ions).
+    """
+    known = _TOPOLOGY_HAS.setdefault(universe, {})
+    if attr not in known:
+        # as MDAnalysis' own unwrap checks bonds, on one atom to keep it cheap
+        known[attr] = hasattr(universe.atoms[:1], attr)
+        if not known[attr]:
+            logger.log(*_WITHOUT[attr])
+    return known[attr]
 
 
 def _vdw_radii(universe: mda.Universe) -> np.ndarray:
@@ -298,6 +339,9 @@ class MolGroup:
         `_placement_order`), each at the periodic image nearest its tree neighbour.
         The Universe's positions are left exactly as they were.
 
+        Residues are made whole along their bonds, or, in a topology without
+        bonds, by minimum image around their first atom (see `_has`).
+
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
@@ -306,19 +350,82 @@ class MolGroup:
             vectors on top of it).
         """
         atoms = self._rg.atoms
+        boxcenter = np.sum(self._uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
+        if _has(self._uni, "bonds"):
+            positions, shift = self.__unwrap_along_bonds(atoms, boxcenter)
+        else:
+            positions, shift = self.__unwrap_by_minimum_image(atoms, boxcenter)
+
+        if len(self._rg) > 1:
+            self.__place_residues(atoms, positions)
+        return positions, shift
+
+    def __unwrap_along_bonds(
+        self, atoms: core.groups.AtomGroup, boxcenter: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Center the group's first residue and make each residue whole by its bonds.
+
+        Parameters
+        ----------
+        atoms : core.groups.AtomGroup
+            The group's atoms.
+        boxcenter : np.ndarray
+            The center of the box.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            See `__compute_whole_positions`, before the residues are placed.
+        """
         original = atoms.positions  # a copy
         try:
-            boxcenter = np.sum(self._uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
             ref_mol_cm = self._rg[:1].center_of_mass(unwrap=True)
             shift = boxcenter - ref_mol_cm
             atoms.positions += shift
             atoms.unwrap(compound="residues", reference="cog", inplace=True)
-            positions = atoms.positions
+            return atoms.positions, shift
         finally:
             atoms.positions = original
 
-        if len(self._rg) > 1:
-            self.__place_residues(atoms, positions)
+    def __unwrap_by_minimum_image(
+        self, atoms: core.groups.AtomGroup, boxcenter: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Center the group's first residue and make each residue whole, bond-free.
+
+        Each residue is made whole by minimum image around its first atom (see
+        `conntable._whole_residue_offsets`), which gives what `__unwrap_along_bonds`
+        does, up to rounding, for residues spanning less than half the box.
+
+        Parameters
+        ----------
+        atoms : core.groups.AtomGroup
+            The group's atoms.
+        boxcenter : np.ndarray
+            The center of the box.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            See `__compute_whole_positions`, before the residues are placed.
+        """
+        box = self._uni.dimensions
+        anchors, offsets, residue = _whole_residue_offsets(atoms, box)
+        positions = anchors[residue] + offsets
+
+        first = atoms.resindices == self._rg.ix[0]
+        masses = atoms.masses[first]
+        ref_mol_cm = masses @ positions[first] / masses.sum()
+        shift = boxcenter - ref_mol_cm
+        positions += shift.astype(positions.dtype)
+
+        # each residue's center of geometry into the box, as unwrap's reference="cog"
+        counts = np.bincount(residue)
+        centers = (
+            np.stack([np.bincount(residue, positions[:, k]) for k in range(3)], axis=1)
+            / counts[:, None]
+        )
+        wrapped = apply_PBC(centers.astype(np.float32), box)
+        positions += (wrapped - centers)[residue].astype(positions.dtype)
         return positions, shift
 
     def __place_residues(

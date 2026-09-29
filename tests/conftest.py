@@ -83,7 +83,9 @@ def make_universe() -> UniverseFactory:
     Returns
     -------
     UniverseFactory
-        ``make_universe(frames, n_res, resnames=None, blank_elements=())``.
+        ``make_universe(frames, n_res, resnames=None, blank_elements=(), bonds=True,
+        charges=True)``; ``bonds``/``charges`` False leave those topology attributes
+        out, as in a coordinate-only topology.
     """
 
     def factory(
@@ -91,6 +93,8 @@ def make_universe() -> UniverseFactory:
         n_res: int,
         resnames: Sequence[str] | None = None,
         blank_elements: Sequence[int] = (),
+        bonds: bool = True,
+        charges: bool = True,
     ) -> mda.Universe:
         n_atoms = 2 * n_res
         uni = mda.Universe.empty(
@@ -110,8 +114,10 @@ def make_universe() -> UniverseFactory:
         uni.add_TopologyAttr("resnames", list(resnames or ["MOL"] * n_res))
         uni.add_TopologyAttr("resids", np.arange(1, n_res + 1))
         uni.add_TopologyAttr("masses", [12.011, 15.999] * n_res)
-        uni.add_TopologyAttr("charges", [0.3, -0.3] * n_res)
-        uni.add_TopologyAttr("bonds", [(2 * i, 2 * i + 1) for i in range(n_res)])
+        if charges:
+            uni.add_TopologyAttr("charges", [0.3, -0.3] * n_res)
+        if bonds:
+            uni.add_TopologyAttr("bonds", [(2 * i, 2 * i + 1) for i in range(n_res)])
 
         coords = np.empty((len(frames), n_atoms, 3), dtype=np.float32)
         for f, groups in enumerate(frames):

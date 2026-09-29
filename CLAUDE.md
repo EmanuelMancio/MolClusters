@@ -95,7 +95,10 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   properties computed on the group made whole across PBC (`whole()`; never
   moves the shared Universe for good; residues are placed along a spanning tree, a `Cluster`'s
   own graph or a plain group's minimum spanning tree, so groups wider than half the box stay
-  whole, and a cluster wrapping around the box is warned about once). The whole positions and
+  whole, and a cluster wrapping around the box is warned about once; each residue is made
+  whole along its bonds, or, when the topology has none (`_has`, logged once), by minimum image
+  around its first atom, `conntable._whole_residue_offsets`, as the "cm" rule does, so
+  existing bonded runs keep their exact output). The whole positions and
   the geometric properties (`@_per_frame`: `radius`, Rg, sphericity, dipole moment, shape,
   center of mass, dipole, `bsphere`) are computed once per frame and residue set
   (`_frame_cache`), since analyses read them repeatedly (`diameter`/`volume`/`density` all go

@@ -142,14 +142,45 @@ def check_resids(universe: mda.Universe) -> None:
         )
 
 
+def _whole_residue_offsets(
+    atoms: core.groups.AtomGroup, box: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Make each residue whole by minimum image around its first atom.
+
+    Trajectories often split molecules across periodic boundaries (raw GROMACS
+    output, wrapped LAMMPS dumps). Each atom is taken at its nearest image to its
+    residue's first atom, which needs no bonds and holds for any residue spanning
+    less than half the box: ``anchors[residue] + offsets`` are the whole positions.
+
+    Parameters
+    ----------
+    atoms : core.groups.AtomGroup
+        Every atom of the residues, in residue order.
+    box : np.ndarray
+        The box dimensions.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        Each residue's first atom's position (its anchor), each atom's minimum-image
+        offset from its residue's anchor, and each atom's residue, as a row of the
+        anchors.
+    """
+    positions = atoms.positions
+    _, first, residue = np.unique(
+        atoms.resindices, return_index=True, return_inverse=True
+    )
+    anchors = positions[first]
+    offsets = minimize_vectors(positions - anchors[residue], box)
+    return anchors, offsets, residue
+
+
 def _whole_centers_of_mass(atoms: core.groups.AtomGroup) -> np.ndarray:
     """Calculate the center of mass of each residue, as if the residue were whole.
 
-    Trajectories often split molecules across periodic boundaries (raw GROMACS
-    output, wrapped LAMMPS dumps), and the plain center of mass of a split molecule
-    lands between its pieces, up to half a box away from the molecule. Each atom is
-    taken instead at its nearest image to its residue's first atom, which needs no
-    bonds and holds for any residue spanning less than half the box.
+    The plain center of mass of a molecule split across periodic boundaries lands
+    between its pieces, up to half a box away from the molecule; each residue is
+    made whole first instead (see `_whole_residue_offsets`).
 
     Parameters
     ----------
@@ -165,13 +196,8 @@ def _whole_centers_of_mass(atoms: core.groups.AtomGroup) -> np.ndarray:
     if box is None or not np.any(box[:3]):
         return atoms.center_of_mass(compound="residues")
 
-    positions = atoms.positions
     masses = atoms.masses
-    _, first, residue = np.unique(
-        atoms.resindices, return_index=True, return_inverse=True
-    )
-    anchors = positions[first]
-    offsets = minimize_vectors(positions - anchors[residue], box)
+    anchors, offsets, residue = _whole_residue_offsets(atoms, box)
     weighted = np.stack(
         [np.bincount(residue, masses * offsets[:, k]) for k in range(3)], axis=1
     )

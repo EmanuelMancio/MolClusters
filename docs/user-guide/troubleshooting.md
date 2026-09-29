@@ -50,19 +50,6 @@ dump, see [LAMMPS systems](lammps.md#elements-and-atom-names).
 Every molecule id of a LAMMPS topology needs a name; add the listed ids to
 [`lammps_resnames`](configuration.md#lammps_resnames).
 
-### AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds
-
-```text
-NoDataError: AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds. ...
-Raised by JsonReport.analyse() on frame 1
-```
-
-Clusters are made whole across the periodic boundaries along their molecules' bonds
-before their properties are computed, so the topology needs bonds. Coordinate-only
-topologies (`.gro`, `.pdb`, `.xyz`) have none; they lack partial charges too, which
-the charge, dipole moment and `hb` rules need. Use a topology with both, such as a
-GROMACS `.tpr`, a CHARMM `.psf` or a LAMMPS DATA file with `atom_style full`.
-
 ### Cannot assign donor-hydrogen pairs ... no bond information
 
 `hb` rules find donors through the hydrogens' bonds. Use a topology with bonds, or
