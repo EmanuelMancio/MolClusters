@@ -2,14 +2,19 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+import io
 import time
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 
+import MDAnalysis as mda
 import numpy as np
 import pandas as pd
 import pytest
 from loguru import logger
+from MDAnalysis.core.groups import AtomGroup
+from MDAnalysis.lib.util import NamedStream
 
 from molclusters.analysis import (
     ClusterCoordinates,
@@ -22,6 +27,7 @@ from molclusters.analysis import (
     SizeEvolution,
     SoluteSolvent,
 )
+from molclusters.analysis.coordinates import gro_frame
 from molclusters.config import MolClsConfig, ReportCompression
 from molclusters.output import OutputFile, RunOutput
 from molclusters.report import Report, read_report
@@ -546,6 +552,93 @@ class TestClusterCoordinates:
         assert analysis.outputs[0].name == str(
             Path(where, "cls-n<size>.gro").as_posix()
         )
+
+
+def written_by_mdanalysis(atoms: AtomGroup, title: str) -> str:
+    """Write atoms with MDAnalysis' own GRO writer, with `title` for its title line.
+
+    Returns
+    -------
+    str
+        The file's text.
+    """
+    buf = io.StringIO()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # e.g. missing names, or box
+        with mda.Writer(NamedStream(buf, "frame.gro"), multiframe=False) as writer:
+            writer.write(atoms)
+    _, body = buf.getvalue().split("\n", 1)
+    return f"{title}\n{body}"
+
+
+class TestGroFrame:
+    """`gro_frame` renders what MDAnalysis' GRO writer writes, byte for byte."""
+
+    @staticmethod
+    def chain(make_universe: UniverseFactory, **kwargs: object) -> mda.Universe:
+        uni = make_universe([[[1, 2, 3]]], 3, **kwargs)
+        # negative coordinates, and digits past the 3 decimals written
+        uni.atoms.positions = uni.atoms.positions - 104.123456
+        return uni
+
+    @pytest.mark.parametrize(
+        "box",
+        [
+            [30.0, 40.0, 50.0, 90.0, 90.0, 90.0],
+            [30.0, 40.0, 50.0, 80.0, 70.0, 60.0],  # triclinic
+            None,
+        ],
+    )
+    def test_matches_the_writer_for_any_box(
+        self, make_universe: UniverseFactory, box: list[float] | None
+    ):
+        uni = self.chain(make_universe, box=box is not None)
+        if box is not None:
+            uni.dimensions = box
+
+        assert gro_frame(uni.atoms, "t") == written_by_mdanalysis(uni.atoms, "t")
+
+    def test_matches_the_writer_with_velocities(self, make_universe: UniverseFactory):
+        uni = self.chain(make_universe)
+        uni.trajectory.ts.has_velocities = True
+        uni.atoms.velocities = np.linspace(-9.87654, 12.3456, 18).reshape(6, 3)
+
+        text = gro_frame(uni.atoms, "t")
+
+        assert text == written_by_mdanalysis(uni.atoms, "t")
+        assert len(text.splitlines()[2]) == 44 + 24
+
+    def test_numbers_the_atoms_in_the_order_given_and_truncates_as_the_writer(
+        self, make_universe: UniverseFactory
+    ):
+        uni = self.chain(make_universe)
+        uni.residues.resids = [123_456, 99_999, 100_000]
+        uni.residues.resnames = ["LONGNAME", "A", "SOL"]
+        uni.atoms.names = ["C1", "OXYGENS"] * 3
+        atoms = uni.atoms[[5, 0, 3, 2]]
+
+        assert gro_frame(atoms, "t") == written_by_mdanalysis(atoms, "t")
+
+    def test_atoms_without_names_are_written_as_the_writer_does(self):
+        uni = mda.Universe.empty(2, n_residues=1, atom_resindex=[0, 0], trajectory=True)
+        uni.add_TopologyAttr("resnames", ["MOL"])
+        uni.add_TopologyAttr("resids", [1])
+        uni.atoms.positions = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+        uni.dimensions = [10.0, 10.0, 10.0, 90.0, 90.0, 90.0]
+
+        text = gro_frame(uni.atoms, "t")
+
+        assert text == written_by_mdanalysis(uni.atoms, "t")
+        assert "    X" in text
+
+    def test_coordinates_out_of_the_format_range_are_rejected(
+        self, make_universe: UniverseFactory
+    ):
+        uni = self.chain(make_universe)
+        uni.atoms.positions = uni.atoms.positions + 200_000.0  # 20,000 nm or so
+
+        with pytest.raises(ValueError, match="'Cluster-1' can't be written"):
+            gro_frame(uni.atoms, "Cluster-1")
 
 
 class TestNucleus:

@@ -575,7 +575,7 @@ def _analyse(args: arg.Namespace) -> None:
 
     if not hasattr(uni.atoms, "names"):
         # e.g. LAMMPS topologies, which carry no atom names of their own. Without
-        # this, MDAnalysis' GRO writer would warn and write every atom as "X".
+        # this, the .gro files would write every atom as "X" (see `gro_frame`).
         logger.info("Topology has no atom names, using elements as names")
         uni.add_TopologyAttr("names", values=uni.atoms.elements)
 
