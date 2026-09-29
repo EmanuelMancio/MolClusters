@@ -40,6 +40,13 @@ change for the package follows the same rule.
 - `dev` is where work happens; feature branches start from it and pull requests
   target it. Dependabot's updates also go to `dev`.
 - `main` receives releases: `dev` is merged into it when a release is due.
+- Changes that don't touch the package (documentation, citation, CI, repository
+  files) can go to `main` between releases, without a release: fast-forward `main`
+  to `dev` (`git fetch . dev:main` from `dev`, or `git merge --ff-only dev` on
+  `main`) and push it **without a tag**. The push runs the tests and redeploys
+  this site; only a `v*` tag starts the *Release* workflow, so nothing goes to
+  PyPI or Zenodo, and the PyPI page keeps the README of the last release. The
+  next `cz bump` still counts every commit since the last tag.
 
 ## Cutting a release
 
