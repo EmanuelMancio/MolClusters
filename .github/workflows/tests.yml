@@ -39,6 +39,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Codecov's tokenless upload authenticates with a GitHub OIDC token.
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -56,5 +60,16 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --dev
 
+      # Coverage is reported (and held at 95% or more) from the 3.12 job only. The floor is
+      # here rather than in .coveragerc so that running part of the suite locally still passes.
       - name: Run tests
-        run: uv run pytest ${{ matrix.python-version == '3.12' && '--cov-report=term-missing' || '' }}
+        run: uv run pytest ${{ matrix.python-version == '3.12' && '--cov-report=term-missing --cov-report=xml --cov-fail-under=95' || '' }}
+
+      # Feeds the README's coverage badge. A failed upload (e.g. a fork's pull request, which
+      # gets no OIDC token) doesn't fail the job.
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v7.1.1
+        with:
+          files: coverage.xml
+          use_oidc: true
