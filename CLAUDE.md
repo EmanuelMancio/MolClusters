@@ -10,8 +10,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
 
 - Run all pre-commit hooks (ruff check --fix, ruff format, REUSE license lint, pytest, and
   `cz check` commit-message lint): `uv run pre-commit run --all-files`. The pytest hook runs
-  only the tests affected by what changed (`--testmon --no-cov`, blind to data files); the
-  whole suite is `uv run pytest`. All hooks are `local`
+  only the tests affected by what changed (`--testmon --no-cov`, blind to data files); a
+  `pre-push` hook runs them all (`uv run pytest` adds coverage). All hooks are `local`
   and run the uv-installed tools, so their versions come from `uv.lock` (bumped weekly by
   Dependabot, `.github/dependabot.yml`); don't use `pre-commit autoupdate`.
 - Docs (MkDocs Material + mkdocstrings, `docs/`, `mkdocs.yml`, `docs` dependency group):

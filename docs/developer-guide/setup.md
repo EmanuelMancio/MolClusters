@@ -9,7 +9,7 @@ git clone https://github.com/EmanuelMancio/MolClusters.git
 cd MolClusters
 git switch dev
 uv sync                       # runtime + dev dependencies (pytest, ruff, ...)
-uv run pre-commit install     # pre-commit and commit-msg hooks
+uv run pre-commit install     # pre-commit, commit-msg and pre-push hooks
 uv run molclusters --version
 ```
 
@@ -31,6 +31,7 @@ uv run pre-commit run --all-files
 | `reuse-lint-file` | [REUSE](https://reuse.software/) license headers |
 | `pytest` | the tests affected by your changes (see below) |
 | `commitizen` | commit message format (on `commit-msg`) |
+| `pytest-all` | the whole test suite, without coverage (on `pre-push`) |
 
 All hooks are `local` and run the tools uv installed, so their versions come from
 `uv.lock`, which Dependabot bumps weekly (`.github/dependabot.yml`). Don't use
@@ -41,8 +42,8 @@ The `pytest` hook runs `pytest --testmon --no-cov`:
 `.testmondata`, git-ignored) and reruns only the tests whose code changed since its
 last run, so a commit usually takes seconds; the first run, and any change to the
 installed packages, runs them all. It doesn't see changes to data files (such as
-`tests/data/`), so after changing those, or to check everything, run the whole suite
-as CI does, with coverage:
+`tests/data/`), which is why `pytest-all` runs the whole suite before every push. To
+run it yourself as CI does, with coverage:
 
 ```bash
 uv run pytest

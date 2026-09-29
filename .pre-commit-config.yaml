@@ -8,6 +8,7 @@
 default_install_hook_types:
   - pre-commit
   - commit-msg
+  - pre-push
 
 repos:
   - repo: local
@@ -35,7 +36,7 @@ repos:
         stages: [pre-commit]
 
       # Only the tests affected by what changed since the last run (pytest-testmon, which
-      # needs coverage off); CI runs them all, with coverage.
+      # needs coverage off, and doesn't see data files); pytest-all runs them all on push.
       - id: pytest
         name: pytest (affected tests)
         entry: uv run pytest --testmon --no-cov -q
@@ -43,6 +44,15 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+
+      # The whole suite before a push; coverage is left to CI.
+      - id: pytest-all
+        name: pytest (all tests)
+        entry: uv run pytest --no-cov -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
 
       - id: commitizen
         name: conventional commit message

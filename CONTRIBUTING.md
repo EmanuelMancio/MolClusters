@@ -37,7 +37,7 @@ on the approach. Then:
    ```
 
 3. Make your change, with tests, and run every check CI runs (the pre-commit
-   hook only runs the tests your change affects, so run the whole suite too):
+   hook only runs the tests your change affects, and the whole suite runs on push):
 
    ```bash
    uv run pre-commit run --all-files
