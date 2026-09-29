@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import zstandard
 
-from molclusters.output import OutputFile, RunOutput
+from molclusters.output import FLUSH_THREADS, OutputFile, RunOutput
 
 
 class TestOutputFile:
@@ -133,6 +133,37 @@ class TestRunOutput:
         output.flush()
 
         assert (tmp_path / "a.bin").read_bytes() == b"1\n2\r\n"
+
+    def test_many_files_are_flushed_side_by_side_each_in_order(self, tmp_path: Path):
+        # more files than FLUSH_THREADS, of every kind, each appended over flushes
+        names = [f"gro/{i}.gro" for i in range(3 * FLUSH_THREADS)]
+        names += ["a.bin", "a.jsonl.zst", "a.jsonl.gz"]
+        output = RunOutput(tmp_path)
+        for frame in range(3):
+            for name in names:
+                text = f"{name} {frame}\n"
+                output.append(name, text.encode() if name == "a.bin" else text)
+            output.flush()
+        output.close()
+
+        for name in names:
+            file = tmp_path / name
+            if name.endswith((".zst", ".gz")):
+                text = decompress(file.read_bytes(), file.suffix).decode()
+            else:
+                text = file.read_text()
+            assert text == "".join(f"{name} {i}\n" for i in range(3))
+
+    def test_a_write_that_fails_raises(self, tmp_path: Path):
+        output = RunOutput(tmp_path)
+        output.append("a.gro", "x")
+        output.append("b.gro", "x")
+        (tmp_path / "b.gro").mkdir()  # a folder can't be opened as a file
+
+        with pytest.raises(OSError):  # PermissionError on Windows
+            output.flush()
+
+        assert (tmp_path / "a.gro").read_text() == "x"
 
     @pytest.mark.parametrize(
         ("first", "then"), [("text", b"bytes"), (b"bytes", "text")]
