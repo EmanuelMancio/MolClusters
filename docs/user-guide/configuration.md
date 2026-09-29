@@ -93,8 +93,8 @@ MOL: cm 6.0
 Connects two molecules whose centers of mass are at most the given distance apart,
 in ångströms. Each molecule is made whole across the periodic boundaries before its
 center of mass is computed, and the distance follows the minimum-image convention.
-Finding these connections needs only masses; the cluster properties computed
-afterwards need partial charges as well (see [Quick start](quickstart.md#1-what-you-need)).
+Finding these connections needs only masses; the clusters' charge and dipole moment
+need partial charges as well (see [Quick start](quickstart.md#1-what-you-need)).
 
 ### `hb`: hydrogen bond
 

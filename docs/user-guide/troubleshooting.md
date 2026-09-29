@@ -77,6 +77,13 @@ switch the rule to `cm`.
 :   Distances are computed without periodic boundary conditions. Fine for a cluster
     in vacuum, wrong for a periodic simulation: use a trajectory with the box.
 
+**`The topology has no partial charges`**
+:   A coordinate-only topology (`.gro`, `.pdb`): the charge and dipole moment of
+    clusters and nuclei are empty (NaN, `null` in the report), and `hb` rules can't
+    run. The other properties don't need charges. Use a topology with charges, such
+    as a GROMACS `.tpr`, a CHARMM `.psf` or a LAMMPS DATA file with
+    `atom_style full`, to get them.
+
 **`cluster N wraps around the periodic box`**
 :   A cluster spanning the box (percolating) is connected to its own periodic image
     and can't be made whole, so its size, density, shape and dipole mean little

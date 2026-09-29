@@ -527,6 +527,39 @@ class TestWholeWithoutBonds:
         assert not any("no bonds" in m for m in captured_logs)
 
 
+class TestWithoutCharges:
+    """A topology without partial charges leaves charges and dipoles NaN."""
+
+    def test_charge_and_dipole_are_nan(self, make_universe: UniverseFactory):
+        group = MolGroup(make_universe([[[1, 2]]], 2, charges=False), [1, 2])
+
+        assert np.isnan(group.charge)
+        assert np.isnan(group.dipole_moment)
+        assert group.dipole.shape == (3,)
+        assert np.isnan(group.dipole).all()
+        assert not group.dipole.flags.writeable
+        # the rest doesn't need charges
+        assert group.radius_of_gyration > 0
+
+    def test_is_warned_once(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        uni = make_universe([[[1, 2]]], 2, charges=False)
+
+        read_geometry(MolGroup(uni, [1, 2]))
+        _ = MolGroup(uni, [1]).charge
+
+        assert len([m for m in captured_logs if "no partial charges" in m]) == 1
+
+    def test_a_topology_with_charges_is_not_warned(
+        self, chain: Cluster, captured_logs: list[str]
+    ):
+        read_geometry(chain)
+        _ = chain.charge
+
+        assert not any("no partial charges" in m for m in captured_logs)
+
+
 class TestFrameCache:
     """Geometric properties are computed once per frame and residue set."""
 

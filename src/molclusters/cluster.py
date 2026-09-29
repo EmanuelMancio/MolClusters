@@ -65,13 +65,18 @@ _WITHOUT = {
         "The topology has no bonds: molecules are made whole by minimum image "
         "around their first atom, so each must span less than half the box.",
     ),
+    "charges": (
+        "WARNING",
+        "The topology has no partial charges: charges and dipole moments are NaN "
+        "(null in the report).",
+    ),
 }
 
 
 def _has(universe: mda.Universe, attr: str) -> bool:
     """Check whether a Universe's topology has an attribute, noting once if not.
 
-    Coordinate-only topologies (``.gro``, ``.pdb``) have no bonds.
+    Coordinate-only topologies (``.gro``, ``.pdb``) have no bonds or charges.
 
     Parameters
     ----------
@@ -727,8 +732,11 @@ class MolGroup:
         Returns
         -------
         float
-            The dipole moment of the group in Debye (D).
+            The dipole moment of the group in Debye (D), NaN if the topology has no
+            partial charges.
         """
+        if not _has(self._uni, "charges"):
+            return np.nan
         return self._rg.atoms.dipole_moment() * EA2D
 
     @property
@@ -742,8 +750,11 @@ class MolGroup:
         Returns
         -------
         np.ndarray
-            The dipole vector of the group in Debye (D) (read-only).
+            The dipole vector of the group in Debye (D) (read-only), NaN if the
+            topology has no partial charges.
         """
+        if not _has(self._uni, "charges"):
+            return np.full(3, np.nan)
         return self._rg.atoms.dipole_vector() * EA2D
 
     @property
@@ -875,8 +886,11 @@ class MolGroup:
         Returns
         -------
         float
-            The total charge of the group.
+            The total charge of the group, NaN if the topology has no partial
+            charges.
         """
+        if not _has(self._uni, "charges"):
+            return np.nan
         return self._rg.total_charge()
 
     def __len__(self) -> int:

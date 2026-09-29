@@ -28,7 +28,9 @@ molecules spanning less than half the box.
 ## Mass and charge
 
 The mass is the sum of the atoms' masses, and the charge the sum of their partial
-charges, both from the topology.
+charges, both from the topology. A topology without partial charges (e.g. a `.gro`
+or `.pdb`) leaves the charge and the dipole moment empty (NaN, `null` in the
+report).
 
 ## Size
 
