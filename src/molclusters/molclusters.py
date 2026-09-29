@@ -29,6 +29,7 @@ from tqdm import tqdm
 
 from .analysis import Frame, FrameAnalysis, Run
 from .analysis.builtins import build_builtins
+from .cluster import _has_box
 from .config import MolClsConfig
 from .conntable import check_resids
 from .log import FILE_ONLY, format_duration
@@ -271,12 +272,23 @@ class MolClusters:
 
         n_frames = len(self.uni.trajectory)
         self.__check_previous_outputs(directory)
+        self.uni.trajectory[0]
+        if not _has_box(self.uni):
+            logger.warning(
+                "The trajectory has no box: it is analysed as non-periodic, with "
+                "distances computed without periodic boundary conditions and molecules "
+                "taken as they are. That is only right for a system that isn't "
+                "periodic (e.g. a cluster in vacuum), so make sure yours is: if the "
+                "simulation was periodic and its box was lost (e.g. an .xyz, or a .pdb "
+                "without CRYST1), molecules split across the boundaries stay split, "
+                "connections across them are missed, and the properties of the "
+                "groups holding them are wrong, dipole moments most of all."
+            )
         logger.info(f"Tracking clusters over {n_frames} frame(s)")
         start = time.perf_counter()
         # the bar only shows on the terminal, so the log files get a line every 10%
         progress_step = max(1, n_frames // 10)
 
-        self.uni.trajectory[0]
         self.tracker = ClusterTracker(self.uni, self.config)
         tracking = time.perf_counter() - start  # the analyses' time is kept by `run`
 

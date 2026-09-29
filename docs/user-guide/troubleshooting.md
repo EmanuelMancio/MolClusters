@@ -74,8 +74,14 @@ switch the rule to `cm`.
 :   Set [`lammps_timestep`](lammps.md#times).
 
 **`The trajectory has no box`**
-:   Distances are computed without periodic boundary conditions. Fine for a cluster
-    in vacuum, wrong for a periodic simulation: use a trajectory with the box.
+:   The system is analysed as non-periodic: distances are computed without periodic
+    boundary conditions and molecules are taken as they are. Right for a system that
+    isn't periodic (e.g. a cluster in vacuum); for a periodic simulation whose file
+    lost its box (e.g. an `.xyz`, or a `.pdb` without `CRYST1`), molecules split
+    across the boundaries stay split, connections across them are missed and the
+    properties of their clusters are wrong: dipole moments by far the most, since
+    each atom on the wrong side adds its charge times the box length. Use a
+    trajectory with the box.
 
 **`The topology has no partial charges`**
 :   A coordinate-only topology (`.gro`, `.pdb`): the charge and dipole moment of

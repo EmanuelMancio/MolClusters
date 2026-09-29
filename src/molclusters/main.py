@@ -258,10 +258,8 @@ def _log_system(uni: mda.Universe) -> None:
 
     box = uni.dimensions
     if box is None or not np.any(box[:3]):
-        logger.warning(
-            "The trajectory has no box: distances are computed without periodic "
-            "boundary conditions."
-        )
+        # what that means is warned about by the run (`MolClusters.run`)
+        logger.info("Box (first frame): none")
     else:
         lengths = " x ".join(f"{x:.2f}" for x in box[:3])
         angles = (

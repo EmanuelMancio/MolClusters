@@ -203,6 +203,25 @@ class TestRun:
             )
         assert (vacuum / "evo.txt").read_text() == (boxed / "evo.txt").read_text()
 
+    @pytest.mark.filterwarnings("ignore:missing dimension")
+    @pytest.mark.parametrize("box", [True, False])
+    def test_a_trajectory_without_a_box_is_warned_about(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        captured_logs: list[str],
+        box: bool,
+    ):
+        uni = make_universe([[[1, 2]]], 2, box=box)
+
+        MolClusters(uni, MolClsConfig(rules=MOL_RULES)).run(tmp_path)
+
+        warnings = [m for m in captured_logs if "has no box" in m]
+        assert len(warnings) == (0 if box else 1)
+        if warnings:
+            assert "make sure" in warnings[0]
+            assert "dipole moments" in warnings[0]
+
     def test_report_records_nuclei(self, full_run: Path):
         first = next(read_report(full_run / "molclusters.jsonl.zst").frames())
 
