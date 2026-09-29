@@ -464,6 +464,67 @@ class TestWholePositions:
         assert first.radius_of_gyration != pytest.approx(rg_before)
 
 
+class TestSubgroup:
+    """A part of a group keeps the group's whole positions instead of its own."""
+
+    @pytest.mark.parametrize("bonds", [True, False])
+    def test_a_part_has_the_properties_of_the_part_made_whole_on_its_own(
+        self, make_universe: UniverseFactory, bonds: bool
+    ):
+        # a chain reaching past half the box, split by its edge
+        _, uni, _ = chain_across_a_small_box(make_universe, 8, bonds=bonds)
+        (connected,) = connected_groups(uni)
+        whole_chain = Cluster(uni, connected, cluster_id=1)
+
+        part = whole_chain.subgroup([4, 5, 6, 7])
+        alone = MolGroup(uni, [4, 5, 6, 7])
+
+        # float32 positions: placed elsewhere, they're rounded otherwise
+        for name in ["radius_of_gyration", "dipole_moment", "shape_parameter"]:
+            assert getattr(part, name) == pytest.approx(getattr(alone, name), rel=1e-5)
+        assert part.sphericity == pytest.approx(alone.sphericity, abs=1e-5)
+        np.testing.assert_allclose(part.center_of_mass, alone.center_of_mass, atol=1e-4)
+        np.testing.assert_array_equal(part.resids, [4, 5, 6, 7])
+
+    def test_a_part_is_not_made_whole_again(
+        self, chain: Cluster, monkeypatch: pytest.MonkeyPatch
+    ):
+        computed = []
+        compute = MolGroup._MolGroup__compute_whole_positions
+
+        def counted(group: MolGroup) -> tuple[np.ndarray, np.ndarray]:
+            computed.append(group)
+            return compute(group)
+
+        monkeypatch.setattr(MolGroup, "_MolGroup__compute_whole_positions", counted)
+
+        part = chain.subgroup([3, 1])
+        read_geometry(part)
+
+        assert computed == [chain]
+        with chain.whole() as atoms:
+            expected = atoms.positions[[4, 5, 0, 1]]  # residue 3's atoms, then 1's
+        with part.whole() as atoms:
+            np.testing.assert_array_equal(atoms.positions, expected)
+
+    def test_in_another_frame_a_part_is_made_whole_on_its_own(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[[1, 2, 3]], [[1, 2], [3]]], 3)
+        (connected,) = connected_groups(uni)
+        part = Cluster(uni, connected, cluster_id=1).subgroup([1, 2])
+
+        uni.trajectory[1]
+
+        assert part.radius_of_gyration == pytest.approx(
+            MolGroup(uni, [1, 2]).radius_of_gyration
+        )
+
+    def test_molecules_outside_the_group_are_rejected(self, chain: Cluster):
+        with pytest.raises(ValueError, match=r"Molecules \[4, 5\] are not in the"):
+            chain.subgroup([3, 4, 5])
+
+
 def torn_chain(make_universe: UniverseFactory, bonds: bool = True) -> Universe:
     """The chain 1-2-3 with every molecule itself split by the box edge.
 

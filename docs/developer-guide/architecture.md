@@ -95,7 +95,9 @@ without partial charges, `charge`, `dipole` and `dipole_moment` are NaN, warned 
 The whole positions and the geometric properties (`@_per_frame`: `radius`, Rg,
 sphericity, dipole moment, shape, center of mass, dipole, `bsphere`) are computed
 once per frame and residue set (`_frame_cache`), since analyses read them
-repeatedly.
+repeatedly. A part of a group made with `subgroup` (the nuclei of a cluster) starts
+that frame with the group's whole positions, rather than being made whole again,
+which costs as much as for the group.
 
 A group can't be changed through what it hands out, which is also what makes caching
 arrays safe. Every array it returns is read-only (`_readonly`; callers change a

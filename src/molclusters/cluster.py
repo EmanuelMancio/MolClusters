@@ -590,6 +590,44 @@ class MolGroup:
         finally:
             atoms.positions = original
 
+    def subgroup(self, residues: Iterable[int]) -> "MolGroup":
+        """Make a group of some of this group's molecules, placed as they are in it.
+
+        For the current frame, the new group's whole positions (see `whole`) are
+        this group's own, so it isn't made whole again: it keeps the shape it has
+        in this group, which is whole for a part connected within the group (e.g.
+        a nucleus of a cluster), without being centered on its own. Its center of
+        mass is still wrapped into the primary unit cell. In other frames it is
+        made whole as any group.
+
+        Parameters
+        ----------
+        residues : Iterable[int]
+            The residue ids of the molecules, all in this group.
+
+        Returns
+        -------
+        MolGroup
+            The group of those molecules.
+
+        Raises
+        ------
+        ValueError
+            If a molecule isn't in this group.
+        """
+        group = MolGroup(self._uni, residues)
+        positions, shift = self.__whole()
+        # each of the new group's atoms, as its row in this group's atoms
+        own = self._rg.atoms.ix
+        wanted = group._rg.atoms.ix
+        by_ix = np.argsort(own)
+        rows = by_ix[np.searchsorted(own, wanted, sorter=by_ix).clip(max=len(own) - 1)]
+        if not np.array_equal(own[rows], wanted):
+            missing = sorted(set(group.resids.tolist()) - set(self.resids.tolist()))
+            raise ValueError(f"Molecules {missing} are not in the group.")
+        group._frame_cache()["whole"] = (positions[rows], shift)
+        return group
+
     def __add__(self, other: core.groups.ResidueGroup | Self) -> "MolGroup":
         """Combine this group with a ResidueGroup or another MolGroup.
 
