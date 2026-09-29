@@ -29,12 +29,24 @@ uv run pre-commit run --all-files
 | `ruff-check` | `ruff check --fix` (lint rules in `.ruff.toml`) |
 | `ruff-format` | `ruff format` |
 | `reuse-lint-file` | [REUSE](https://reuse.software/) license headers |
-| `pytest` | the whole test suite |
+| `pytest` | the tests affected by your changes (see below) |
 | `commitizen` | commit message format (on `commit-msg`) |
 
 All hooks are `local` and run the tools uv installed, so their versions come from
 `uv.lock`, which Dependabot bumps weekly (`.github/dependabot.yml`). Don't use
 `pre-commit autoupdate`.
+
+The `pytest` hook runs `pytest --testmon --no-cov`:
+[pytest-testmon](https://testmon.org/) records which code each test runs (in
+`.testmondata`, git-ignored) and reruns only the tests whose code changed since its
+last run, so a commit usually takes seconds; the first run, and any change to the
+installed packages, runs them all. It doesn't see changes to data files (such as
+`tests/data/`), so after changing those, or to check everything, run the whole suite
+as CI does, with coverage:
+
+```bash
+uv run pytest
+```
 
 ## Conventions
 

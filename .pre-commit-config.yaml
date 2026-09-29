@@ -34,9 +34,11 @@ repos:
         language: system
         stages: [pre-commit]
 
+      # Only the tests affected by what changed since the last run (pytest-testmon, which
+      # needs coverage off); CI runs them all, with coverage.
       - id: pytest
-        name: pytest
-        entry: uv run pytest
+        name: pytest (affected tests)
+        entry: uv run pytest --testmon --no-cov -q
         language: system
         pass_filenames: false
         always_run: true

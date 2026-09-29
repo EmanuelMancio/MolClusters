@@ -152,3 +152,6 @@ molclusters.jsonl*
 
 # CLAUDE
 .claude/
+
+# pytest-testmon's record of which tests run which code
+.testmondata*

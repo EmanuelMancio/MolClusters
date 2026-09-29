@@ -36,10 +36,12 @@ on the approach. Then:
    uv run pre-commit install
    ```
 
-3. Make your change, with tests, and run every check CI runs:
+3. Make your change, with tests, and run every check CI runs (the pre-commit
+   hook only runs the tests your change affects, so run the whole suite too):
 
    ```bash
    uv run pre-commit run --all-files
+   uv run pytest
    ```
 
 4. Write commit messages in the
