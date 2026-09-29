@@ -99,6 +99,24 @@ def _has(universe: mda.Universe, attr: str) -> bool:
     return known[attr]
 
 
+def _has_box(universe: mda.Universe) -> bool:
+    """Check whether the Universe's current frame has a periodic box.
+
+    Parameters
+    ----------
+    universe : mda.Universe
+        The Universe to check.
+
+    Returns
+    -------
+    bool
+        False for a frame without a box (MDAnalysis gives None, or zero lengths,
+        e.g. a cluster in vacuum), where nothing is split across boundaries.
+    """
+    box = universe.dimensions
+    return box is not None and bool(np.any(box[:3]))
+
+
 def _vdw_radii(universe: mda.Universe) -> np.ndarray:
     """Look up the van der Waals radius of every atom of a Universe, by element.
 
@@ -345,7 +363,8 @@ class MolGroup:
         The Universe's positions are left exactly as they were.
 
         Residues are made whole along their bonds, or, in a topology without
-        bonds, by minimum image around their first atom (see `_has`).
+        bonds, by minimum image around their first atom (see `_has`). Without a
+        periodic box nothing can be split, so the positions are taken as they are.
 
         Returns
         -------
@@ -355,6 +374,9 @@ class MolGroup:
             vectors on top of it).
         """
         atoms = self._rg.atoms
+        if not _has_box(self._uni):
+            return atoms.positions, np.zeros(3)
+
         boxcenter = np.sum(self._uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
         if _has(self._uni, "bonds"):
             positions, shift = self.__unwrap_along_bonds(atoms, boxcenter)
@@ -449,8 +471,6 @@ class MolGroup:
             Their positions, each residue whole and wrapped into the box.
         """
         box = self._uni.dimensions
-        if box is None or not np.any(box[:3]):
-            return
         # each atom's residue, as its row in self._rg
         by_ix = np.argsort(self._rg.ix)
         rows = by_ix[np.searchsorted(self._rg.ix[by_ix], atoms.resindices)]
@@ -692,10 +712,13 @@ class MolGroup:
         Returns
         -------
         np.ndarray
-            The center of mass, wrapped into the primary unit cell (read-only).
+            The center of mass, wrapped into the primary unit cell if there is a
+            periodic box (read-only).
         """
         with self.whole() as atoms:
             center = atoms.center_of_mass()
+        if not _has_box(self._uni):
+            return center
         _, shift = self.__whole()
         return apply_PBC(center - shift, self._uni.dimensions)
 

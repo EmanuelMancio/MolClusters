@@ -98,7 +98,8 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   whole, and a cluster wrapping around the box is warned about once; each residue is made
   whole along its bonds, or, when the topology has none (`_has`, logged once), by minimum image
   around its first atom, `conntable._whole_residue_offsets`, as the "cm" rule does, so
-  existing bonded runs keep their exact output; without partial charges, `charge`, `dipole`
+  existing bonded runs keep their exact output; without a box (`_has_box`) positions are taken
+  as they are; without partial charges, `charge`, `dipole`
   and `dipole_moment` are NaN, warned once). The whole positions and
   the geometric properties (`@_per_frame`: `radius`, Rg, sphericity, dipole moment, shape,
   center of mass, dipole, `bsphere`) are computed once per frame and residue set

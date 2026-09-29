@@ -423,6 +423,26 @@ class TestWholePositions:
         # MDAnalysis's own puts it between the pieces, far from the chain
         assert abs(split.atoms.center_of_mass()[1] - expected[1]) > 5.0
 
+    @pytest.mark.parametrize("bonds", [True, False])
+    def test_group_without_a_box_is_taken_as_it_is(
+        self, make_universe: UniverseFactory, bonds: bool
+    ):
+        # a cluster in vacuum: nothing is split, and there is no box to center in
+        reference = MolGroup(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
+        uni = make_universe([[[1, 2, 3]]], 3, bonds=bonds, box=False)
+        group = MolGroup(uni, [1, 2, 3])
+
+        with group.whole() as atoms:
+            np.testing.assert_array_equal(atoms.positions, uni.atoms.positions)
+        read_geometry(group)
+        # float32 positions: the reference is made whole at its box's center
+        assert group.radius_of_gyration == pytest.approx(
+            reference.radius_of_gyration, rel=1e-5
+        )
+        np.testing.assert_allclose(
+            group.center_of_mass, uni.atoms.center_of_mass(), rtol=1e-6
+        )
+
     def test_whole_restores_positions_on_error(self, chain: Cluster):
         before = chain.universe.atoms.positions
 

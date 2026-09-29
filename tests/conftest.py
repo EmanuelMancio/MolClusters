@@ -84,8 +84,9 @@ def make_universe() -> UniverseFactory:
     -------
     UniverseFactory
         ``make_universe(frames, n_res, resnames=None, blank_elements=(), bonds=True,
-        charges=True)``; ``bonds``/``charges`` False leave those topology attributes
-        out, as in a coordinate-only topology.
+        charges=True, box=True)``; ``bonds``/``charges`` False leave those topology
+        attributes out, as in a coordinate-only topology, and ``box`` False the
+        periodic box, as for a cluster in vacuum.
     """
 
     def factory(
@@ -95,6 +96,7 @@ def make_universe() -> UniverseFactory:
         blank_elements: Sequence[int] = (),
         bonds: bool = True,
         charges: bool = True,
+        box: bool = True,
     ) -> mda.Universe:
         n_atoms = 2 * n_res
         uni = mda.Universe.empty(
@@ -128,7 +130,7 @@ def make_universe() -> UniverseFactory:
         uni.load_new(
             coords,
             format=MemoryReader,
-            dimensions=[BOX, BOX, BOX, 90.0, 90.0, 90.0],
+            dimensions=[BOX, BOX, BOX, 90.0, 90.0, 90.0] if box else None,
             dt=1.0,
         )
         # JsonReport records both paths
