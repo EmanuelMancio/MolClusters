@@ -97,7 +97,8 @@ Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--
   own graph or a plain group's minimum spanning tree, so groups wider than half the box stay
   whole, and a cluster wrapping around the box is warned about once; each residue is made
   whole along its bonds, or, when the topology has none (`_has`, logged once), by minimum image
-  around its first atom, `conntable._whole_residue_offsets`, as the "cm" rule does, so
+  around its first atom, `conntable._whole_residue_offsets`, as the "cm" rule does, which
+  warns once when a molecule reaches 80% of the limit, `_check_reach`, so
   existing bonded runs keep their exact output; without a box (`_has_box`) positions are taken
   as they are; without partial charges, `charge`, `dipole`
   and `dipole_moment` are NaN, warned once). The whole positions and

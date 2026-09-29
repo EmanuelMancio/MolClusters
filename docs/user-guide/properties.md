@@ -9,7 +9,8 @@ A cluster connected to its own periodic image (e.g. a slab spanning the box) can
 be made whole; the log warns once per such cluster. Each molecule is itself made
 whole along its bonds, or, in a topology without bonds (e.g. a `.gro` or `.pdb`), by
 taking each atom at its nearest image to the molecule's first atom, which holds for
-molecules spanning less than half the box. A trajectory without a box (e.g. a cluster
+molecules reaching less than half the box from their first atom; the log warns once
+if one comes close. A trajectory without a box (e.g. a cluster
 in vacuum) splits nothing, so its positions are used as they are.
 
 | Property | Report field | Table column | Unit |

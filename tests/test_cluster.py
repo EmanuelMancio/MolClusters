@@ -547,6 +547,79 @@ class TestWholeWithoutBonds:
         assert not any("no bonds" in m for m in captured_logs)
 
 
+RECTANGULAR = [20.0, 20.0, 20.0, 90.0, 90.0, 90.0]
+# its shortest distance between periodic images is 20 A too, so half of it is 10 A
+TRICLINIC = [20.0, 20.0, 20.0, 90.0, 90.0, 60.0]
+
+
+def rod(length: float, dimensions: list[float], bonds: bool = False) -> Universe:
+    """One MOL molecule: a straight line of carbons 1 A apart along x.
+
+    Returns
+    -------
+    Universe
+        The molecule, `length` A long from its first atom, wrapped into the box.
+    """
+    n_atoms = int(length) + 1
+    uni = Universe.empty(n_atoms, n_residues=1, atom_resindex=[0] * n_atoms)
+    uni.add_TopologyAttr("resids", [1])
+    uni.add_TopologyAttr("resnames", ["MOL"])
+    uni.add_TopologyAttr("masses", [12.011] * n_atoms)
+    uni.add_TopologyAttr("charges", [0.0] * n_atoms)
+    uni.add_TopologyAttr("elements", ["C"] * n_atoms)
+    if bonds:
+        uni.add_TopologyAttr("bonds", [(i, i + 1) for i in range(n_atoms - 1)])
+    positions = np.zeros((n_atoms, 3), dtype=np.float32) + [1.0, 5.0, 5.0]
+    positions[:, 0] += np.arange(n_atoms)
+    uni.load_new(
+        apply_PBC(positions, np.array(dimensions, dtype=np.float32))[None],
+        format="MEMORY",
+        dimensions=dimensions,
+    )
+    return uni
+
+
+class TestLongMolecules:
+    """A molecule too long for minimum image around its first atom is warned about."""
+
+    @pytest.mark.parametrize("dimensions", [RECTANGULAR, TRICLINIC])
+    def test_a_molecule_reaching_past_half_the_box_is_warned_once(
+        self, dimensions: list[float], captured_logs: list[str]
+    ):
+        uni = rod(12.0, dimensions)
+
+        read_geometry(MolGroup(uni, [1]))
+        read_geometry(MolGroup(uni, [1]))
+
+        (warning,) = [m for m in captured_logs if "from its first atom" in m]
+        assert warning.startswith("Molecule MOL 1 reaches 100% of half the box")
+
+    def test_cm_rules_warn_even_with_bonds(self, captured_logs: list[str]):
+        # the rule's centers of mass always come from minimum image
+        connected_groups(rod(12.0, RECTANGULAR, bonds=True))
+
+        assert any("from its first atom" in m for m in captured_logs)
+
+    @pytest.mark.parametrize(
+        ("length", "dimensions"),
+        [
+            (6.0, RECTANGULAR),
+            (6.0, TRICLINIC),
+            # rectangular: the limit is per axis, 50 A along x in a thin slab
+            (30.0, [100.0, 100.0, 20.0, 90.0, 90.0, 90.0]),
+        ],
+    )
+    def test_molecules_well_within_half_the_box_are_not_warned(
+        self, length: float, dimensions: list[float], captured_logs: list[str]
+    ):
+        uni = rod(length, dimensions)
+
+        read_geometry(MolGroup(uni, [1]))
+        connected_groups(uni)
+
+        assert not any("from its first atom" in m for m in captured_logs)
+
+
 class TestWithoutCharges:
     """A topology without partial charges leaves charges and dipoles NaN."""
 

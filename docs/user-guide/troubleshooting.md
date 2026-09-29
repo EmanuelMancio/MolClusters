@@ -84,6 +84,14 @@ switch the rule to `cm`.
     as a GROMACS `.tpr`, a CHARMM `.psf` or a LAMMPS DATA file with
     `atom_style full`, to get them.
 
+**`Molecule X N reaches ...% of half the box from its first atom`**
+:   `cm` rules, and every property in a topology without bonds, make molecules
+    whole by taking each atom at its nearest image to the molecule's first atom,
+    which fails for a molecule reaching half the box or more (a long polymer or
+    surfactant in a small box): it is torn apart, and its center of mass and the
+    properties of the groups holding it are wrong. Warned from 80% of that limit,
+    once. Use a larger box, or, for the properties, a topology with bonds.
+
 **`cluster N wraps around the periodic box`**
 :   A cluster spanning the box (percolating) is connected to its own periodic image
     and can't be made whole, so its size, density, shape and dipole mean little
