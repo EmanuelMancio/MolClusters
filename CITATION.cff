@@ -32,3 +32,53 @@ keywords:
   - molecular clusters
   - nucleation
   - MDAnalysis
+# MDAnalysis asks every user to cite both of its papers. The method papers to cite for
+# particular features are listed in the documentation's "Citing" section.
+references:
+  - type: article
+    title: "MDAnalysis: A Toolkit for the Analysis of Molecular Dynamics Simulations"
+    authors:
+      - family-names: Michaud-Agrawal
+        given-names: Naveen
+      - family-names: Denning
+        given-names: Elizabeth J.
+      - family-names: Woolf
+        given-names: Thomas B.
+      - family-names: Beckstein
+        given-names: Oliver
+    journal: Journal of Computational Chemistry
+    volume: 32
+    start: 2319
+    end: 2327
+    year: 2011
+    doi: 10.1002/jcc.21787
+  - type: conference-paper
+    title: "MDAnalysis: A Python Package for the Rapid Analysis of Molecular Dynamics Simulations"
+    authors:
+      - family-names: Gowers
+        given-names: Richard J.
+      - family-names: Linke
+        given-names: Max
+      - family-names: Barnoud
+        given-names: Jonathan
+      - family-names: Reddy
+        given-names: Tyler J. E.
+      - family-names: Melo
+        given-names: Manuel N.
+      - family-names: Seyler
+        given-names: Sean L.
+      - family-names: Domański
+        given-names: Jan
+      - family-names: Dotson
+        given-names: David L.
+      - family-names: Buchoux
+        given-names: Sébastien
+      - family-names: Kenney
+        given-names: Ian M.
+      - family-names: Beckstein
+        given-names: Oliver
+    collection-title: Proceedings of the 15th Python in Science Conference
+    start: 98
+    end: 105
+    year: 2016
+    doi: 10.25080/Majora-629e541a-00e

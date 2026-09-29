@@ -33,8 +33,18 @@ A cluster is not a sphere, but its size is summarised by the **equivalent sphere
 the uniform sphere with the same mass-weighted radius of gyration \(R_g\), whose
 radius is \(\sqrt{5/3}\,R_g\). The radius of gyration only sees the atoms' centers,
 so the sphere would end at the outer atoms' centers; half the atoms' mean van der
-Waals radius \(\bar r_\text{vdW}\) (by element, from MDAnalysis' table) is added to
-account for the atoms' own size:
+Waals radius \(\bar r_\text{vdW}\) (by element, from MDAnalysis' table[^vdw]) is added
+to account for the atoms' own size:
+
+[^vdw]: MDAnalysis takes its van der Waals radii from A. Bondi, "van der Waals Volumes
+    and Radii", *J. Phys. Chem.* **68**, 441–451 (1964),
+    [doi:10.1021/j100785a001](https://doi.org/10.1021/j100785a001); R. S. Rowland
+    and R. Taylor, "Intermolecular Nonbonded Contact Distances in Organic Crystal
+    Structures", *J. Phys. Chem.* **100**, 7384–7391 (1996),
+    [doi:10.1021/jp953141+](https://doi.org/10.1021/jp953141%2B); and M. Mantina,
+    A. C. Chamberlin, R. Valero, C. J. Cramer and D. G. Truhlar, "Consistent van der
+    Waals Radii for the Whole Main Group", *J. Phys. Chem. A* **113**, 5806–5812
+    (2009), [doi:10.1021/jp8111556](https://doi.org/10.1021/jp8111556).
 
 \[
 R = \sqrt{\tfrac{5}{3}}\,R_g + \tfrac{1}{2}\,\bar r_\text{vdW},

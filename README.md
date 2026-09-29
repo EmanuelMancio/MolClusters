@@ -71,6 +71,13 @@ whole (it resolves to the latest version).
 [CITATION.cff](https://github.com/EmanuelMancio/MolClusters/blob/main/CITATION.cff) has the
 details, and GitHub's "Cite this repository" button formats them.
 
+If you can, please also cite the work MolClusters builds on:
+[MDAnalysis](https://www.mdanalysis.org/citations/) (Michaud-Agrawal *et al.*,
+[J. Comput. Chem. 2011](https://doi.org/10.1002/jcc.21787); Gowers *et al.*,
+[SciPy 2016](https://doi.org/10.25080/Majora-629e541a-00e)), and, depending on the
+features you use, the method papers listed in the
+[documentation](https://emanuelmancio.github.io/MolClusters/#software-and-methods-it-builds-on).
+
 ## License
 
 MolClusters is free software, licensed under the

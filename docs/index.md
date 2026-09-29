@@ -88,6 +88,42 @@ whole (it resolves to the latest version). The repository's
 [CITATION.cff](https://github.com/EmanuelMancio/MolClusters/blob/main/CITATION.cff) has
 the details, and GitHub's "Cite this repository" button formats them.
 
+### Software and methods it builds on
+
+If you can, please also cite the work MolClusters relies on:
+
+- **MDAnalysis**, which reads the trajectories and computes the distances,
+  hydrogen bonds and group properties. MDAnalysis asks for both of its papers:
+    - N. Michaud-Agrawal, E. J. Denning, T. B. Woolf and O. Beckstein, "MDAnalysis:
+      A Toolkit for the Analysis of Molecular Dynamics Simulations", *J. Comput.
+      Chem.* **32**, 2319–2327 (2011).
+      [doi:10.1002/jcc.21787](https://doi.org/10.1002/jcc.21787)
+    - R. J. Gowers, M. Linke, J. Barnoud, T. J. E. Reddy, M. N. Melo, S. L. Seyler,
+      J. Domański, D. L. Dotson, S. Buchoux, I. M. Kenney and O. Beckstein,
+      "MDAnalysis: A Python Package for the Rapid Analysis of Molecular Dynamics
+      Simulations", *Proc. 15th Python in Science Conf.*, 98–105 (2016).
+      [doi:10.25080/Majora-629e541a-00e](https://doi.org/10.25080/Majora-629e541a-00e)
+- **With `hb` rules**, MDAnalysis' hydrogen bond analysis: P. Smith, R. M. Ziolek,
+  E. Gazzarrini, D. M. Owen and C. D. Lorenz, "On the interaction of hyaluronic acid
+  with synovial fluid lipid membranes", *Phys. Chem. Chem. Phys.* **21**, 9845–9857
+  (2019). [doi:10.1039/C9CP01532A](https://doi.org/10.1039/C9CP01532A)
+- **For sphericity or the shape parameter**: R. I. Dima and D. Thirumalai, "Asymmetry
+  in the Shapes of Folded and Denatured States of Proteins", *J. Phys. Chem. B*
+  **108**, 6564–6570 (2004). [doi:10.1021/jp037128y](https://doi.org/10.1021/jp037128y)
+- **For radius, diameter, volume or density**, the sources of the van der Waals radii
+  (MDAnalysis' table), for the elements in your system: A. Bondi, *J. Phys. Chem.*
+  **68**, 441–451 (1964), [doi:10.1021/j100785a001](https://doi.org/10.1021/j100785a001);
+  R. S. Rowland and R. Taylor, *J. Phys. Chem.* **100**, 7384–7391 (1996),
+  [doi:10.1021/jp953141+](https://doi.org/10.1021/jp953141%2B); M. Mantina,
+  A. C. Chamberlin, R. Valero, C. J. Cramer and D. G. Truhlar, *J. Phys. Chem. A*
+  **113**, 5806–5812 (2009), [doi:10.1021/jp8111556](https://doi.org/10.1021/jp8111556).
+- **NetworkX**, for the connection graphs and clusters: A. A. Hagberg, D. A. Schult and
+  P. J. Swart, "Exploring Network Structure, Dynamics, and Function using NetworkX",
+  *Proc. 7th Python in Science Conf.*, 11–15 (2008).
+  [doi:10.25080/TCWV9851](https://doi.org/10.25080/TCWV9851)
+- **NumPy**: C. R. Harris *et al.*, "Array programming with NumPy", *Nature* **585**,
+  357–362 (2020). [doi:10.1038/s41586-020-2649-2](https://doi.org/10.1038/s41586-020-2649-2)
+
 ## Authorship and acknowledgments
 
 MolClusters was written by Emanuel Fernandes Dias Mancio[:fontawesome-brands-orcid:](https://orcid.org/0000-0002-0262-711X){ .profile title="ORCID" aria-label="ORCID" }[:academicons-lattes:](http://lattes.cnpq.br/3118069372734394){ .profile title="Lattes CV" aria-label="Lattes CV" },
