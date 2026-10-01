@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!--
+SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+
+SPDX-License-Identifier: LGPL-3.0-or-later
+-->
+<!--
+The root 404 page of the versioned docs site, put on the gh-pages branch by
+.github/workflows/docs.yml. GitHub Pages serves it for any missing path, so links
+from before the site was versioned (/MolClusters/user-guide/...) are sent to the same
+page under latest/. A path already inside a version is really missing: it gets a
+plain "not found" instead, so this never loops.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page not found · MolClusters</title>
+  <script>
+    (function () {
+      var base = "/MolClusters/";
+      var path = window.location.pathname;
+      if (path.indexOf(base) !== 0) return;
+      var rest = path.slice(base.length);
+      var first = rest.split("/")[0];
+      if (/^(latest|dev|\d+\.\d+)$/.test(first)) return;
+      window.location.replace(
+        base + "latest/" + rest + window.location.search + window.location.hash
+      );
+    })();
+  </script>
+</head>
+<body>
+  <h1>Page not found</h1>
+  <p>See the <a href="/MolClusters/latest/">MolClusters documentation</a>.</p>
+</body>
+</html>
