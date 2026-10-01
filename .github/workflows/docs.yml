@@ -3,14 +3,16 @@
 # SPDX-License-Identifier: CC0-1.0
 
 # Builds the documentation site on every pull request (to catch broken links and
-# docstrings), and publishes the build of `main` to GitHub Pages. Pages must be set
-# to deploy from GitHub Actions (Settings > Pages > Source).
+# docstrings), and publishes the builds of `main` and `dev` as a versioned site with
+# mike on the gh-pages branch. Pages must be set to deploy from that branch (Settings >
+# Pages > Source), and `mike set-default --push latest` run once after the first
+# deployment from main.
 
 name: Docs
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
     branches: [main, dev]
   workflow_dispatch:
@@ -38,23 +40,54 @@ jobs:
       - name: Build the site
         run: uv run --locked --only-group docs mkdocs build --strict
 
-      - name: Upload the site
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: site
-
+  # One site per minor version (0.7, 0.8, ...) on the gh-pages branch, managed by mike;
+  # `latest` always points at the newest. Pushes to main rebuild the version in
+  # pyproject.toml, so a docs-only change updates the current version's pages; pushes
+  # to dev update the separate `dev` version (the unreleased docs).
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
+    concurrency:
+      group: docs-deploy
+      cancel-in-progress: false
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # mike needs the gh-pages history
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Deploy the version to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$GITHUB_REF_NAME" = dev ]; then
+            uv run --locked --only-group docs mike deploy --push --title "dev (unreleased)" dev
+          else
+            version=$(uv run --locked --only-group docs python -c \
+              "import tomllib; v = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']; print('.'.join(v.split('.')[:2]))")
+            uv run --locked --only-group docs mike deploy --push --update-aliases "$version" latest
+          fi
+
+      # mike leaves other files at the root alone; this one sends links from before the
+      # site was versioned (/MolClusters/user-guide/...) to the same page under latest/.
+      - name: Update the root 404 page
+        run: |
+          git worktree add "$RUNNER_TEMP/gh-pages" gh-pages
+          cp .github/gh-pages/404.html "$RUNNER_TEMP/gh-pages/404.html"
+          cd "$RUNNER_TEMP/gh-pages"
+          git add 404.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Update the root 404 page"
+            git push origin gh-pages
+          fi

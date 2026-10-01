@@ -23,7 +23,7 @@ molecular dynamics trajectories (GROMACS, LAMMPS and any other format
 
 > ⚠️ **Results from v0.6.0 or earlier?** Those versions have errors in dipoles, volumes,
 > densities and, in some cases, cluster membership, fixed in v0.7.0. See
-> [Known issues in earlier versions](https://emanuelmancio.github.io/MolClusters/user-guide/known-issues/)
+> [Known issues in earlier versions](https://emanuelmancio.github.io/MolClusters/latest/user-guide/known-issues/)
 > for which results are affected and how to correct them.
 
 ## Installation
@@ -50,7 +50,7 @@ It depends on [MDAnalysis](https://www.mdanalysis.org/), [NetworkX](https://netw
 molclusters traj.xtc topol.tpr config.yml --output-dir results
 ```
 
-The [user guide](https://emanuelmancio.github.io/MolClusters/user-guide/) covers the
+The [user guide](https://emanuelmancio.github.io/MolClusters/latest/user-guide/) covers the
 configuration file, the output files and using MolClusters from Python; `molclusters -h`
 lists the command-line options.
 
@@ -59,7 +59,7 @@ lists the command-line options.
 Bug reports and pull requests are welcome; for major changes, please open an issue first to
 discuss what you would like to change. See
 [CONTRIBUTING.md](https://github.com/EmanuelMancio/MolClusters/blob/main/CONTRIBUTING.md) and the
-[developer guide](https://emanuelmancio.github.io/MolClusters/developer-guide/) for the
+[developer guide](https://emanuelmancio.github.io/MolClusters/latest/developer-guide/) for the
 development setup and conventions.
 
 ## Citing
@@ -77,7 +77,7 @@ If you can, please also cite the work MolClusters builds on:
 [J. Comput. Chem. 2011](https://doi.org/10.1002/jcc.21787); Gowers *et al.*,
 [SciPy 2016](https://doi.org/10.25080/Majora-629e541a-00e)), and, depending on the
 features you use, the method papers listed in the
-[documentation](https://emanuelmancio.github.io/MolClusters/#software-and-methods-it-builds-on).
+[documentation](https://emanuelmancio.github.io/MolClusters/latest/#software-and-methods-it-builds-on).
 
 ## License
 

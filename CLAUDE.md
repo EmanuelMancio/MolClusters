@@ -16,9 +16,10 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   Dependabot, `.github/dependabot.yml`); don't use `pre-commit autoupdate`.
 - Docs (MkDocs Material + mkdocstrings, `docs/`, `mkdocs.yml`, `docs` dependency group):
   `uv run --group docs mkdocs serve` to preview, `uv run --group docs mkdocs build --strict`
-  as CI does (`.github/workflows/docs.yml`, which deploys `main` to GitHub Pages). A change to
-  a config key, the CLI help, an output file, the report format, a property or id assignment
-  updates its user-guide page too (table in `docs/developer-guide/docs.md`).
+  as CI does (`.github/workflows/docs.yml`, which deploys with mike to `gh-pages`: `main` as
+  one folder per minor version plus `latest`, `dev` as `dev`). A change to a config key,
+  the CLI help, an output file, the report format, a property or id assignment updates
+  its user-guide page too (table in `docs/developer-guide/docs.md`).
 
 Note: pytest config lives solely in `pytest.ini` (`addopts` already includes `--cov=src
 --cov-report html`), so a plain `uv run pytest` produces an HTML coverage report under `htmlcov/`.
