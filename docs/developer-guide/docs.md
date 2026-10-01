@@ -52,10 +52,30 @@ underscore) are left out of the reference.
 
 ## Publishing
 
-`.github/workflows/docs.yml` builds the site on every pull request (to catch
-errors) and on pushes to `main`, and deploys the `main` build to GitHub Pages at
-<https://emanuelmancio.github.io/MolClusters/>. It can also be run by hand from the
-repository's *Actions* tab.
+`.github/workflows/docs.yml` builds the site with `--strict` on every pull request and
+push (to catch errors). On pushes to `main` and `dev` it also deploys it with
+[mike](https://github.com/jimporter/mike) to the `gh-pages` branch: `main` as one
+folder per minor version (`0.7`, `0.8`, ...) taken from `pyproject.toml`, copied to a
+`latest` folder, and `dev` as a separate `dev` version (the unreleased docs). Pushing
+docs-only changes to `main` therefore updates the current version's pages, and a
+release of a new minor adds a folder. Every version's canonical URLs point at
+`latest`, so search engines index that one. The site is at
+<https://emanuelmancio.github.io/MolClusters/>; the version selector in the header
+switches between versions. Links from before the site was versioned
+(`.../MolClusters/user-guide/...`, as in the v0.7.0 README on PyPI and Zenodo) still
+work: the workflow also puts `.github/gh-pages/404.html` at the branch's root, which
+sends a missing path to the same page under `latest/`, so links in the README and
+elsewhere should point at `latest/` directly. The workflow can also be run by hand
+from the repository's *Actions* tab.
 
-The repository's *Settings → Pages → Build and deployment → Source* must be set to
-**GitHub Actions** once, for the deployment to be accepted.
+Set up once: *Settings → Pages → Build and deployment → Source* to **Deploy from a
+branch**, `gh-pages` / root; and after the first deployment from `main` (which creates
+`latest`) make the bare URL open it:
+
+```bash
+uv run --group docs mike set-default --push latest
+```
+
+To preview the versioned site locally, `uv run --group docs mike serve` (it serves
+the `gh-pages` branch, so it shows nothing until a deployment exists). An old
+version's pages are fixed once built; delete one with `mike delete --push <version>`.

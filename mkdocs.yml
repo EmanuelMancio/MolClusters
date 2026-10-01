@@ -129,6 +129,11 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
+extra:
+  version:
+    provider: mike
+    default: latest
+
 extra_css:
   - stylesheets/extra.css
 
@@ -138,6 +143,9 @@ extra_javascript:
 
 plugins:
   - search
+  - mike:
+      alias_type: copy  # a real folder: GitHub Pages need not follow symlinks
+      canonical_version: latest  # every version's canonical URLs point at latest
   - mkdocstrings:
       handlers:
         python:

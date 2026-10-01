@@ -46,7 +46,7 @@ on the approach. Then:
    [Conventional Commits](https://www.conventionalcommits.org/) format (for example
    `fix(config): reject an empty rule`); the `commit-msg` hook checks them.
 
-The [developer guide](https://emanuelmancio.github.io/MolClusters/developer-guide/)
+The [developer guide](https://emanuelmancio.github.io/MolClusters/latest/developer-guide/)
 covers the architecture, the conventions (docstrings, license headers, units) and
 what counts as a breaking change.
 
