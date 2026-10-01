@@ -89,3 +89,23 @@ code.doc-symbol-type_parameter::after {
   --md-accent-fg-color--transparent: #d642151a;
   --md-mermaid-node-bg-color: #d642150d;
 }
+
+/* The version selector beside the site name in the header: Material centres the two
+   separately and nudges the version down, so it sits low. Put both on one baseline,
+   with the version a step smaller than the name and greyed (the header's faded
+   text colour), in full colour on hover. */
+.md-header__topic:has(.md-version) {
+  align-items: baseline;
+}
+.md-version {
+  font-size: 0.7rem;
+}
+.md-version__current {
+  top: 0;
+  color: var(--md-primary-bg-color--light);
+  transition: color 0.25s;
+}
+.md-version__current:hover,
+.md-version__current:focus {
+  color: var(--md-primary-bg-color);
+}
