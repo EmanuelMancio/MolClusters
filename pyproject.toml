@@ -72,7 +72,9 @@ docs = [
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version_provider = "pep621"
+# sets the version in pyproject.toml and uv.lock
+version_provider = "uv"
+version_files = ["CITATION.cff:^version:"]
 version_scheme = "semver2"
 update_changelog_on_bump = true
 gpg_sign = true
@@ -83,8 +85,7 @@ major_version_zero = true
 tag_format = "v$version"
 pre_bump_hooks = [
     "uv run python scripts/check_release_branch.py",
-    "uv lock",
-    "uv run python scripts/update_citation.py",
+    "uv run python scripts/update_citation_date.py",
 ]
 
 [build-system]
