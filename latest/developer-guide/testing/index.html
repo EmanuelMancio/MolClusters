@@ -1744,7 +1744,9 @@
 <p>pytest's configuration is in <code>pytest.ini</code> only; its <code>addopts</code> already include
 <code>--cov=src --cov-report html</code>, so every run writes a coverage report to <code>htmlcov/</code>.
 CI (<code>.github/workflows/tests.yml</code>) runs the suite on Python 3.12, 3.13 and 3.14 on
-every push and pull request to <code>main</code> and <code>dev</code>.</p>
+every push and pull request to <code>main</code> and <code>dev</code>. The 3.12 job fails if coverage drops below
+95% and uploads its report to <a href="https://codecov.io/gh/EmanuelMancio/MolClusters">Codecov</a>,
+which feeds the README's coverage badge.</p>
 <h2 id="the-suite">The suite<a class="headerlink" href="#the-suite" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1784,7 +1786,7 @@ every push and pull request to <code>main</code> and <code>dev</code>.</p>
 </tr>
 <tr>
 <td><code>test_output.py</code></td>
-<td><code>RunOutput</code> buffering, overwriting, compression</td>
+<td><code>RunOutput</code> buffering, overwriting, compression, parallel flush</td>
 </tr>
 <tr>
 <td><code>test_report.py</code></td>

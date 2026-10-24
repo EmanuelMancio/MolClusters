@@ -1764,9 +1764,11 @@
 (residue name <code>MAL</code>) and 2-methylerythritol (<code>MOL</code>), simulated with GROMACS.</p>
 <h2 id="1-what-you-need">1. What you need<a class="headerlink" href="#1-what-you-need" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A <strong>topology</strong> with residue names, masses, partial charges and bonds: a GROMACS
-  <code>.tpr</code>, a CHARMM/NAMD <code>.psf</code> or a LAMMPS DATA file (<code>atom_style full</code>) has them
-  all; a <code>.gro</code> or <code>.pdb</code> doesn't. The residues must be numbered 1 to N in topology
+<li>A <strong>topology</strong> with residue names and masses, and preferably partial charges and
+  bonds: a GROMACS <code>.tpr</code>, a CHARMM/NAMD <code>.psf</code> or a LAMMPS DATA file
+  (<code>atom_style full</code>) has them all. A <code>.gro</code> or <code>.pdb</code> has neither: <code>cm</code> rules and
+  the clusters' geometry work, but their charge and dipole moment are left empty
+  and <code>hb</code> rules can't run. The residues must be numbered 1 to N in topology
   order (see <a href="../troubleshooting/#residues-numbered-otherwise">Troubleshooting</a>).</li>
 <li>A <strong>trajectory</strong> MDAnalysis can read (<code>.xtc</code>, <code>.trr</code>, <code>.dcd</code>, a LAMMPS dump, ...),
   with the box, so distances respect periodic boundary conditions.</li>

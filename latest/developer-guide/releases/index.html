@@ -1852,10 +1852,11 @@ it's time, merge <code>dev</code> into <code>main</code> and, on <code>main</cod
 </span></code></pre></div>
 <p>Commitizen computes the next version from the commits since the last tag, updates
 <code>pyproject.toml</code>, <code>uv.lock</code>, <code>CITATION.cff</code> and <code>CHANGELOG.md</code>, and creates a
-GPG-signed commit (<code>chore: release vX -&gt; vY</code>) and an annotated tag <code>vY</code>. Its
-pre-bump hooks refuse to run off <code>main</code> (<code>scripts/check_release_branch.py</code>), refresh
-<code>uv.lock</code>, and set <code>CITATION.cff</code>'s <code>version</code> and <code>date-released</code>
-(<code>scripts/update_citation.py</code>). Then push the branch and the tag:</p>
+GPG-signed commit (<code>chore: release vX -&gt; vY</code>) and an annotated tag <code>vY</code>. The
+version in <code>pyproject.toml</code> and <code>uv.lock</code> comes from its <code>uv</code> version provider, and
+the one in <code>CITATION.cff</code> from <code>version_files</code>. Its pre-bump hooks refuse to run off
+<code>main</code> (<code>scripts/check_release_branch.py</code>) and set <code>CITATION.cff</code>'s <code>date-released</code>
+(<code>scripts/update_citation_date.py</code>). Then push the branch and the tag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main<span class="w"> </span>--follow-tags
 </span></code></pre></div>
 <p>and merge <code>main</code> back into <code>dev</code>. The push to <code>main</code> runs the tests and publishes this

@@ -959,17 +959,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#atomgroupunwrap-not-available-this-atomgroup-lacks-defined-bonds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#cannot-assign-donor-hydrogen-pairs-no-bond-information" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1841,17 +1830,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#atomgroupunwrap-not-available-this-atomgroup-lacks-defined-bonds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#cannot-assign-donor-hydrogen-pairs-no-bond-information" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1962,15 +1940,6 @@ dump, see <a href="../lammps/#elements-and-atom-names">LAMMPS systems</a>.</p>
 <h3 id="lammps_resnames-does-not-cover-lammps-molecule-ids">'lammps_resnames' does not cover LAMMPS molecule id(s) ...<a class="headerlink" href="#lammps_resnames-does-not-cover-lammps-molecule-ids" title="Permanent link">&para;</a></h3>
 <p>Every molecule id of a LAMMPS topology needs a name; add the listed ids to
 <a href="../configuration/#lammps_resnames"><code>lammps_resnames</code></a>.</p>
-<h3 id="atomgroupunwrap-not-available-this-atomgroup-lacks-defined-bonds">AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds<a class="headerlink" href="#atomgroupunwrap-not-available-this-atomgroup-lacks-defined-bonds" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>NoDataError: AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds. ...
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Raised by JsonReport.analyse() on frame 1
-</span></code></pre></div>
-<p>Clusters are made whole across the periodic boundaries along their molecules' bonds
-before their properties are computed, so the topology needs bonds. Coordinate-only
-topologies (<code>.gro</code>, <code>.pdb</code>, <code>.xyz</code>) have none; they lack partial charges too, which
-the charge, dipole moment and <code>hb</code> rules need. Use a topology with both, such as a
-GROMACS <code>.tpr</code>, a CHARMM <code>.psf</code> or a LAMMPS DATA file with <code>atom_style full</code>.</p>
 <h3 id="cannot-assign-donor-hydrogen-pairs-no-bond-information">Cannot assign donor-hydrogen pairs ... no bond information<a class="headerlink" href="#cannot-assign-donor-hydrogen-pairs-no-bond-information" title="Permanent link">&para;</a></h3>
 <p><code>hb</code> rules find donors through the hydrogens' bonds. Use a topology with bonds, or
 switch the rule to <code>cm</code>.</p>
@@ -1989,8 +1958,27 @@ keys.</dd>
 <dt><strong><code>LAMMPS dumps record step numbers, not times</code></strong></dt>
 <dd>Set <a href="../lammps/#times"><code>lammps_timestep</code></a>.</dd>
 <dt><strong><code>The trajectory has no box</code></strong></dt>
-<dd>Distances are computed without periodic boundary conditions. Fine for a cluster
-in vacuum, wrong for a periodic simulation: use a trajectory with the box.</dd>
+<dd>The system is analysed as non-periodic: distances are computed without periodic
+boundary conditions and molecules are taken as they are. Right for a system that
+isn't periodic (e.g. a cluster in vacuum); for a periodic simulation whose file
+lost its box (e.g. an <code>.xyz</code>, or a <code>.pdb</code> without <code>CRYST1</code>), molecules split
+across the boundaries stay split, connections across them are missed and the
+properties of their clusters are wrong: dipole moments by far the most, since
+each atom on the wrong side adds its charge times the box length. Use a
+trajectory with the box.</dd>
+<dt><strong><code>The topology has no partial charges</code></strong></dt>
+<dd>A coordinate-only topology (<code>.gro</code>, <code>.pdb</code>): the charge and dipole moment of
+clusters and nuclei are empty (NaN, <code>null</code> in the report), and <code>hb</code> rules can't
+run. The other properties don't need charges. Use a topology with charges, such
+as a GROMACS <code>.tpr</code>, a CHARMM <code>.psf</code> or a LAMMPS DATA file with
+<code>atom_style full</code>, to get them.</dd>
+<dt><strong><code>Molecule X N reaches ...% of half the box from its first atom</code></strong></dt>
+<dd><code>cm</code> rules, and every property in a topology without bonds, make molecules
+whole by taking each atom at its nearest image to the molecule's first atom,
+which fails for a molecule reaching half the box or more (a long polymer or
+surfactant in a small box): it is torn apart, and its center of mass and the
+properties of the groups holding it are wrong. Warned from 80% of that limit,
+once. Use a larger box, or, for the properties, a topology with bonds.</dd>
 <dt><strong><code>cluster N wraps around the periodic box</code></strong></dt>
 <dd>A cluster spanning the box (percolating) is connected to its own periodic image
 and can't be made whole, so its size, density, shape and dipole mean little
@@ -2013,7 +2001,9 @@ fresh <code>--output-dir</code>.</dd>
 <li>Every cluster's properties are computed every frame for the report and the
   tables; turn off the analyses you don't need with
   <a href="../configuration/#analyses"><code>analyses</code></a>. <code>ClusterCoordinates</code> in particular writes
-  many files.</li>
+  many files. Writing them on a network file system (an HPC cluster's shared scratch
+  space) may go faster with a higher <a href="../configuration/#flush_threads"><code>flush_threads</code></a>,
+  or write to a local disk and copy the results afterwards.</li>
 <li>For a first look at a long trajectory, analyse every N-th frame with
   <code>--traj-memory --in-memory-step N</code>.</li>
 <li>The end of the log says how long the tracking and each analysis took.</li>

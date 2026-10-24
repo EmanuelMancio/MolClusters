@@ -1745,7 +1745,7 @@ editable mode.</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>MolClusters
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>git<span class="w"> </span>switch<span class="w"> </span>dev
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>uv<span class="w"> </span>sync<span class="w">                       </span><span class="c1"># runtime + dev dependencies (pytest, ruff, ...)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pre-commit<span class="w"> </span>install<span class="w">     </span><span class="c1"># pre-commit and commit-msg hooks</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pre-commit<span class="w"> </span>install<span class="w">     </span><span class="c1"># pre-commit, commit-msg and pre-push hooks</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>uv<span class="w"> </span>run<span class="w"> </span>molclusters<span class="w"> </span>--version
 </span></code></pre></div>
 <p>Work happens on <code>dev</code>, or on branches off it; <code>main</code> only receives releases (see
@@ -1776,17 +1776,30 @@ editable mode.</p>
 </tr>
 <tr>
 <td><code>pytest</code></td>
-<td>the whole test suite</td>
+<td>the tests affected by your changes (see below)</td>
 </tr>
 <tr>
 <td><code>commitizen</code></td>
 <td>commit message format (on <code>commit-msg</code>)</td>
+</tr>
+<tr>
+<td><code>pytest-all</code></td>
+<td>the whole test suite, without coverage (on <code>pre-push</code>)</td>
 </tr>
 </tbody>
 </table>
 <p>All hooks are <code>local</code> and run the tools uv installed, so their versions come from
 <code>uv.lock</code>, which Dependabot bumps weekly (<code>.github/dependabot.yml</code>). Don't use
 <code>pre-commit autoupdate</code>.</p>
+<p>The <code>pytest</code> hook runs <code>pytest --testmon --no-cov</code>:
+<a href="https://testmon.org/">pytest-testmon</a> records which code each test runs (in
+<code>.testmondata</code>, git-ignored) and reruns only the tests whose code changed since its
+last run, so a commit usually takes seconds; the first run, and any change to the
+installed packages, runs them all. It doesn't see changes to data files (such as
+<code>tests/data/</code>), which is why <code>pytest-all</code> runs the whole suite before every push. To
+run it yourself as CI does, with coverage:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest
+</span></code></pre></div>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Docstrings</strong> are <a href="https://numpydoc.readthedocs.io/en/latest/format.html">NumPy style</a>,
@@ -1803,21 +1816,21 @@ editable mode.</p>
   terminal doesn't need goes through <code>logger.bind(**FILE_ONLY)</code>.</li>
 </ul>
 <h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>src/molclusters/
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├── main.py          # the `molclusters` command: arguments, loading, errors
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├── molclusters.py   # MolClusters, the runner
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>├── tracker.py       # ClusterTracker and Transition: clusters and their ids
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>├── conntable.py     # ConnectionTable: which molecules connect, frame by frame
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>├── cluster.py       # MolGroup and Cluster: groups of molecules and their properties
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>├── config.py        # MolClsConfig: the configuration, parsed and checked
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>├── analysis/        # FrameAnalysis, Run, Frame, and the built-in analyses
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>├── output.py        # OutputFile and RunOutput: the files a run writes
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>├── report.py        # the JSON report's format, encoders and reader
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>├── log.py           # logging setup
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>└── symdict.py       # SymmetricDict, for per-residue-pair rules
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>tests/               # pytest suite, with small data sets in tests/data
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>docs/                # this site (mkdocs.yml at the root)
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>scripts/             # release helpers
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>src/molclusters/
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>├── main.py          # the `molclusters` command: arguments, loading, errors
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>├── molclusters.py   # MolClusters, the runner
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>├── tracker.py       # ClusterTracker and Transition: clusters and their ids
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>├── conntable.py     # ConnectionTable: which molecules connect, frame by frame
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>├── cluster.py       # MolGroup and Cluster: groups of molecules and their properties
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>├── config.py        # MolClsConfig: the configuration, parsed and checked
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>├── analysis/        # FrameAnalysis, Run, Frame, and the built-in analyses
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>├── output.py        # OutputFile and RunOutput: the files a run writes
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>├── report.py        # the JSON report's format, encoders and reader
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>├── log.py           # logging setup
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>└── symdict.py       # SymmetricDict, for per-residue-pair rules
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>tests/               # pytest suite, with small data sets in tests/data
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>docs/                # this site (mkdocs.yml at the root)
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>scripts/             # release helpers
 </span></code></pre></div>
 
 

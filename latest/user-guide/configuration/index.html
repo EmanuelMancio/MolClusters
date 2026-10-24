@@ -795,6 +795,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#flush_threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        flush_threads
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lammps_resnames" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1934,6 +1945,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#flush_threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        flush_threads
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lammps_resnames" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2102,6 +2124,11 @@ topology doesn't have is warned about, since it would silently select nothing.</
 <td>MDAnalysis backend for <code>cm</code> distances</td>
 </tr>
 <tr>
+<td><a href="#flush_threads"><code>flush_threads</code></a></td>
+<td><code>4</code></td>
+<td>output files written at once</td>
+</tr>
+<tr>
 <td><a href="#lammps_resnames"><code>lammps_resnames</code></a></td>
 <td>none</td>
 <td>residue names of LAMMPS molecule ids</td>
@@ -2127,8 +2154,8 @@ rules for the same pair are an error.</p>
 <p>Connects two molecules whose centers of mass are at most the given distance apart,
 in ångströms. Each molecule is made whole across the periodic boundaries before its
 center of mass is computed, and the distance follows the minimum-image convention.
-Finding these connections needs only masses; the cluster properties computed
-afterwards need bonds and charges as well (see <a href="../quickstart/#1-what-you-need">Quick start</a>).</p>
+Finding these connections needs only masses; the clusters' charge and dipole moment
+need partial charges as well (see <a href="../quickstart/#1-what-you-need">Quick start</a>).</p>
 <h3 id="hb-hydrogen-bond"><code>hb</code>: hydrogen bond<a class="headerlink" href="#hb-hydrogen-bond" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">MAL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hb d 3.5 a 120</span>
 </span></code></pre></div>
@@ -2287,6 +2314,15 @@ rules' distance searches. It often makes no difference: MDAnalysis ignores it wh
 it picks its grid search (typical when the cutoff is much smaller than the box), and
 some MDAnalysis builds, such as the PyPI wheels for Windows, have OpenMP compiled
 out (MolClusters warns when it detects this). <code>hb</code> rules always run serially.</p>
+<h2 id="flush_threads"><code>flush_threads</code><a class="headerlink" href="#flush_threads" title="Permanent link">&para;</a></h2>
+<p>How many output files are written at once (default <code>4</code>, at least <code>1</code>). The files are
+kept in memory and written when the buffer fills up and at the end of the run, where
+a run with one coordinate file per cluster can have thousands of them. Writing
+several at once overlaps the wait for the file system on each. On a local disk the
+gain is small: on Windows, 4 is about as fast as it gets. On a network file system,
+such as an HPC cluster's shared scratch space, where every file costs a round trip
+to a server, more may help; <code>1</code> writes the files one after another. It changes only
+how long writing takes, not what's written.</p>
 <h2 id="lammps_resnames"><code>lammps_resnames</code><a class="headerlink" href="#lammps_resnames" title="Permanent link">&para;</a></h2>
 <p>LAMMPS topologies have molecule ids but no residue names. This maps each name used
 elsewhere in the file to the LAMMPS molecule id(s) it stands for: a single id, an

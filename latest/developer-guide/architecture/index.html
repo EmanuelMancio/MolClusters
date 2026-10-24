@@ -1944,10 +1944,18 @@ never moves the shared Universe for good: residues are placed along a spanning t
 (a <code>Cluster</code>'s own graph, or a plain group's minimum spanning tree of centers), so
 groups wider than half the box stay whole, and a cluster wrapping around the box is
 warned about once.</p>
+<p>Each residue is made whole along its bonds or, when the topology has none (<code>_has</code>,
+logged once), by minimum image around its first atom
+(<code>conntable._whole_residue_offsets</code>), as the <code>cm</code> rule does; that warns once when a
+molecule reaches 80% of the minimum-image limit (<code>_check_reach</code>). Bonded runs keep
+their exact output. Without a box (<code>_has_box</code>), positions are taken as they are;
+without partial charges, <code>charge</code>, <code>dipole</code> and <code>dipole_moment</code> are NaN, warned once.</p>
 <p>The whole positions and the geometric properties (<code>@_per_frame</code>: <code>radius</code>, Rg,
 sphericity, dipole moment, shape, center of mass, dipole, <code>bsphere</code>) are computed
 once per frame and residue set (<code>_frame_cache</code>), since analyses read them
-repeatedly.</p>
+repeatedly. A part of a group made with <code>subgroup</code> (the nuclei of a cluster) starts
+that frame with the group's whole positions, rather than being made whole again,
+which costs as much as for the group.</p>
 <p>A group can't be changed through what it hands out, which is also what makes caching
 arrays safe. Every array it returns is read-only (<code>_readonly</code>; callers change a
 <code>.copy()</code>). <code>residues</code> is a new group over a copy of its indices each time: a group's
@@ -1976,7 +1984,10 @@ after the built-ins but before those marked <code>last</code> (the report). See
   and flushed when the buffer is full and at the end. A file's first flush in a run
   overwrites it, so runs never mix. Names ending in <code>.gz</code>/<code>.zst</code> are compressed into
   one stream per run, ending a block at every flush, so a killed run leaves
-  everything flushed readable.</li>
+  everything flushed readable. A flush writes up to <code>flush_threads</code> files at once
+  (a config key, default <code>FLUSH_THREADS</code> = 4), each by one thread so its data keeps
+  its order; which file gets what, and in which mode, is settled beforehand. Folders
+  are created once per run.</li>
 </ul>
 <p>Each analysis declares its files in <code>outputs</code> (<code>OutputFile</code>, with <code>&lt;placeholder&gt;</code>
 patterns for families like <code>cls-id&lt;id&gt;.gro</code>). The declarations drive the checks
@@ -2022,6 +2033,15 @@ in <code>describe()</code>, and a section in the <a href="../../user-guide/confi
   <code>_single_frame</code>, <code>_ts</code>), checked at construction by <code>_check_hb_private_api</code> so an
   MDAnalysis upgrade that removes them fails early rather than mid-run.</li>
 <li>The log ends with the time spent tracking and in each analysis; start there.</li>
+<li>Most of a run is the analyses, not the tracking, and most of that is MDAnalysis'
+  Python overhead on small groups, which threads can't overlap (the GIL): making
+  groups whole (<code>__unwrap_along_bonds</code>) is the largest single cost. Nuclei reuse
+  their cluster's whole positions (<code>subgroup</code>), and <code>ClusterCoordinates</code> formats
+  <code>.gro</code> frames itself (<code>gro_frame</code>), byte for byte what MDAnalysis' GRO writer
+  writes, several times faster.</li>
+<li>Opening files is the cost at the end of a run with many <code>.gro</code> files. On Windows
+  the file system and antivirus serialize much of it: 2,771 files take 2.9 s one at a
+  time and 2.2 s with 4 threads, no faster with more.</li>
 </ul>
 
 

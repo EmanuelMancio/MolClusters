@@ -1926,7 +1926,9 @@ Universe is <code>cluster.universe</code>.</p>
 <p>Clusters are also live: their properties are those of the current frame. To keep
 data about a cluster across frames, key it by <code>cluster.id</code>, not by the object.</p>
 <p>Any group of molecules can get the same properties as a <code>MolGroup</code>:
-<code>MolGroup(frame.universe, [resid, ...])</code>.</p>
+<code>MolGroup(frame.universe, [resid, ...])</code>. For a part of a cluster (as the nuclei
+are), <code>cluster.subgroup([resid, ...])</code> is faster: it keeps the place its molecules
+have in the cluster, made whole already, instead of making them whole again.</p>
 <h2 id="writing-files">Writing files<a class="headerlink" href="#writing-files" title="Permanent link">&para;</a></h2>
 <p>Files go through <code>run.output</code> (or <code>frame.output</code>), always relative to the run's
 output directory:</p>
