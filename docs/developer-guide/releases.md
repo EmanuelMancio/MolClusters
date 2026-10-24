@@ -61,10 +61,11 @@ uv run cz bump
 
 Commitizen computes the next version from the commits since the last tag, updates
 `pyproject.toml`, `uv.lock`, `CITATION.cff` and `CHANGELOG.md`, and creates a
-GPG-signed commit (`chore: release vX -> vY`) and an annotated tag `vY`. Its
-pre-bump hooks refuse to run off `main` (`scripts/check_release_branch.py`), refresh
-`uv.lock`, and set `CITATION.cff`'s `version` and `date-released`
-(`scripts/update_citation.py`). Then push the branch and the tag:
+GPG-signed commit (`chore: release vX -> vY`) and an annotated tag `vY`. The
+version in `pyproject.toml` and `uv.lock` comes from its `uv` version provider, and
+the one in `CITATION.cff` from `version_files`. Its pre-bump hooks refuse to run off
+`main` (`scripts/check_release_branch.py`) and set `CITATION.cff`'s `date-released`
+(`scripts/update_citation_date.py`). Then push the branch and the tag:
 
 ```bash
 git push origin main --follow-tags

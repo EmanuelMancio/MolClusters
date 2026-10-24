@@ -161,6 +161,77 @@ class TestRun:
         assert df["NNuc"].tolist() == [1, 1, 1]
         assert df["Size"].tolist() == [1.5, 1.5, 2]
 
+    # MDAnalysis' GRO writer writes a zero box then, as GROMACS does
+    @pytest.mark.filterwarnings("ignore:missing dimension")
+    def test_a_trajectory_without_a_box_runs_like_one_in_a_big_box(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        # the synthetic clusters sit far from the big box's faces, so the box
+        # changes nothing but whether there is one, and where the groups are
+        # made whole: at its center, ~1000 A, float32 positions keep ~1e-4 A
+        config = MolClsConfig(
+            rules=ALL_PAIRS_RULES,
+            solute=["MOL"],
+            solvent=["SOL"],
+            nucleus=["MOL"],
+            follow=["solute"],
+        )
+        boxed, vacuum = tmp_path / "boxed", tmp_path / "vacuum"
+        for folder, box in ((boxed, True), (vacuum, False)):
+            folder.mkdir()
+            monkeypatch.chdir(folder)
+            uni = make_universe(RUN_FRAMES, 10, RUN_RESNAMES, box=box)
+            MolClusters(uni, config).run()
+
+        tables = [
+            read_report(folder / "molclusters.jsonl.zst").clusters()
+            for folder in (vacuum, boxed)
+        ]
+        # records, not numbers: compared by the molecules they hold
+        nuclei = [
+            [[n["resids"] for n in row] for row in table.pop("Nucleus.nuclei")]
+            for table in tables
+        ]
+        assert nuclei[0] == nuclei[1]
+        pd.testing.assert_frame_equal(*tables, rtol=1e-4)
+        for name in ("solute_solvent.csv", "nucleus_data.csv"):
+            pd.testing.assert_frame_equal(
+                pd.read_csv(vacuum / name), pd.read_csv(boxed / name), rtol=1e-4
+            )
+        assert (vacuum / "evo.txt").read_text() == (boxed / "evo.txt").read_text()
+
+    @pytest.mark.filterwarnings("ignore:missing dimension")
+    @pytest.mark.parametrize("box", [True, False])
+    def test_a_trajectory_without_a_box_is_warned_about(
+        self,
+        make_universe: UniverseFactory,
+        tmp_path: Path,
+        captured_logs: list[str],
+        box: bool,
+    ):
+        uni = make_universe([[[1, 2]]], 2, box=box)
+
+        MolClusters(uni, MolClsConfig(rules=MOL_RULES)).run(tmp_path)
+
+        warnings = [m for m in captured_logs if "has no box" in m]
+        assert len(warnings) == (0 if box else 1)
+        if warnings:
+            assert "make sure" in warnings[0]
+            assert "dipole moments" in warnings[0]
+
+    def test_the_output_writes_as_many_files_at_once_as_configured(
+        self, make_universe: UniverseFactory, tmp_path: Path
+    ):
+        uni = make_universe([[[1, 2]]], 2)
+        molcls = MolClusters(uni, MolClsConfig(rules=MOL_RULES, flush_threads=7))
+
+        molcls.run(tmp_path)
+
+        assert molcls.output.flush_threads == 7
+
     def test_report_records_nuclei(self, full_run: Path):
         first = next(read_report(full_run / "molclusters.jsonl.zst").frames())
 

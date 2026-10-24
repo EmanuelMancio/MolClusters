@@ -50,19 +50,6 @@ dump, see [LAMMPS systems](lammps.md#elements-and-atom-names).
 Every molecule id of a LAMMPS topology needs a name; add the listed ids to
 [`lammps_resnames`](configuration.md#lammps_resnames).
 
-### AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds
-
-```text
-NoDataError: AtomGroup.unwrap() not available; this AtomGroup lacks defined bonds. ...
-Raised by JsonReport.analyse() on frame 1
-```
-
-Clusters are made whole across the periodic boundaries along their molecules' bonds
-before their properties are computed, so the topology needs bonds. Coordinate-only
-topologies (`.gro`, `.pdb`, `.xyz`) have none; they lack partial charges too, which
-the charge, dipole moment and `hb` rules need. Use a topology with both, such as a
-GROMACS `.tpr`, a CHARMM `.psf` or a LAMMPS DATA file with `atom_style full`.
-
 ### Cannot assign donor-hydrogen pairs ... no bond information
 
 `hb` rules find donors through the hydrogens' bonds. Use a topology with bonds, or
@@ -87,8 +74,29 @@ switch the rule to `cm`.
 :   Set [`lammps_timestep`](lammps.md#times).
 
 **`The trajectory has no box`**
-:   Distances are computed without periodic boundary conditions. Fine for a cluster
-    in vacuum, wrong for a periodic simulation: use a trajectory with the box.
+:   The system is analysed as non-periodic: distances are computed without periodic
+    boundary conditions and molecules are taken as they are. Right for a system that
+    isn't periodic (e.g. a cluster in vacuum); for a periodic simulation whose file
+    lost its box (e.g. an `.xyz`, or a `.pdb` without `CRYST1`), molecules split
+    across the boundaries stay split, connections across them are missed and the
+    properties of their clusters are wrong: dipole moments by far the most, since
+    each atom on the wrong side adds its charge times the box length. Use a
+    trajectory with the box.
+
+**`The topology has no partial charges`**
+:   A coordinate-only topology (`.gro`, `.pdb`): the charge and dipole moment of
+    clusters and nuclei are empty (NaN, `null` in the report), and `hb` rules can't
+    run. The other properties don't need charges. Use a topology with charges, such
+    as a GROMACS `.tpr`, a CHARMM `.psf` or a LAMMPS DATA file with
+    `atom_style full`, to get them.
+
+**`Molecule X N reaches ...% of half the box from its first atom`**
+:   `cm` rules, and every property in a topology without bonds, make molecules
+    whole by taking each atom at its nearest image to the molecule's first atom,
+    which fails for a molecule reaching half the box or more (a long polymer or
+    surfactant in a small box): it is torn apart, and its center of mass and the
+    properties of the groups holding it are wrong. Warned from 80% of that limit,
+    once. Use a larger box, or, for the properties, a topology with bonds.
 
 **`cluster N wraps around the periodic box`**
 :   A cluster spanning the box (percolating) is connected to its own periodic image
@@ -115,7 +123,9 @@ switch the rule to `cm`.
 - Every cluster's properties are computed every frame for the report and the
   tables; turn off the analyses you don't need with
   [`analyses`](configuration.md#analyses). `ClusterCoordinates` in particular writes
-  many files.
+  many files. Writing them on a network file system (an HPC cluster's shared scratch
+  space) may go faster with a higher [`flush_threads`](configuration.md#flush_threads),
+  or write to a local disk and copy the results afterwards.
 - For a first look at a long trajectory, analyse every N-th frame with
   `--traj-memory --in-memory-step N`.
 - The end of the log says how long the tracking and each analysis took.

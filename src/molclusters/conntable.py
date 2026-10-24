@@ -21,7 +21,9 @@ Dependencies:
     - HydrogenBondAnalysis: For analyzing hydrogen bonds between molecules.
 """
 
+import itertools
 import warnings
+import weakref
 from collections import Counter
 from typing import Generator, Iterator, overload
 
@@ -32,9 +34,17 @@ from loguru import logger
 from MDAnalysis import core
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 from MDAnalysis.lib.distances import apply_PBC, minimize_vectors
+from MDAnalysis.lib.mdamath import triclinic_vectors
 
 from .config import DistanceBackend, HBRule, Rule
 from .symdict import SymmetricDict
+
+# how far a molecule may reach from its first atom, as a fraction of where minimum
+# image stops finding its atoms' true places, before it's warned about (see `_reach`)
+_REACH_WARNING = 0.8
+
+# Universes already warned about a molecule reaching that far (see `_check_reach`)
+_REACH_WARNED: "weakref.WeakSet[mda.Universe]" = weakref.WeakSet()
 
 # ConnectionTable drives HydrogenBondAnalysis one frame at a time via these
 # undocumented methods (see _check_hb_private_api below), plus a third: it
@@ -142,14 +152,111 @@ def check_resids(universe: mda.Universe) -> None:
         )
 
 
+def _whole_residue_offsets(
+    atoms: core.groups.AtomGroup, box: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Make each residue whole by minimum image around its first atom.
+
+    Trajectories often split molecules across periodic boundaries (raw GROMACS
+    output, wrapped LAMMPS dumps). Each atom is taken at its nearest image to its
+    residue's first atom, which needs no bonds and holds for any residue spanning
+    less than half the box: ``anchors[residue] + offsets`` are the whole positions.
+
+    Parameters
+    ----------
+    atoms : core.groups.AtomGroup
+        Every atom of the residues, in residue order.
+    box : np.ndarray
+        The box dimensions.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        Each residue's first atom's position (its anchor), each atom's minimum-image
+        offset from its residue's anchor, and each atom's residue, as a row of the
+        anchors.
+    """
+    positions = atoms.positions
+    _, first, residue = np.unique(
+        atoms.resindices, return_index=True, return_inverse=True
+    )
+    anchors = positions[first]
+    offsets = minimize_vectors(positions - anchors[residue], box)
+    _check_reach(atoms, offsets, box)
+    return anchors, offsets, residue
+
+
+def _reach(offsets: np.ndarray, box: np.ndarray) -> np.ndarray:
+    """Measure how far atoms sit from their residue's first atom, for minimum image.
+
+    Minimum image finds an atom's true place only within a limit: half the box
+    along each axis of a rectangular box, and, in any other, half the shortest
+    distance between periodic images. A molecule reaching past it is torn apart,
+    and has atoms right at it, where the minimum image switches to the next image
+    (the molecule's atoms are close together), so a reach near 1 flags molecules
+    torn and molecules about to be.
+
+    Parameters
+    ----------
+    offsets : np.ndarray
+        Each atom's minimum-image offset from its residue's first atom.
+    box : np.ndarray
+        The box dimensions.
+
+    Returns
+    -------
+    np.ndarray
+        Each atom's reach, as a fraction of the limit (at most 1).
+    """
+    if (np.abs(box[3:] - 90.0) < 1e-3).all():
+        return 2 * np.max(np.abs(offsets) / box[:3], axis=1)
+    images = np.array(list(itertools.product((-1, 0, 1), repeat=3)))
+    images = images[images.any(axis=1)] @ triclinic_vectors(box)
+    return 2 * np.linalg.norm(offsets, axis=1) / np.linalg.norm(images, axis=1).min()
+
+
+def _check_reach(
+    atoms: core.groups.AtomGroup, offsets: np.ndarray, box: np.ndarray
+) -> None:
+    """Warn, once per Universe, about a molecule too long for minimum image.
+
+    Parameters
+    ----------
+    atoms : core.groups.AtomGroup
+        Every atom of the residues, in residue order.
+    offsets : np.ndarray
+        Each atom's minimum-image offset from its residue's first atom.
+    box : np.ndarray
+        The box dimensions.
+    """
+    universe = atoms.universe
+    if universe in _REACH_WARNED:
+        return
+    reach = _reach(offsets, box)
+    farthest = int(np.argmax(reach))
+    if reach[farthest] < _REACH_WARNING:
+        return
+
+    _REACH_WARNED.add(universe)
+    residue = atoms[farthest].residue
+    n_far = len(np.unique(atoms.resindices[reach >= _REACH_WARNING]))
+    logger.warning(
+        f"Molecule {residue.resname} {residue.resid} reaches {reach[farthest]:.0%} of "
+        "half the box from its first atom in frame "
+        f"{universe.trajectory.ts.frame} ({n_far} molecule(s) reach "
+        f"{_REACH_WARNING:.0%} or more): molecules made whole by minimum image around "
+        "their first atom may be torn apart, so their center of mass for cm rules, "
+        "and, in a topology without bonds, the properties of the groups holding them "
+        "may be wrong. (Reported once.)"
+    )
+
+
 def _whole_centers_of_mass(atoms: core.groups.AtomGroup) -> np.ndarray:
     """Calculate the center of mass of each residue, as if the residue were whole.
 
-    Trajectories often split molecules across periodic boundaries (raw GROMACS
-    output, wrapped LAMMPS dumps), and the plain center of mass of a split molecule
-    lands between its pieces, up to half a box away from the molecule. Each atom is
-    taken instead at its nearest image to its residue's first atom, which needs no
-    bonds and holds for any residue spanning less than half the box.
+    The plain center of mass of a molecule split across periodic boundaries lands
+    between its pieces, up to half a box away from the molecule; each residue is
+    made whole first instead (see `_whole_residue_offsets`).
 
     Parameters
     ----------
@@ -165,13 +272,8 @@ def _whole_centers_of_mass(atoms: core.groups.AtomGroup) -> np.ndarray:
     if box is None or not np.any(box[:3]):
         return atoms.center_of_mass(compound="residues")
 
-    positions = atoms.positions
     masses = atoms.masses
-    _, first, residue = np.unique(
-        atoms.resindices, return_index=True, return_inverse=True
-    )
-    anchors = positions[first]
-    offsets = minimize_vectors(positions - anchors[residue], box)
+    anchors, offsets, residue = _whole_residue_offsets(atoms, box)
     weighted = np.stack(
         [np.bincount(residue, masses * offsets[:, k]) for k in range(3)], axis=1
     )

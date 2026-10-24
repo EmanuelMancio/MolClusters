@@ -235,9 +235,11 @@ def read_geometry(group: MolGroup) -> None:
 
 
 def split_across_the_box_edge(
-    make_universe: UniverseFactory,
+    make_universe: UniverseFactory, bonds: bool = True
 ) -> tuple[MolGroup, MolGroup, np.ndarray]:
     """The chain 1-2-3, whole in one Universe and split by the box edge in another.
+
+    The split Universe's topology has bonds only if `bonds`.
 
     Returns
     -------
@@ -245,7 +247,7 @@ def split_across_the_box_edge(
         The whole chain, the split chain, and the split Universe's positions.
     """
     reference = MolGroup(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
-    uni = make_universe([[[1, 2, 3]]], 3)
+    uni = make_universe([[[1, 2, 3]]], 3, bonds=bonds)
     box = 20.0
     # move the chain so its residues sit at y = 19, 21, 23, then wrap y into
     # the box: the chain is split, one residue at y = 19 and two at y = 1, 3
@@ -257,13 +259,14 @@ def split_across_the_box_edge(
 
 
 def chain_across_a_small_box(
-    make_universe: UniverseFactory, n_res: int, box: float = 20.0
+    make_universe: UniverseFactory, n_res: int, box: float = 20.0, bonds: bool = True
 ) -> tuple[MolGroup, Universe, np.ndarray]:
     """A straight chain of `n_res` residues along y, BOND_STEP apart, in a small box.
 
     The chain starts at y = 13 and is wrapped into a `box`-wide box, so from
     ``n_res = 5`` on it is split by the box edge, and from ``n_res = 7`` it reaches
-    more than half a box from its first residue.
+    more than half a box from its first residue. The small-box Universe's topology
+    has bonds only if `bonds`.
 
     Returns
     -------
@@ -273,7 +276,7 @@ def chain_across_a_small_box(
     """
     residues = list(range(1, n_res + 1))
     reference = MolGroup(make_universe([[residues]], n_res), residues)
-    uni = make_universe([[residues]], n_res)
+    uni = make_universe([[residues]], n_res, bonds=bonds)
     shift = np.array([-90.0, -87.0, -90.0])
     uni.dimensions = [box, box, box, 90.0, 90.0, 90.0]
     uni.atoms.positions = (uni.atoms.positions + shift) % box
@@ -283,13 +286,14 @@ def chain_across_a_small_box(
 class TestWholePositions:
     """Geometric properties see whole groups without moving the shared Universe."""
 
+    @pytest.mark.parametrize("bonds", [True, False])
     @pytest.mark.parametrize("kind", [Cluster, MolGroup])
     def test_group_reaching_past_half_the_box_is_made_whole(
-        self, make_universe: UniverseFactory, kind: type
+        self, make_universe: UniverseFactory, kind: type, bonds: bool
     ):
         # 14 A long in a 20 A box: its far end is more than half a box from the
         # first residue, and would be wrapped back onto the wrong side
-        reference, uni, shift = chain_across_a_small_box(make_universe, 8)
+        reference, uni, shift = chain_across_a_small_box(make_universe, 8, bonds=bonds)
         if kind is Cluster:
             (connected,) = connected_groups(uni)
             group = Cluster(uni, connected, cluster_id=1)
@@ -332,13 +336,14 @@ class TestWholePositions:
 
         assert not any("wraps around" in m for m in captured_logs)
 
+    @pytest.mark.parametrize("bonds", [True, False])
     def test_group_reaching_past_half_a_triclinic_box_is_made_whole(
-        self, make_universe: UniverseFactory, captured_logs: list[str]
+        self, make_universe: UniverseFactory, captured_logs: list[str], bonds: bool
     ):
         # 10 A long along y, in a 60-degree box whose height along y is 17.3 A
         residues = [1, 2, 3, 4, 5, 6]
         reference = MolGroup(make_universe([[residues]], 6), residues)
-        uni = make_universe([[residues]], 6)
+        uni = make_universe([[residues]], 6, bonds=bonds)
         dimensions = np.array([20.0, 20.0, 20.0, 90.0, 90.0, 60.0])
         uni.dimensions = dimensions
         uni.atoms.positions = apply_PBC(
@@ -387,10 +392,11 @@ class TestWholePositions:
         fresh = MolGroup(uni, [1, 2, 3, 4, 5, 6])
         assert fresh.radius_of_gyration == pytest.approx(rg)
 
+    @pytest.mark.parametrize("bonds", [True, False])
     def test_group_split_across_the_box_edge_is_made_whole(
-        self, make_universe: UniverseFactory
+        self, make_universe: UniverseFactory, bonds: bool
     ):
-        reference, split, shifted = split_across_the_box_edge(make_universe)
+        reference, split, shifted = split_across_the_box_edge(make_universe, bonds)
 
         with split.whole() as atoms:
             span = np.ptp(atoms.positions[:, 1])
@@ -402,10 +408,11 @@ class TestWholePositions:
         )
         np.testing.assert_allclose(split.universe.atoms.positions, shifted)
 
+    @pytest.mark.parametrize("bonds", [True, False])
     def test_center_of_mass_of_a_split_group_is_that_of_the_whole_group(
-        self, make_universe: UniverseFactory
+        self, make_universe: UniverseFactory, bonds: bool
     ):
-        reference, split, _ = split_across_the_box_edge(make_universe)
+        reference, split, _ = split_across_the_box_edge(make_universe, bonds)
         # the whole chain's center of mass, moved like the chain and wrapped
         expected = apply_PBC(
             reference.atoms.center_of_mass() - [95.0, 81.0, 95.0],
@@ -415,6 +422,26 @@ class TestWholePositions:
         np.testing.assert_allclose(split.center_of_mass, expected, atol=1e-4)
         # MDAnalysis's own puts it between the pieces, far from the chain
         assert abs(split.atoms.center_of_mass()[1] - expected[1]) > 5.0
+
+    @pytest.mark.parametrize("bonds", [True, False])
+    def test_group_without_a_box_is_taken_as_it_is(
+        self, make_universe: UniverseFactory, bonds: bool
+    ):
+        # a cluster in vacuum: nothing is split, and there is no box to center in
+        reference = MolGroup(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
+        uni = make_universe([[[1, 2, 3]]], 3, bonds=bonds, box=False)
+        group = MolGroup(uni, [1, 2, 3])
+
+        with group.whole() as atoms:
+            np.testing.assert_array_equal(atoms.positions, uni.atoms.positions)
+        read_geometry(group)
+        # float32 positions: the reference is made whole at its box's center
+        assert group.radius_of_gyration == pytest.approx(
+            reference.radius_of_gyration, rel=1e-5
+        )
+        np.testing.assert_allclose(
+            group.center_of_mass, uni.atoms.center_of_mass(), rtol=1e-6
+        )
 
     def test_whole_restores_positions_on_error(self, chain: Cluster):
         before = chain.universe.atoms.positions
@@ -435,6 +462,256 @@ class TestWholePositions:
         expected = MolGroup(uni, [1, 2, 3, 4]).radius_of_gyration
         assert first.radius_of_gyration == pytest.approx(expected)
         assert first.radius_of_gyration != pytest.approx(rg_before)
+
+
+class TestSubgroup:
+    """A part of a group keeps the group's whole positions instead of its own."""
+
+    @pytest.mark.parametrize("bonds", [True, False])
+    def test_a_part_has_the_properties_of_the_part_made_whole_on_its_own(
+        self, make_universe: UniverseFactory, bonds: bool
+    ):
+        # a chain reaching past half the box, split by its edge
+        _, uni, _ = chain_across_a_small_box(make_universe, 8, bonds=bonds)
+        (connected,) = connected_groups(uni)
+        whole_chain = Cluster(uni, connected, cluster_id=1)
+
+        part = whole_chain.subgroup([4, 5, 6, 7])
+        alone = MolGroup(uni, [4, 5, 6, 7])
+
+        # float32 positions: placed elsewhere, they're rounded otherwise
+        for name in ["radius_of_gyration", "dipole_moment", "shape_parameter"]:
+            assert getattr(part, name) == pytest.approx(getattr(alone, name), rel=1e-5)
+        assert part.sphericity == pytest.approx(alone.sphericity, abs=1e-5)
+        np.testing.assert_allclose(part.center_of_mass, alone.center_of_mass, atol=1e-4)
+        np.testing.assert_array_equal(part.resids, [4, 5, 6, 7])
+
+    def test_a_part_is_not_made_whole_again(
+        self, chain: Cluster, monkeypatch: pytest.MonkeyPatch
+    ):
+        computed = []
+        compute = MolGroup._MolGroup__compute_whole_positions
+
+        def counted(group: MolGroup) -> tuple[np.ndarray, np.ndarray]:
+            computed.append(group)
+            return compute(group)
+
+        monkeypatch.setattr(MolGroup, "_MolGroup__compute_whole_positions", counted)
+
+        part = chain.subgroup([3, 1])
+        read_geometry(part)
+
+        assert computed == [chain]
+        with chain.whole() as atoms:
+            expected = atoms.positions[[4, 5, 0, 1]]  # residue 3's atoms, then 1's
+        with part.whole() as atoms:
+            np.testing.assert_array_equal(atoms.positions, expected)
+
+    def test_in_another_frame_a_part_is_made_whole_on_its_own(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[[1, 2, 3]], [[1, 2], [3]]], 3)
+        (connected,) = connected_groups(uni)
+        part = Cluster(uni, connected, cluster_id=1).subgroup([1, 2])
+
+        uni.trajectory[1]
+
+        assert part.radius_of_gyration == pytest.approx(
+            MolGroup(uni, [1, 2]).radius_of_gyration
+        )
+
+    def test_molecules_outside_the_group_are_rejected(self, chain: Cluster):
+        with pytest.raises(ValueError, match=r"Molecules \[4, 5\] are not in the"):
+            chain.subgroup([3, 4, 5])
+
+
+def torn_chain(make_universe: UniverseFactory, bonds: bool = True) -> Universe:
+    """The chain 1-2-3 with every molecule itself split by the box edge.
+
+    Returns
+    -------
+    Universe
+        A 20 A box holding the chain with its C atoms at z = 19.5 and its O atoms,
+        1.2 A above them, wrapped to z = 0.7; its topology has bonds only if
+        `bonds`.
+    """
+    uni = make_universe([[[1, 2, 3]]], 3, bonds=bonds)
+    box = 20.0
+    uni.dimensions = [box, box, box, 90.0, 90.0, 90.0]
+    uni.atoms.positions = (uni.atoms.positions - [90.0, 90.0, 80.5]) % box
+    return uni
+
+
+class TestWholeWithoutBonds:
+    """A topology without bonds gets its molecules made whole by minimum image."""
+
+    @pytest.mark.parametrize("bonds", [True, False])
+    def test_molecules_split_across_the_box_edge_are_made_whole(
+        self, make_universe: UniverseFactory, bonds: bool
+    ):
+        reference = MolGroup(make_universe([[[1, 2, 3]]], 3), [1, 2, 3])
+        torn = MolGroup(torn_chain(make_universe, bonds), [1, 2, 3])
+
+        assert torn.radius_of_gyration == pytest.approx(
+            reference.radius_of_gyration, rel=1e-5
+        )
+        assert torn.dipole_moment == pytest.approx(reference.dipole_moment, rel=1e-4)
+        # MDAnalysis's own sees each O a box away from its C
+        assert torn.atoms.dipole_moment() * cluster.EA2D > 10 * reference.dipole_moment
+
+    # the group is centered on its first residue, which needn't be the lowest one
+    @pytest.mark.parametrize("residues", [[1, 2, 3], [3, 1, 2]])
+    def test_bonds_and_minimum_image_give_the_same_whole_positions(
+        self, make_universe: UniverseFactory, residues: list[int]
+    ):
+        bonded = MolGroup(torn_chain(make_universe), residues)
+        bondless = MolGroup(torn_chain(make_universe, bonds=False), residues)
+
+        with bonded.whole() as atoms:
+            expected = atoms.positions
+        with bondless.whole() as atoms:
+            np.testing.assert_allclose(atoms.positions, expected, atol=1e-4)
+        np.testing.assert_allclose(bondless.center_of_mass, bonded.center_of_mass)
+
+    @pytest.mark.parametrize("bonds", [None, []])
+    def test_dipole_of_ions_split_across_the_box_edge(self, bonds: list | None):
+        # Na+ at x = 19 and Cl- at x = 21.8, wrapped to 1.8: a 2.8 A ion pair,
+        # which summing each ion's own dipole (zero) would miss
+        uni = Universe.empty(2, n_residues=2, atom_resindex=[0, 1], trajectory=True)
+        uni.add_TopologyAttr("resids", [1, 2])
+        uni.add_TopologyAttr("masses", [22.99, 35.45])
+        uni.add_TopologyAttr("charges", [1.0, -1.0])
+        if bonds is not None:  # ions have none, but the topology may list bonds
+            uni.add_TopologyAttr("bonds", bonds)
+        uni.atoms.positions = [[19.0, 10.0, 10.0], [1.8, 10.0, 10.0]]
+        uni.dimensions = [20.0, 20.0, 20.0, 90.0, 90.0, 90.0]
+
+        pair = MolGroup(uni, [1, 2])
+
+        np.testing.assert_allclose(pair.dipole, [-2.8 * 4.80320, 0, 0], rtol=1e-4)
+
+    def test_a_topology_without_bonds_is_noted_once(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        uni = make_universe([[[1, 2, 3]]], 3, bonds=False)
+
+        read_geometry(MolGroup(uni, [1, 2, 3]))
+        read_geometry(MolGroup(uni, [1, 2]))
+
+        assert len([m for m in captured_logs if "no bonds" in m]) == 1
+
+    def test_a_topology_with_bonds_is_not_noted(
+        self, chain: Cluster, captured_logs: list[str]
+    ):
+        read_geometry(chain)
+
+        assert not any("no bonds" in m for m in captured_logs)
+
+
+RECTANGULAR = [20.0, 20.0, 20.0, 90.0, 90.0, 90.0]
+# its shortest distance between periodic images is 20 A too, so half of it is 10 A
+TRICLINIC = [20.0, 20.0, 20.0, 90.0, 90.0, 60.0]
+
+
+def rod(length: float, dimensions: list[float], bonds: bool = False) -> Universe:
+    """One MOL molecule: a straight line of carbons 1 A apart along x.
+
+    Returns
+    -------
+    Universe
+        The molecule, `length` A long from its first atom, wrapped into the box.
+    """
+    n_atoms = int(length) + 1
+    uni = Universe.empty(n_atoms, n_residues=1, atom_resindex=[0] * n_atoms)
+    uni.add_TopologyAttr("resids", [1])
+    uni.add_TopologyAttr("resnames", ["MOL"])
+    uni.add_TopologyAttr("masses", [12.011] * n_atoms)
+    uni.add_TopologyAttr("charges", [0.0] * n_atoms)
+    uni.add_TopologyAttr("elements", ["C"] * n_atoms)
+    if bonds:
+        uni.add_TopologyAttr("bonds", [(i, i + 1) for i in range(n_atoms - 1)])
+    positions = np.zeros((n_atoms, 3), dtype=np.float32) + [1.0, 5.0, 5.0]
+    positions[:, 0] += np.arange(n_atoms)
+    uni.load_new(
+        apply_PBC(positions, np.array(dimensions, dtype=np.float32))[None],
+        format="MEMORY",
+        dimensions=dimensions,
+    )
+    return uni
+
+
+class TestLongMolecules:
+    """A molecule too long for minimum image around its first atom is warned about."""
+
+    @pytest.mark.parametrize("dimensions", [RECTANGULAR, TRICLINIC])
+    def test_a_molecule_reaching_past_half_the_box_is_warned_once(
+        self, dimensions: list[float], captured_logs: list[str]
+    ):
+        uni = rod(12.0, dimensions)
+
+        read_geometry(MolGroup(uni, [1]))
+        read_geometry(MolGroup(uni, [1]))
+
+        (warning,) = [m for m in captured_logs if "from its first atom" in m]
+        assert warning.startswith("Molecule MOL 1 reaches 100% of half the box")
+
+    def test_cm_rules_warn_even_with_bonds(self, captured_logs: list[str]):
+        # the rule's centers of mass always come from minimum image
+        connected_groups(rod(12.0, RECTANGULAR, bonds=True))
+
+        assert any("from its first atom" in m for m in captured_logs)
+
+    @pytest.mark.parametrize(
+        ("length", "dimensions"),
+        [
+            (6.0, RECTANGULAR),
+            (6.0, TRICLINIC),
+            # rectangular: the limit is per axis, 50 A along x in a thin slab
+            (30.0, [100.0, 100.0, 20.0, 90.0, 90.0, 90.0]),
+        ],
+    )
+    def test_molecules_well_within_half_the_box_are_not_warned(
+        self, length: float, dimensions: list[float], captured_logs: list[str]
+    ):
+        uni = rod(length, dimensions)
+
+        read_geometry(MolGroup(uni, [1]))
+        connected_groups(uni)
+
+        assert not any("from its first atom" in m for m in captured_logs)
+
+
+class TestWithoutCharges:
+    """A topology without partial charges leaves charges and dipoles NaN."""
+
+    def test_charge_and_dipole_are_nan(self, make_universe: UniverseFactory):
+        group = MolGroup(make_universe([[[1, 2]]], 2, charges=False), [1, 2])
+
+        assert np.isnan(group.charge)
+        assert np.isnan(group.dipole_moment)
+        assert group.dipole.shape == (3,)
+        assert np.isnan(group.dipole).all()
+        assert not group.dipole.flags.writeable
+        # the rest doesn't need charges
+        assert group.radius_of_gyration > 0
+
+    def test_is_warned_once(
+        self, make_universe: UniverseFactory, captured_logs: list[str]
+    ):
+        uni = make_universe([[[1, 2]]], 2, charges=False)
+
+        read_geometry(MolGroup(uni, [1, 2]))
+        _ = MolGroup(uni, [1]).charge
+
+        assert len([m for m in captured_logs if "no partial charges" in m]) == 1
+
+    def test_a_topology_with_charges_is_not_warned(
+        self, chain: Cluster, captured_logs: list[str]
+    ):
+        read_geometry(chain)
+        _ = chain.charge
+
+        assert not any("no partial charges" in m for m in captured_logs)
 
 
 class TestFrameCache:

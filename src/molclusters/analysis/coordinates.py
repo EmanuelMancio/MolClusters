@@ -4,18 +4,101 @@
 
 """Provides `ClusterCoordinates`, the coordinates of the clusters holding solutes (.gro files)."""
 
-import io
 from collections import Counter
 from collections.abc import Iterable
+from itertools import chain
 from pathlib import PurePosixPath
 
-import MDAnalysis as mda
+import numpy as np
 from loguru import logger
-from MDAnalysis.lib.util import NamedStream
+from MDAnalysis import core, units
+from MDAnalysis.exceptions import NoDataError
 
 from ..cluster import Cluster
 from ..output import OutputFile
 from .base import Frame, FrameAnalysis, Run
+
+# MDAnalysis' GRO writer's formats (`GROWriter.fmt`): an atom, its velocity, and
+# the box, rectangular or not (the triclinic vectors' components, in the writer's
+# order)
+_GRO_ATOM = "{:>5d}{:<5.5s}{:>5.5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}"
+_GRO_VELOCITY = "{:8.4f}{:8.4f}{:8.4f}"
+_GRO_BOX = "{:10.5f} {:9.5f} {:9.5f}\n"
+_GRO_TRICLINIC_BOX = (
+    "{0:10.5f} {4:9.5f} {8:9.5f} {1:9.5f} {2:9.5f} {3:9.5f} {5:9.5f} {6:9.5f} "
+    "{7:9.5f}\n"
+)
+# .gro files are in nm and nm/ps, converted as the writer does
+_NM = units.get_conversion_factor("length", "Angstrom", "nm")
+_NM_PS = units.get_conversion_factor("speed", "Angstrom/ps", "nm/ps")
+# the coordinates a .gro file can hold, in nm (`GROWriter.gro_coor_limits`)
+_GRO_MIN, _GRO_MAX = -999.9995, 9999.9995
+
+
+def gro_frame(atoms: core.groups.AtomGroup, title: str) -> str:
+    """Render atoms as one frame of a .gro file, as MDAnalysis' GRO writer does.
+
+    The writer only writes whole files, and formats every atom through calls of
+    its own; this formats them all at once, several times faster, into the same
+    text. The atoms are numbered from 1 in the order given, and their resids and
+    numbers keep their last 5 digits, as the format has room for. Atoms without
+    names are written as "X", as by the writer (which also warns about it).
+
+    Parameters
+    ----------
+    atoms : core.groups.AtomGroup
+        The atoms, at their current positions.
+    title : str
+        The frame's title line.
+
+    Returns
+    -------
+    str
+        The frame's text.
+
+    Raises
+    ------
+    ValueError
+        If a coordinate is out of the range a .gro file can hold.
+    """
+    n_atoms = len(atoms)
+    positions = _NM * atoms.positions
+    if not ((_GRO_MIN < positions).all() and (positions <= _GRO_MAX).all()):
+        raise ValueError(
+            f"GRO files must have coordinate values between {_GRO_MIN:.3f} and "
+            f"{_GRO_MAX:.3f} nm, so {title!r} can't be written."
+        )
+    try:
+        names = atoms.names
+    except NoDataError:
+        names = np.full(n_atoms, "X")
+    columns = [
+        atoms.resids % 100_000,
+        atoms.resnames,
+        names,
+        np.arange(1, n_atoms + 1) % 100_000,
+        *positions.T,
+    ]
+    line = _GRO_ATOM
+    try:
+        columns += [*(_NM_PS * atoms.velocities).T]
+        line += _GRO_VELOCITY
+    except NoDataError:
+        pass
+    # one format call for every atom: the columns, row by row
+    rows = zip(*(column.tolist() for column in columns), strict=True)
+    atom_lines = ((line + "\n") * n_atoms).format(*chain.from_iterable(rows))
+
+    box = atoms.dimensions
+    if box is None:
+        footer = _GRO_BOX.format(0.0, 0.0, 0.0)
+    elif np.allclose(box[3:], 90.0):
+        footer = _GRO_BOX.format(*(_NM * box[:3]).tolist())
+    else:
+        vectors = _NM * atoms.universe.coord.triclinic_dimensions.flatten()
+        footer = _GRO_TRICLINIC_BOX.format(*vectors.tolist())
+
+    return f"{title}\n{n_atoms:5d}\n{atom_lines}{footer}"
 
 
 class ClusterCoordinates(FrameAnalysis):
@@ -155,18 +238,8 @@ class ClusterCoordinates(FrameAnalysis):
         str
             The frame's text, title line included.
         """
-        # the GRO writer only writes whole files, so render the frame in memory
-        # (NamedStream keeps the buffer open when the writer closes it)
-        buf = io.StringIO()
-        with (
-            mda.Writer(NamedStream(buf, "cluster.gro"), multiframe=False) as w,
-            cls.whole() as atoms,
-        ):
-            w.write(atoms.sort())
-
-        # replace the writer's fixed "Written by MDAnalysis" title line
-        _, body = buf.getvalue().split("\n", 1)
-        return f"Cluster-{cls.id} - Time = {time}\n{body}"
+        with cls.whole() as atoms:
+            return gro_frame(atoms.sort(), f"Cluster-{cls.id} - Time = {time}")
 
     def finish(self, run: Run) -> None:
         """Warn about the frames in which solutes weren't followed.

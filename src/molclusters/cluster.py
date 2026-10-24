@@ -42,7 +42,7 @@ from MDAnalysis.exceptions import NoDataError
 from MDAnalysis.guesser.tables import vdwradii
 from MDAnalysis.lib.distances import apply_PBC, distance_array, minimize_vectors
 
-from .conntable import ConnectionTable
+from .conntable import ConnectionTable, _whole_residue_offsets
 
 # 1 D = 0.2081943 e·Å (e·Å, not the atomic unit e·a0: 1 D = 0.3934303 e·a0)
 EA2D = 1 / 0.2081943
@@ -51,6 +51,70 @@ EA2D = 1 / 0.2081943
 _VDW_RADII: "weakref.WeakKeyDictionary[mda.Universe, np.ndarray]" = (
     weakref.WeakKeyDictionary()
 )
+
+# Universe -> topology attribute -> whether the topology has it (see `_has`)
+_TOPOLOGY_HAS: "weakref.WeakKeyDictionary[mda.Universe, dict[str, bool]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+# what a topology without the attribute gets instead, logged once (see `_has`)
+_WITHOUT = {
+    # groups are made whole along bonds when there are some (see `MolGroup.whole`)
+    "bonds": (
+        "INFO",
+        "The topology has no bonds: molecules are made whole by minimum image "
+        "around their first atom, so each must span less than half the box.",
+    ),
+    "charges": (
+        "WARNING",
+        "The topology has no partial charges: charges and dipole moments are NaN "
+        "(null in the report).",
+    ),
+}
+
+
+def _has(universe: mda.Universe, attr: str) -> bool:
+    """Check whether a Universe's topology has an attribute, noting once if not.
+
+    Coordinate-only topologies (``.gro``, ``.pdb``) have no bonds or charges.
+
+    Parameters
+    ----------
+    universe : mda.Universe
+        The Universe to check.
+    attr : str
+        A topology attribute listed in `_WITHOUT`.
+
+    Returns
+    -------
+    bool
+        Whether the topology has it (bonds possibly none at all, e.g. only ions).
+    """
+    known = _TOPOLOGY_HAS.setdefault(universe, {})
+    if attr not in known:
+        # as MDAnalysis' own unwrap checks bonds, on one atom to keep it cheap
+        known[attr] = hasattr(universe.atoms[:1], attr)
+        if not known[attr]:
+            logger.log(*_WITHOUT[attr])
+    return known[attr]
+
+
+def _has_box(universe: mda.Universe) -> bool:
+    """Check whether the Universe's current frame has a periodic box.
+
+    Parameters
+    ----------
+    universe : mda.Universe
+        The Universe to check.
+
+    Returns
+    -------
+    bool
+        False for a frame without a box (MDAnalysis gives None, or zero lengths,
+        e.g. a cluster in vacuum), where nothing is split across boundaries.
+    """
+    box = universe.dimensions
+    return box is not None and bool(np.any(box[:3]))
 
 
 def _vdw_radii(universe: mda.Universe) -> np.ndarray:
@@ -298,6 +362,10 @@ class MolGroup:
         `_placement_order`), each at the periodic image nearest its tree neighbour.
         The Universe's positions are left exactly as they were.
 
+        Residues are made whole along their bonds, or, in a topology without
+        bonds, by minimum image around their first atom (see `_has`). Without a
+        periodic box nothing can be split, so the positions are taken as they are.
+
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
@@ -306,19 +374,85 @@ class MolGroup:
             vectors on top of it).
         """
         atoms = self._rg.atoms
+        if not _has_box(self._uni):
+            return atoms.positions, np.zeros(3)
+
+        boxcenter = np.sum(self._uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
+        if _has(self._uni, "bonds"):
+            positions, shift = self.__unwrap_along_bonds(atoms, boxcenter)
+        else:
+            positions, shift = self.__unwrap_by_minimum_image(atoms, boxcenter)
+
+        if len(self._rg) > 1:
+            self.__place_residues(atoms, positions)
+        return positions, shift
+
+    def __unwrap_along_bonds(
+        self, atoms: core.groups.AtomGroup, boxcenter: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Center the group's first residue and make each residue whole by its bonds.
+
+        Parameters
+        ----------
+        atoms : core.groups.AtomGroup
+            The group's atoms.
+        boxcenter : np.ndarray
+            The center of the box.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            See `__compute_whole_positions`, before the residues are placed.
+        """
         original = atoms.positions  # a copy
         try:
-            boxcenter = np.sum(self._uni.trajectory.ts.triclinic_dimensions, axis=0) / 2
             ref_mol_cm = self._rg[:1].center_of_mass(unwrap=True)
             shift = boxcenter - ref_mol_cm
             atoms.positions += shift
             atoms.unwrap(compound="residues", reference="cog", inplace=True)
-            positions = atoms.positions
+            return atoms.positions, shift
         finally:
             atoms.positions = original
 
-        if len(self._rg) > 1:
-            self.__place_residues(atoms, positions)
+    def __unwrap_by_minimum_image(
+        self, atoms: core.groups.AtomGroup, boxcenter: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Center the group's first residue and make each residue whole, bond-free.
+
+        Each residue is made whole by minimum image around its first atom (see
+        `conntable._whole_residue_offsets`), which gives what `__unwrap_along_bonds`
+        does, up to rounding, for residues spanning less than half the box.
+
+        Parameters
+        ----------
+        atoms : core.groups.AtomGroup
+            The group's atoms.
+        boxcenter : np.ndarray
+            The center of the box.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            See `__compute_whole_positions`, before the residues are placed.
+        """
+        box = self._uni.dimensions
+        anchors, offsets, residue = _whole_residue_offsets(atoms, box)
+        positions = anchors[residue] + offsets
+
+        first = atoms.resindices == self._rg.ix[0]
+        masses = atoms.masses[first]
+        ref_mol_cm = masses @ positions[first] / masses.sum()
+        shift = boxcenter - ref_mol_cm
+        positions += shift.astype(positions.dtype)
+
+        # each residue's center of geometry into the box, as unwrap's reference="cog"
+        counts = np.bincount(residue)
+        centers = (
+            np.stack([np.bincount(residue, positions[:, k]) for k in range(3)], axis=1)
+            / counts[:, None]
+        )
+        wrapped = apply_PBC(centers.astype(np.float32), box)
+        positions += (wrapped - centers)[residue].astype(positions.dtype)
         return positions, shift
 
     def __place_residues(
@@ -337,8 +471,6 @@ class MolGroup:
             Their positions, each residue whole and wrapped into the box.
         """
         box = self._uni.dimensions
-        if box is None or not np.any(box[:3]):
-            return
         # each atom's residue, as its row in self._rg
         by_ix = np.argsort(self._rg.ix)
         rows = by_ix[np.searchsorted(self._rg.ix[by_ix], atoms.resindices)]
@@ -457,6 +589,44 @@ class MolGroup:
             yield atoms
         finally:
             atoms.positions = original
+
+    def subgroup(self, residues: Iterable[int]) -> "MolGroup":
+        """Make a group of some of this group's molecules, placed as they are in it.
+
+        For the current frame, the new group's whole positions (see `whole`) are
+        this group's own, so it isn't made whole again: it keeps the shape it has
+        in this group, which is whole for a part connected within the group (e.g.
+        a nucleus of a cluster), without being centered on its own. Its center of
+        mass is still wrapped into the primary unit cell. In other frames it is
+        made whole as any group.
+
+        Parameters
+        ----------
+        residues : Iterable[int]
+            The residue ids of the molecules, all in this group.
+
+        Returns
+        -------
+        MolGroup
+            The group of those molecules.
+
+        Raises
+        ------
+        ValueError
+            If a molecule isn't in this group.
+        """
+        group = MolGroup(self._uni, residues)
+        positions, shift = self.__whole()
+        # each of the new group's atoms, as its row in this group's atoms
+        own = self._rg.atoms.ix
+        wanted = group._rg.atoms.ix
+        by_ix = np.argsort(own)
+        rows = by_ix[np.searchsorted(own, wanted, sorter=by_ix).clip(max=len(own) - 1)]
+        if not np.array_equal(own[rows], wanted):
+            missing = sorted(set(group.resids.tolist()) - set(self.resids.tolist()))
+            raise ValueError(f"Molecules {missing} are not in the group.")
+        group._frame_cache()["whole"] = (positions[rows], shift)
+        return group
 
     def __add__(self, other: core.groups.ResidueGroup | Self) -> "MolGroup":
         """Combine this group with a ResidueGroup or another MolGroup.
@@ -580,10 +750,13 @@ class MolGroup:
         Returns
         -------
         np.ndarray
-            The center of mass, wrapped into the primary unit cell (read-only).
+            The center of mass, wrapped into the primary unit cell if there is a
+            periodic box (read-only).
         """
         with self.whole() as atoms:
             center = atoms.center_of_mass()
+        if not _has_box(self._uni):
+            return center
         _, shift = self.__whole()
         return apply_PBC(center - shift, self._uni.dimensions)
 
@@ -620,8 +793,11 @@ class MolGroup:
         Returns
         -------
         float
-            The dipole moment of the group in Debye (D).
+            The dipole moment of the group in Debye (D), NaN if the topology has no
+            partial charges.
         """
+        if not _has(self._uni, "charges"):
+            return np.nan
         return self._rg.atoms.dipole_moment() * EA2D
 
     @property
@@ -635,8 +811,11 @@ class MolGroup:
         Returns
         -------
         np.ndarray
-            The dipole vector of the group in Debye (D) (read-only).
+            The dipole vector of the group in Debye (D) (read-only), NaN if the
+            topology has no partial charges.
         """
+        if not _has(self._uni, "charges"):
+            return np.full(3, np.nan)
         return self._rg.atoms.dipole_vector() * EA2D
 
     @property
@@ -768,8 +947,11 @@ class MolGroup:
         Returns
         -------
         float
-            The total charge of the group.
+            The total charge of the group, NaN if the topology has no partial
+            charges.
         """
+        if not _has(self._uni, "charges"):
+            return np.nan
         return self._rg.total_charge()
 
     def __len__(self) -> int:

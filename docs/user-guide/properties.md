@@ -3,10 +3,17 @@
 The same properties are computed for clusters and nuclei (any group of molecules),
 in the tables and the [JSON report](report.md). All of them are computed on the
 group **made whole** across the periodic boundaries: its molecules are placed next
-to each other along the cluster's connections (or, for a nucleus, a minimum spanning
-tree of its molecules' centers), so a cluster wider than half the box stays whole.
+to each other along the cluster's connections, so a cluster wider than half the box
+stays whole. A nucleus keeps the place its molecules have in its cluster, which is
+whole already (other groups of molecules are placed along a minimum spanning tree of
+their molecules' centers).
 A cluster connected to its own periodic image (e.g. a slab spanning the box) cannot
-be made whole; the log warns once per such cluster.
+be made whole; the log warns once per such cluster. Each molecule is itself made
+whole along its bonds, or, in a topology without bonds (e.g. a `.gro` or `.pdb`), by
+taking each atom at its nearest image to the molecule's first atom, which holds for
+molecules reaching less than half the box from their first atom; the log warns once
+if one comes close. A trajectory without a box (e.g. a cluster
+in vacuum) splits nothing, so its positions are used as they are.
 
 | Property | Report field | Table column | Unit |
 | --- | --- | --- | --- |
@@ -25,7 +32,9 @@ be made whole; the log warns once per such cluster.
 ## Mass and charge
 
 The mass is the sum of the atoms' masses, and the charge the sum of their partial
-charges, both from the topology.
+charges, both from the topology. A topology without partial charges (e.g. a `.gro`
+or `.pdb`) leaves the charge and the dipole moment empty (NaN, `null` in the
+report).
 
 ## Size
 

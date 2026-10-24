@@ -82,6 +82,17 @@ class TestEncoding:
         # as the property is, to the decimals kept
         assert record["radius"] == pytest.approx(MolGroup(uni, [1, 2]).radius, abs=1e-6)
 
+    def test_a_topology_without_charges_leaves_them_null(
+        self, make_universe: UniverseFactory
+    ):
+        uni = make_universe([[[1, 2]]], 2, charges=False)
+
+        record = json.loads(dumps(group_record(MolGroup(uni, [1, 2]))))
+
+        assert record["charge"] is None
+        assert record["dipole_moment"] is None
+        assert record["radius"] > 0
+
     def test_a_group_counts_its_residue_names(self, make_universe: UniverseFactory):
         uni = make_universe([[[1, 2, 3]]], 3, ["SOL", "MOL", "SOL"])
 

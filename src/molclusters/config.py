@@ -18,6 +18,7 @@ from pydantic import Field, PositiveInt, PrivateAttr, model_validator
 from pydantic.dataclasses import dataclass
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .output import FLUSH_THREADS
 from .symdict import SymmetricDict
 
 
@@ -359,6 +360,10 @@ class MolClsConfig(BaseSettings):
     # gzip the most widely readable (see `report` for the file's format).
     report_compression: ReportCompression = "zstd"
 
+    # How many files are written at once when the output is flushed (see
+    # `RunOutput.flush`); more may help on a network file system.
+    flush_threads: PositiveInt = FLUSH_THREADS
+
     # Sorted, non-overlapping (start, end, name) ranges built from `lammps_resnames`,
     # kept as ranges (not one dict entry per id) so a config spanning millions of
     # molecule ids costs only as much memory as the handful of lines the user wrote.
@@ -469,6 +474,7 @@ class MolClsConfig(BaseSettings):
             f"report_compression: {self.report_compression} "
             f"({report_name(self.report_compression)})"
         )
+        lines.append(f"flush_threads: {self.flush_threads} (files written at once)")
 
         ranges = [
             f"{name} = {start}" if start == end else f"{name} = {start}-{end}"

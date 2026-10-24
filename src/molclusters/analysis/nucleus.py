@@ -4,9 +4,7 @@
 
 """Provides `Nucleus`, the nuclei inside the clusters (nucleus_data.csv)."""
 
-import operator
 from collections.abc import Iterable
-from functools import reduce
 from typing import Any
 
 import networkx as nx
@@ -104,7 +102,9 @@ class Nucleus(FrameAnalysis):
             subcomps = nx.induced_subgraph(cls.graph, possible_nucleus)
             n_nuc = 0
             for sg in nx.connected_components(subcomps):
-                tp = MolGroup(frame.universe, list(sg))
+                # placed as in the cluster, which is whole already (and so is a
+                # connected part of it), rather than made whole again
+                tp = cls.subgroup(list(sg))
 
                 n_nuc += 1
                 sizes.append(tp.size)
@@ -149,7 +149,12 @@ class Nucleus(FrameAnalysis):
             (None without nuclei).
         """
         nuclei = self.nuclei.get(cluster.id, [])
-        combined = reduce(operator.add, nuclei).dipole_moment if nuclei else None
+        combined = (
+            # all of them, placed as they are in the cluster
+            cluster.subgroup(np.concatenate([n.resids for n in nuclei])).dipole_moment
+            if nuclei
+            else None
+        )
         return {
             "nuclei": [group_record(nucleus) for nucleus in nuclei],
             "combined_dipole_moment": combined,

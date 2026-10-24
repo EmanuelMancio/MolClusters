@@ -12,12 +12,16 @@ Classes:
 Constants:
 ----------
 - COMPRESSED_SUFFIXES: The file suffixes `RunOutput.append` compresses, and how.
+- FLUSH_THREADS: How many files `RunOutput.flush` writes at once, by default.
 """
 
+import os
 import re
 import zlib
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path, PurePosixPath
 
 import zstandard
@@ -69,6 +73,64 @@ COMPRESSED_SUFFIXES: dict[str, type[_GzipStream | _ZstdStream]] = {
     ".zst": _ZstdStream,
 }
 
+# How many files `RunOutput.flush` writes at once by default (the config's
+# `flush_threads`). Measured flushing 2,771 small files on Windows 11: 2.9 s one at
+# a time, 2.2 s with 4 threads, and no faster with more (the file system and
+# antivirus serialize much of the file creation). A network file system may gain
+# from more.
+FLUSH_THREADS = 4
+
+
+def _write(
+    path: Path,
+    mode: str,
+    binary: bool,
+    stream: _GzipStream | _ZstdStream | None,
+    chunks: list[str | bytes],
+) -> None:
+    """Write the chunks queued for a file (see `RunOutput.flush`).
+
+    Parameters
+    ----------
+    path : Path
+        The file.
+    mode : str
+        "w" to overwrite it, "a" to append to it.
+    binary : bool
+        Whether the chunks are bytes (for an uncompressed file).
+    stream : _GzipStream | _ZstdStream | None
+        The file's compression stream, or None for a file that isn't compressed.
+    chunks : list[str | bytes]
+        The data, in order.
+    """
+    if stream is not None:
+        data = b"".join(
+            chunk.encode() if isinstance(chunk, str) else chunk for chunk in chunks
+        )
+        with path.open(mode + "b") as out:
+            out.write(stream.compress(data))
+    else:
+        with path.open(mode + "b" * binary) as out:
+            out.writelines(chunks)
+
+
+@cache
+def _pattern(name: str) -> re.Pattern[str]:
+    """Compile the regular expression an `OutputFile` name stands for.
+
+    Parameters
+    ----------
+    name : str
+        The name, where each ``<placeholder>`` stands for an integer.
+
+    Returns
+    -------
+    re.Pattern[str]
+        The pattern, to match whole names with.
+    """
+    literal_parts = re.split(r"<[^<>]*>", name)
+    return re.compile(r"\d+".join(re.escape(part) for part in literal_parts))
+
 
 @dataclass(frozen=True, slots=True)
 class OutputFile:
@@ -98,9 +160,7 @@ class OutputFile:
         bool
             True if `filename` is (one of) the declared file(s).
         """
-        literal_parts = re.split(r"<[^<>]*>", self.name)
-        pattern = r"\d+".join(re.escape(part) for part in literal_parts)
-        return re.fullmatch(pattern, filename) is not None
+        return _pattern(self.name).fullmatch(filename) is not None
 
     @property
     def is_pattern(self) -> bool:
@@ -126,14 +186,20 @@ class OutputFile:
         list[Path]
             The existing files, sorted.
         """
-        folder = directory / PurePosixPath(self.name).parent
-        if not folder.is_dir():
+        # placeholders only go in the file name, so the folder is known; listing it
+        # with scandir needs no system call per file for `is_file` on Windows
+        name = PurePosixPath(self.name)
+        folder = directory / name.parent
+        pattern = _pattern(name.name)
+        try:
+            with os.scandir(folder) as entries:
+                return sorted(
+                    folder / entry.name
+                    for entry in entries
+                    if pattern.fullmatch(entry.name) and entry.is_file()
+                )
+        except (FileNotFoundError, NotADirectoryError):
             return []
-        return sorted(
-            file
-            for file in folder.iterdir()
-            if file.is_file() and self.matches(file.relative_to(directory).as_posix())
-        )
 
 
 class RunOutput:
@@ -161,19 +227,28 @@ class RunOutput:
         The directory the files are written to.
     max_chars : int
         The buffered size, in characters (or bytes), that triggers a flush.
+    flush_threads : int
+        How many files `flush` writes at once.
     """
 
     __slots__ = [
         "directory",
         "max_chars",
+        "flush_threads",
         "_pending",
         "_size",
         "_written",
         "_binary",
         "_streams",
+        "_folders",
     ]
 
-    def __init__(self, directory: Path, max_chars: int = 64 * 2**20) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        max_chars: int = 64 * 2**20,
+        flush_threads: int = FLUSH_THREADS,
+    ) -> None:
         """Initialize the output of a run.
 
         Parameters
@@ -182,9 +257,19 @@ class RunOutput:
             The directory the files are written to.
         max_chars : int
             The buffered size, in characters (or bytes), that triggers a flush.
+        flush_threads : int
+            How many files `flush` writes at once (1: one after another).
+
+        Raises
+        ------
+        ValueError
+            If `flush_threads` is less than 1.
         """
+        if flush_threads < 1:
+            raise ValueError(f"flush_threads must be at least 1, not {flush_threads}.")
         self.directory = directory
         self.max_chars = max_chars
+        self.flush_threads = flush_threads
         self._pending: defaultdict[str, list[str | bytes]] = defaultdict(list)
         self._size = 0
         self._written: set[str] = set()
@@ -192,6 +277,8 @@ class RunOutput:
         self._binary: dict[str, bool] = {}
         # compressed file name -> its compression stream, until `close`
         self._streams: dict[str, _GzipStream | _ZstdStream] = {}
+        # the folders `path` has created (or found)
+        self._folders: set[Path] = set()
 
     @property
     def written(self) -> frozenset[str]:
@@ -219,7 +306,10 @@ class RunOutput:
         """
         self._written.add(name)
         path = self.directory / name
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # once per folder: a system call per file adds up over thousands of files
+        if path.parent not in self._folders:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._folders.add(path.parent)
         return path
 
     def append(self, name: str, data: str | bytes) -> None:
@@ -255,20 +345,26 @@ class RunOutput:
 
         A file flushed for the first time is overwritten instead: whatever it held
         came from an earlier run.
+
+        The files are written by up to `flush_threads` threads at once: opening a
+        file waits on the system (on Windows, much of it on the antivirus; on a
+        network file system, on the server), not on Python, so a run with many
+        files (e.g. one .gro file per cluster) opens some side by side. Each file
+        is written by one thread, so its data keeps its order.
         """
+        # which file gets what, and how, is settled here; the threads only write
+        writes = []
         for name, chunks in self._pending.items():
-            mode = "a" if name in self._written else "w"
+            mode = "a" if name in self._written else "w"  # before `path` marks it
             stream = self.__stream(name)
-            if stream is not None:
-                data = b"".join(
-                    chunk.encode() if isinstance(chunk, str) else chunk
-                    for chunk in chunks
-                )
-                with self.path(name).open(mode + "b") as out:
-                    out.write(stream.compress(data))
-            else:
-                with self.path(name).open(mode + "b" * self._binary[name]) as out:
-                    out.writelines(chunks)
+            writes.append((self.path(name), mode, self._binary[name], stream, chunks))
+        if len(writes) == 1 or self.flush_threads == 1:
+            for write in writes:
+                _write(*write)
+        elif writes:
+            with ThreadPoolExecutor(min(self.flush_threads, len(writes))) as pool:
+                # consumed, so the first write that failed raises here
+                list(pool.map(_write, *zip(*writes, strict=True)))
         self._pending.clear()
         self._size = 0
 

@@ -5,12 +5,14 @@
 import gzip
 import io
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 import zstandard
 
-from molclusters.output import OutputFile, RunOutput
+from molclusters import output as output_module
+from molclusters.output import FLUSH_THREADS, OutputFile, RunOutput
 
 
 class TestOutputFile:
@@ -46,11 +48,17 @@ class TestOutputFile:
         (tmp_path / "gro").mkdir()
         for name in ["gro/cls-id3.gro", "gro/cls-id10.gro", "gro/x.gro", "cls-id4.gro"]:
             (tmp_path / name).write_text("")
+        (tmp_path / "gro/cls-id5.gro").mkdir()  # named like one, but not a file
 
         found = OutputFile("gro/cls-id<id>.gro").existing(tmp_path)
 
         assert found == [tmp_path / "gro/cls-id10.gro", tmp_path / "gro/cls-id3.gro"]
+        assert OutputFile("cls-id<id>.gro").existing(tmp_path) == [
+            tmp_path / "cls-id4.gro"
+        ]
         assert OutputFile("none/cls-id<id>.gro").existing(tmp_path) == []
+        # the folder is a file
+        assert OutputFile("cls-id4.gro/cls-id<id>.gro").existing(tmp_path) == []
 
 
 class TestRunOutput:
@@ -64,6 +72,17 @@ class TestRunOutput:
         output.flush()
 
         assert (tmp_path / "a" / "b" / "c.gro").read_text() == "x\n"
+
+    def test_a_folder_removed_after_its_first_file_is_not_made_again(
+        self, tmp_path: Path
+    ):
+        # folders are created once per run, not once per file
+        output = RunOutput(tmp_path)
+        output.path("gro/a.gro")
+        (tmp_path / "gro").rmdir()
+
+        assert output.path("gro/b.gro") == tmp_path / "gro/b.gro"
+        assert not (tmp_path / "gro").exists()
 
     def test_nothing_is_appended_before_a_flush(self, tmp_path: Path):
         output = RunOutput(tmp_path)
@@ -133,6 +152,66 @@ class TestRunOutput:
         output.flush()
 
         assert (tmp_path / "a.bin").read_bytes() == b"1\n2\r\n"
+
+    def test_many_files_are_flushed_side_by_side_each_in_order(self, tmp_path: Path):
+        # more files than FLUSH_THREADS, of every kind, each appended over flushes
+        names = [f"gro/{i}.gro" for i in range(3 * FLUSH_THREADS)]
+        names += ["a.bin", "a.jsonl.zst", "a.jsonl.gz"]
+        output = RunOutput(tmp_path)
+        for frame in range(3):
+            for name in names:
+                text = f"{name} {frame}\n"
+                output.append(name, text.encode() if name == "a.bin" else text)
+            output.flush()
+        output.close()
+
+        for name in names:
+            file = tmp_path / name
+            if name.endswith((".zst", ".gz")):
+                text = decompress(file.read_bytes(), file.suffix).decode()
+            else:
+                text = file.read_text()
+            assert text == "".join(f"{name} {i}\n" for i in range(3))
+
+    def test_the_thread_count_is_the_one_given(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pools = []
+        real_pool = output_module.ThreadPoolExecutor
+
+        def pool(max_workers: int) -> ThreadPoolExecutor:
+            pools.append(max_workers)
+            return real_pool(max_workers)
+
+        monkeypatch.setattr(output_module, "ThreadPoolExecutor", pool)
+
+        for threads, expected in [(2, [2]), (1, [])]:  # 1: no pool at all
+            pools.clear()
+            output = RunOutput(tmp_path / str(threads), flush_threads=threads)
+            for i in range(5):
+                output.append(f"{i}.gro", f"{i}\n")
+            output.flush()
+
+            assert pools == expected
+            assert [
+                (tmp_path / str(threads) / f"{i}.gro").read_text() for i in range(5)
+            ] == [f"{i}\n" for i in range(5)]
+
+    @pytest.mark.parametrize("threads", [0, -2])
+    def test_fewer_than_one_thread_is_rejected(self, tmp_path: Path, threads: int):
+        with pytest.raises(ValueError, match="at least 1"):
+            RunOutput(tmp_path, flush_threads=threads)
+
+    def test_a_write_that_fails_raises(self, tmp_path: Path):
+        output = RunOutput(tmp_path)
+        output.append("a.gro", "x")
+        output.append("b.gro", "x")
+        (tmp_path / "b.gro").mkdir()  # a folder can't be opened as a file
+
+        with pytest.raises(OSError):  # PermissionError on Windows
+            output.flush()
+
+        assert (tmp_path / "a.gro").read_text() == "x"
 
     @pytest.mark.parametrize(
         ("first", "then"), [("text", b"bytes"), (b"bytes", "text")]

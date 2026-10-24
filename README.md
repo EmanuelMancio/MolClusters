@@ -10,6 +10,7 @@ SPDX-License-Identifier: LGPL-3.0-or-later
 [![Python versions](https://img.shields.io/pypi/pyversions/molclusters.svg)](https://pypi.org/project/molclusters/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23023320.svg)](https://doi.org/10.5281/zenodo.23023320)
 [![Tests](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml/badge.svg?branch=dev)](https://github.com/EmanuelMancio/MolClusters/actions/workflows/tests.yml)
+[![Coverage](https://codecov.io/gh/EmanuelMancio/MolClusters/branch/dev/graph/badge.svg)](https://codecov.io/gh/EmanuelMancio/MolClusters)
 [![Docs](https://github.com/EmanuelMancio/MolClusters/actions/workflows/docs.yml/badge.svg)](https://emanuelmancio.github.io/MolClusters/)
 [![License: LGPL v3+](https://img.shields.io/badge/license-LGPL--3.0--or--later-blue.svg)](https://github.com/EmanuelMancio/MolClusters/blob/main/LICENSE)
 [![REUSE compliant](https://img.shields.io/badge/REUSE-compliant-green.svg)](https://reuse.software/)

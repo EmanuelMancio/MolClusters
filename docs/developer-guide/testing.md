@@ -8,7 +8,9 @@ uv run pytest tests/test_tracker.py -k split
 pytest's configuration is in `pytest.ini` only; its `addopts` already include
 `--cov=src --cov-report html`, so every run writes a coverage report to `htmlcov/`.
 CI (`.github/workflows/tests.yml`) runs the suite on Python 3.12, 3.13 and 3.14 on
-every push and pull request to `main` and `dev`.
+every push and pull request to `main` and `dev`. The 3.12 job fails if coverage drops below
+95% and uploads its report to [Codecov](https://codecov.io/gh/EmanuelMancio/MolClusters),
+which feeds the README's coverage badge.
 
 ## The suite
 
@@ -21,7 +23,7 @@ every push and pull request to `main` and `dev`.
 | `test_properties.py` | properties and outputs of a real system (`tests/data/met-mal`) |
 | `test_analysis.py` | `FrameAnalysis`, `Run` and `Frame`, each built-in analysis, errors and logging |
 | `test_molclusters.py` | the runner: configuration defaults, runs, user analyses, built-ins |
-| `test_output.py` | `RunOutput` buffering, overwriting, compression |
+| `test_output.py` | `RunOutput` buffering, overwriting, compression, parallel flush |
 | `test_report.py` | the report format and the reader |
 | `test_main.py` | the command line, LAMMPS handling, in-memory loading |
 | `test_log.py`, `test_symdict.py` | logging, `SymmetricDict` |

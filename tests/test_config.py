@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from molclusters.config import CMRule, HBRule, MolClsConfig, read_config
+from molclusters.output import FLUSH_THREADS
 
 
 class TestFollowSolute:
@@ -94,6 +95,7 @@ class TestDescribe:
             lammps_timestep="2 fs",
             distance_backend="OpenMP",
             report_compression="gzip",
+            flush_threads=16,
         )
 
         assert config.describe().splitlines() == [
@@ -109,6 +111,7 @@ class TestDescribe:
             "analyses: SizeEvolution, Lineage, SoluteSolvent, ClusterCoordinates, "
             "Nucleus, JsonReport",
             "report_compression: gzip (molclusters.jsonl.gz)",
+            "flush_threads: 16 (files written at once)",
             "lammps_resnames: A = 1-10, B = 11-20",
             "lammps_timestep: 0.002 ps",
         ]
@@ -127,6 +130,7 @@ class TestDescribe:
             "distance_backend: serial (cm rules only)",
             "analyses: SizeEvolution, Lineage, JsonReport",
             "report_compression: zstd (molclusters.jsonl.zst)",
+            "flush_threads: 4 (files written at once)",
             "lammps_resnames: none",
             "lammps_timestep: none (LAMMPS dump times are step numbers)",
         ]
@@ -507,6 +511,23 @@ class TestDistanceBackend:
     def test_unknown_backend_raises(self):
         with pytest.raises(ValidationError):
             MolClsConfig(rules={"A": {"A": "cm 5.0"}}, distance_backend="cuda")
+
+
+class TestFlushThreads:
+    def test_defaults_to_the_output_default(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}})
+
+        assert config.flush_threads == FLUSH_THREADS == 4
+
+    def test_a_count_is_accepted(self):
+        config = MolClsConfig(rules={"A": {"A": "cm 5.0"}}, flush_threads=16)
+
+        assert config.flush_threads == 16
+
+    @pytest.mark.parametrize("count", [0, -1, 1.5, "many"])
+    def test_anything_but_a_positive_count_raises(self, count: object):
+        with pytest.raises(ValidationError, match="flush_threads"):
+            MolClsConfig(rules={"A": {"A": "cm 5.0"}}, flush_threads=count)
 
 
 class TestSoluteKeyword:

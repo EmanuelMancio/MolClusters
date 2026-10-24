@@ -602,15 +602,15 @@ class TestLogSystem:
             "Box (first frame): 2000.00 x 2000.00 x 2000.00 angstrom",
         ]
 
-    def test_warns_without_box(
+    def test_says_when_there_is_no_box(
         self, make_universe: UniverseFactory, captured_logs: list[str]
     ):
-        uni = make_universe([[]], 1)
-        uni.dimensions = None
+        # what that means is warned about by the run itself
+        uni = make_universe([[]], 1, box=False)
 
         _log_system(uni)
 
-        assert captured_logs[-1].startswith("The trajectory has no box")
+        assert captured_logs[-1].rstrip() == "Box (first frame): none"
 
 
 def test_version(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):

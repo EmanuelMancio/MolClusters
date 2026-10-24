@@ -70,6 +70,7 @@ topology doesn't have is warned about, since it would silently select nothing.
 | [`analyses`](#analyses) | all that can run | turn built-in analyses on or off |
 | [`report_compression`](#report_compression) | `zstd` | compression of the JSON report |
 | [`distance_backend`](#distance_backend) | `serial` | MDAnalysis backend for `cm` distances |
+| [`flush_threads`](#flush_threads) | `4` | output files written at once |
 | [`lammps_resnames`](#lammps_resnames) | none | residue names of LAMMPS molecule ids |
 | [`lammps_timestep`](#lammps_timestep) | none | timestep of a LAMMPS run, for dump times |
 
@@ -93,8 +94,8 @@ MOL: cm 6.0
 Connects two molecules whose centers of mass are at most the given distance apart,
 in ångströms. Each molecule is made whole across the periodic boundaries before its
 center of mass is computed, and the distance follows the minimum-image convention.
-Finding these connections needs only masses; the cluster properties computed
-afterwards need bonds and charges as well (see [Quick start](quickstart.md#1-what-you-need)).
+Finding these connections needs only masses; the clusters' charge and dipole moment
+need partial charges as well (see [Quick start](quickstart.md#1-what-you-need)).
 
 ### `hb`: hydrogen bond
 
@@ -218,6 +219,17 @@ rules' distance searches. It often makes no difference: MDAnalysis ignores it wh
 it picks its grid search (typical when the cutoff is much smaller than the box), and
 some MDAnalysis builds, such as the PyPI wheels for Windows, have OpenMP compiled
 out (MolClusters warns when it detects this). `hb` rules always run serially.
+
+## `flush_threads`
+
+How many output files are written at once (default `4`, at least `1`). The files are
+kept in memory and written when the buffer fills up and at the end of the run, where
+a run with one coordinate file per cluster can have thousands of them. Writing
+several at once overlaps the wait for the file system on each. On a local disk the
+gain is small: on Windows, 4 is about as fast as it gets. On a network file system,
+such as an HPC cluster's shared scratch space, where every file costs a round trip
+to a server, more may help; `1` writes the files one after another. It changes only
+how long writing takes, not what's written.
 
 ## `lammps_resnames`
 
