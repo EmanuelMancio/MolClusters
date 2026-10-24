@@ -6,6 +6,27 @@ SPDX-License-Identifier: LGPL-3.0-or-later
 
 # CHANGELOG
 
+## v0.8.0 (2026-10-24)
+
+### Feat
+
+- **config**: make the number of files written at once configurable
+- **conntable**: warn about molecules too long for minimum image
+- **cluster**: leave charges and dipoles empty without partial charges
+- **cluster**: make groups whole without bonds
+
+### Fix
+
+- **molclusters**: warn what a trajectory without a box means for the results
+- **cluster**: compute properties of groups in a trajectory without a box
+
+### Perf
+
+- **coordinates**: render the .gro frames directly
+- **nucleus**: take the nuclei's whole positions from their cluster
+- **output**: make fewer file-system calls for folders and earlier files
+- **output**: write the files side by side when flushing
+
 ## v0.7.0 (2026-09-28)
 
 ### Highlights
