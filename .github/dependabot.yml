@@ -21,6 +21,19 @@ updates:
       runtime:
         dependency-type: "production"
 
+  # The container image's base images (python, uv) in Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      images:
+        patterns: ["*"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "dev"

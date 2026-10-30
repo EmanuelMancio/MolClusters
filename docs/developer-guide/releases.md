@@ -78,8 +78,10 @@ workflow (`.github/workflows/release.yml`):
 1. **build**: checks the tag matches the package version, runs the tests, builds the
    wheel and sdist and checks their metadata (`twine check`);
 2. **pypi**: uploads them to [PyPI](https://pypi.org/project/molclusters/);
-3. **github-release**: publishes the GitHub release, with the same files attached and
-   the version's `CHANGELOG.md` section as its notes.
+3. **container**: builds the [container image](#container-image), checks it, and
+   pushes it to the GitHub Container Registry;
+4. **github-release**: publishes the GitHub release, with the same files attached and
+   the version's `CHANGELOG.md` section as its notes (plus the image's name).
 
 If it fails for a passing reason (a network error), re-run it from the Actions tab; if
 the tagged code itself fails, don't move the tag: fix it on `dev` and cut the next
@@ -103,6 +105,40 @@ work on GitHub but not on PyPI.
 
 The release commit must not carry `[skip ci]`: GitHub would then skip every workflow
 triggered by the push, the tag's included.
+
+## Container image
+
+`Dockerfile` builds an image holding only MolClusters, installed with `uv sync
+--locked --no-dev` so its dependencies are exactly those of `uv.lock`, which the tests
+ran with; `.dockerignore` lists the only files it is built from. The image runs
+`molclusters` as its entrypoint. The *container* job of the *Release* workflow:
+
+1. builds it for linux/amd64 and runs `scripts/check_container.sh` on it, which checks
+   `molclusters --version` against the tag and runs the met-mal test system as a
+   non-root user with a mounted directory, as users run it;
+2. builds it for linux/amd64 and linux/arm64 (the latter emulated with QEMU, which only
+   unpacks wheels) and pushes it to `ghcr.io/emanuelmancio/molclusters` as an OCI image
+   index: OCI media types (`oci-mediatypes=true`), with the
+   `org.opencontainers.image.*` labels and annotations (source, version, revision,
+   license, ...) set by `docker/metadata-action`, and tags `X.Y.Z`, `X.Y` and `latest`.
+
+The *Tests* workflow builds and checks the linux/amd64 image on every push and pull
+request too, so a change that breaks it shows up before a release. Dependabot updates
+the base images (`python`, `uv`) in `Dockerfile` weekly. To check the image locally
+(Docker or Podman, from the repository's root):
+
+```bash
+docker build -t molclusters:test .
+scripts/check_container.sh molclusters:test        # ENGINE=podman for Podman
+```
+
+The job pushes with the workflow's own token, so nothing needs storing. The first
+push creates the package private: once, on GitHub, open *Packages → molclusters →
+Package settings*, set *Change visibility* to **Public**, and check that it is linked
+to this repository (the `org.opencontainers.image.source` label links it), so the
+repository's *Actions* keep write access. Like a PyPI upload, a published tag
+shouldn't be overwritten: if a release's image is broken, fix it on `dev` and cut the
+next version.
 
 ## DOIs (Zenodo)
 
