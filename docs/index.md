@@ -2,8 +2,8 @@
 
 <figure class="hero" markdown="span">
   ![A droplet of a few dozen molecules, drawn as space-filling atoms. Six of the clusters it holds are coloured blue, orange, green, yellow, pink and violet, the other clusters are grey, and free molecules nearby are faint.](assets/home/droplet.webp){ width="300" }
-  <figcaption>One droplet of 2-methylerythritol and malic acid (the test system, at
-  47.5 ns), resolved into clusters by the quick start's rules: each colour is one
+  <figcaption markdown="span">One droplet of 2-methylerythritol and malic acid (the test system, at
+  47.5 ns), resolved into clusters by the [quick start](user-guide/quickstart.md)'s rules: each colour is one
   cluster, grey ones are other clusters, faint ones free molecules.</figcaption>
 </figure>
 
