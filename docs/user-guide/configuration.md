@@ -87,12 +87,16 @@ rules for the same pair are an error.
 
 ### `cm`: center-of-mass distance
 
+```text
+cm <distance>
+```
+
 ```yaml
 MOL: cm 6.0
 ```
 
-Connects two molecules whose centers of mass are at most the given distance apart,
-in ångströms. Each molecule is made whole across the periodic boundaries before its
+The distance is **required**. Connects two molecules whose centers of mass are at
+most that distance apart, in ångströms. Each molecule is made whole across the periodic boundaries before its
 center of mass is computed, and the distance follows the minimum-image convention.
 Finding these connections needs only masses; the clusters' charge and dipole moment
 need partial charges as well (see [Quick start](quickstart.md#1-what-you-need)).
@@ -102,22 +106,27 @@ need partial charges as well (see [Quick start](quickstart.md#1-what-you-need)).
 
 ### `hb`: hydrogen bond
 
+```text
+hb [d <distance>] [a <angle>] [hmin <mass>] [hmax <mass>] [hq <charge>] [aq <charge>]
+```
+
 ```yaml
 MAL: hb d 3.5 a 120
 ```
 
 Connects two molecules that share at least one hydrogen bond, as found by
 MDAnalysis' [`HydrogenBondAnalysis`](https://docs.mdanalysis.org/stable/documentation_pages/analysis/hydrogenbonds.html).
-The rule takes any of these `flag value` pairs, in any order, each optional:
+Every argument is **optional**: the rule takes any of these `flag value` pairs, in
+any order, each at most once, and a flag left out takes its default:
 
-| Flag | Default | Meaning |
-| --- | --- | --- |
-| `d` | 3.5 | donor-acceptor distance cutoff (Å) |
-| `a` | 150 | donor-hydrogen-acceptor angle cutoff (degrees): a straight bond is 180° |
-| `hmin` | 0.9 | hydrogens have a mass (amu) above this... |
-| `hmax` | 1.1 | ...and below this |
-| `hq` | 0.3 | hydrogens have a partial charge (e) above this |
-| `aq` | -0.5 | acceptors have a partial charge (e) below this |
+| Flag | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `d` | no | 3.5 | donor-acceptor distance cutoff (Å) |
+| `a` | no | 150 | donor-hydrogen-acceptor angle cutoff (degrees): a straight bond is 180° |
+| `hmin` | no | 0.9 | hydrogens have a mass (amu) above this... |
+| `hmax` | no | 1.1 | ...and below this |
+| `hq` | no | 0.3 | hydrogens have a partial charge (e) above this |
+| `aq` | no | -0.5 | acceptors have a partial charge (e) below this |
 
 So `hb` alone is `hb d 3.5 a 150 hmin 0.9 hmax 1.1 hq 0.3 aq -0.5`, MDAnalysis'
 own defaults for guessing hydrogens and acceptors. Donors are the atoms the
