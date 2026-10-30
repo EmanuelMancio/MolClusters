@@ -40,19 +40,19 @@ Every event of the run, one row each (see [Events](concepts.md#events)):
 
 ```text
 Frame,Time,Event,Cluster,Other,NMols
-1,960.0,formation,1,,3
-2,1920.0,merge,3,6,2
-2,1920.0,dissolution,2,,2
-8,7680.0,split,117,73,2
+1,48.0,formation,1,,2
+2,96.0,dissolution,1,,2
+8,384.0,split,22,18,1
+44,2112.0,merge,296,300,2
 ```
 
 Read these rows as:
 
-- `formation,1,,3`: cluster 1 formed of 3 free molecules;
-- `merge,3,6,2`: cluster 6 merged into cluster 3, bringing 2 molecules;
-- `dissolution,2,,2`: cluster 2, which held 2 molecules, dissolved;
-- `split,117,73,2`: the new cluster 117 split off cluster 73, taking 2 of its
-  molecules, while cluster 73 carried on.
+- `formation,1,,2`: cluster 1 formed of 2 free molecules;
+- `dissolution,1,,2`: cluster 1, which held 2 molecules, dissolved;
+- `split,22,18,1`: the new cluster 22 split off cluster 18, taking 1 of its
+  molecules, while cluster 18 carried on;
+- `merge,296,300,2`: cluster 300 merged into cluster 296, bringing 2 molecules.
 
 In `split` and `merge` rows, the molecules move from `Other` to `Cluster`: from the
 cluster that split to the new one, and from the absorbed cluster to the one that
@@ -160,9 +160,9 @@ says which cluster and when):
 | `solute-<resid>.gro` | with [`follow: [solute]`](configuration.md#follow), the cluster of that solute molecule, in the frames where it holds no other solute |
 
 ```text
-Cluster-2 - Time = 960.0
+Cluster-5 - Time = 144.0
    30
-  123MAL    CM0    1  16.371  16.273  16.190
+  181MAL    CM0    1  16.158  16.040  16.224
   ...
 ```
 
