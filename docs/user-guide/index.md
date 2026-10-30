@@ -23,5 +23,5 @@ command line or from Python.
   your own.
 - **[Troubleshooting](troubleshooting.md)**: common errors and warnings, and what
   to do about them.
-- **[Known issues in earlier versions](known-issues.md)**: errors in v0.6.0 and
-  earlier, the outputs they affect, and how to correct old results.
+- **[Known issues in earlier versions](known-issues.md)**: errors in earlier
+  versions, the outputs they affect, and how to correct old results.

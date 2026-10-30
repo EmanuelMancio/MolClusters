@@ -7,6 +7,13 @@
     obtained with them against this page: some can be corrected by a constant
     factor, others need the analysis run again.
 
+!!! warning "Skewed triclinic boxes, up to v0.8.0"
+
+    Runs with MDAnalysis 2.10 or earlier, which every release up to and including
+    **v0.8.0** allowed, can miss connections in some triclinic boxes, such as
+    GROMACS' truncated octahedron. See
+    [Skewed triclinic boxes](#skewed-triclinic-boxes).
+
 ## Summary
 
 | Issue | Affected outputs | Fix for old results |
@@ -144,6 +151,30 @@ id could go to the wrong piece. v0.7.0 also assigns ids with a new, order-indepe
 algorithm (see [How clusters are tracked](concepts.md)), so ids can differ from earlier
 versions anyway. Cluster membership and sizes are not affected; per-id results
 (`cls-id*.gro`, anything following a cluster by id) can be.
+
+## Skewed triclinic boxes
+
+(Up to v0.8.0, with MDAnalysis 2.10 or earlier.) MDAnalysis' neighbour search
+missed some pairs within the cutoff in triclinic boxes whose second box vector has an
+x component and whose third has a y component
+([MDAnalysis issue #4906](https://github.com/MDAnalysis/mdanalysis/issues/4906), fixed
+in MDAnalysis 2.11.0). In a `.gro` file's box line, `v1(x) v2(y) v3(z) v1(y) v1(z)
+v2(x) v2(z) v3(x) v3(y)`, those are the 6th and 9th numbers: the box is affected if
+both are nonzero. GROMACS' truncated octahedron is, and so is the rhombic
+dodecahedron with a hexagonal xy face (angles 60°, 60°, 60°); the one with a square xy
+face (60°, 60°, 90°), rectangular boxes and hexagonal prisms aren't.
+
+Both "cm" and "hb" rules use the search, so molecules that should have been connected
+sometimes weren't: with pairs of molecules 2 Å apart and a 3 Å cutoff in a 30 Å box,
+about 3% of the pairs were missed in a truncated octahedron, 1% in the hexagonal
+dodecahedron. A missed connection splits a cluster, and through id continuity can
+change the ids of later frames too. Systems smaller than 100 molecules of a residue
+name (a "cm" rule within it) or 10 donors and acceptors, or molecules of each name (an
+"hb" rule, a "cm" rule between two names), aren't affected, as MDAnalysis compares
+every pair for them.
+
+**Affected:** which molecules cluster, so every output, in such boxes.
+**Fix:** upgrade (later releases require MDAnalysis 2.11 or later) and run again.
 
 ## Other changes in v0.7.0 (not errors)
 

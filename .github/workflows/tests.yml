@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.12"
           enable-cache: true
@@ -46,13 +46,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13", "3.14"]
+        python-version: ["3.12", "3.13", "3.14", "3.15"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -73,3 +73,26 @@ jobs:
         with:
           files: coverage.xml
           use_oidc: true
+
+  # Builds the container image (Dockerfile; linux/amd64 only) and runs it on a test
+  # system, as the Release workflow does before publishing it.
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: molclusters:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check the image
+        run: scripts/check_container.sh molclusters:test

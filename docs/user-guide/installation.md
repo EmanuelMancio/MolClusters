@@ -61,6 +61,75 @@ and what changed in each are listed in the [changelog](../changelog.md). The lat
 development version, not yet released, installs from the repository's `dev` branch:
 `git+https://github.com/EmanuelMancio/MolClusters@dev` in place of `molclusters`.
 
+## Container image
+
+Each release from the one after v0.8.0 is also published as a container image on the
+GitHub Container Registry, `ghcr.io/emanuelmancio/molclusters`, for computers where
+installing Python packages is awkward, such as HPC clusters. It's a standard
+[OCI](https://opencontainers.org/) image (linux/amd64 and linux/arm64), so Docker,
+Podman, Apptainer and Singularity all run it. It holds only MolClusters and its
+dependencies, at the exact versions it was tested with, and runs the `molclusters`
+command with the arguments you give it.
+
+Tags: `X.Y.Z` for a release (e.g. `0.9.0`), `X.Y` for the latest release of a minor
+version, and `latest`. Pin a release (`X.Y.Z`) in anything you need to reproduce, or
+better its digest (`ghcr.io/emanuelmancio/molclusters@sha256:...`), which `docker
+inspect` or the package page on GitHub shows and which can't change.
+
+=== "Apptainer / Singularity"
+
+    Convert the image into a single `.sif` file once, then run it like a command.
+    Apptainer runs it as you, in the current directory, with your home directory
+    and the current directory available, so paths work as usual:
+
+    ```bash
+    apptainer pull molclusters.sif docker://ghcr.io/emanuelmancio/molclusters:X.Y.Z
+    apptainer run molclusters.sif traj.xtc topol.tpr input.yaml
+    ```
+
+    `singularity` takes the same commands. Data outside your home and the current
+    directory (e.g. a scratch file system) needs binding: `apptainer run --bind
+    /scratch molclusters.sif ...`. In a batch job, put the `apptainer run` line
+    where the `molclusters` command would go.
+
+=== "Docker / Podman"
+
+    The image's working directory is `/data`: mount the directory with your files
+    there, and run as yourself, so that MolClusters can write its results there and
+    they are yours:
+
+    ```bash
+    docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/data" \
+        ghcr.io/emanuelmancio/molclusters:X.Y.Z traj.xtc topol.tpr input.yaml
+    ```
+
+    Without `--user` it runs as uid 1000, never as root. With rootless Podman, use
+    `--userns=keep-id` in place of `--user`:
+
+    ```bash
+    podman run --rm --userns=keep-id -v "$PWD:/data" \
+        ghcr.io/emanuelmancio/molclusters:X.Y.Z traj.xtc topol.tpr input.yaml
+    ```
+
+    Paths given to `molclusters` are paths inside the container: files outside the
+    mounted directory need their own `-v` (`:ro` for inputs it only reads).
+
+`molclusters --help` is the image's default command, and `--version` tells which
+release it holds. The [command-line options](cli.md) are the same as for an
+installed `molclusters`. Use `--traj-memory` only if the container may use the
+memory it needs (Docker's `--memory`, or the job's limit).
+
+Each image is signed with a build provenance attestation: [GitHub's
+CLI](https://cli.github.com/) checks that it was built by MolClusters' own release
+workflow, from the repository's sources, and not altered since:
+
+```bash
+gh attestation verify oci://ghcr.io/emanuelmancio/molclusters:X.Y.Z -R EmanuelMancio/MolClusters
+```
+
+To build the image yourself, e.g. from the `dev` branch, run `docker build -t
+molclusters .` (or `podman build`) in a clone of the repository.
+
 ## Dependencies
 
 They are installed automatically:

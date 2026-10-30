@@ -287,9 +287,9 @@ def _warn_if_openmp_unavailable(backend: DistanceBackend) -> None:
     MDAnalysis registers an "OpenMP" backend as soon as its `c_distances_openmp`
     extension imports successfully, even on a build where that extension was
     compiled without OpenMP actually enabled (confirmed for the official PyPI
-    Windows wheel, MDAnalysis 2.10.0) -- selecting it then silently runs at the
-    same speed as "serial" instead of raising an error, which would otherwise go
-    unnoticed.
+    Windows wheel, MDAnalysis 2.10.0 and 2.11.0) -- selecting it then silently runs
+    at the same speed as "serial" instead of raising an error, which would otherwise
+    go unnoticed.
 
     Parameters
     ----------
