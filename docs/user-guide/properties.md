@@ -69,9 +69,9 @@ V = \tfrac{4}{3}\pi R^3,
 ![Cross-section of a cluster drawn as atoms packed in a disk, with three circles about its center: a dashed one of radius Rg, the radius of gyration; one of radius the square root of 5/3 times Rg, reaching the outer atoms' centers; and, half an atom's van der Waals radius further out, the equivalent sphere of radius R, which cuts the outer atoms halfway through.](../assets/concepts/size-dark.svg#only-dark)
 
 Half, not the full van der Waals radius, because bonded atoms' van der Waals spheres
-overlap. On methanol-malic acid mixtures the full radius puts a lone malic acid at
-0.70 g/cm³ and half at 1.21 g/cm³ (the solid is 1.61 g/cm³), and the choice barely
-changes large clusters. The density of small clusters is an estimate; compare it
+overlap. On mixtures of 2-methylerythritol and malic acid the full radius puts a lone
+malic acid at 0.70 g/cm³ and half at 1.21 g/cm³ (the solid is 1.61 g/cm³), and the
+choice barely changes large clusters. The density of small clusters is an estimate; compare it
 between clusters rather than with bulk densities.
 
 The report also gives \(R_g\) itself, as `radius_of_gyration`, for analyses that
