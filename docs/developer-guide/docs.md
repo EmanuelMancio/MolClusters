@@ -55,13 +55,31 @@ describes what the figure shows for readers who can't see it:
 
 The schematic figures of [How clusters are tracked](../user-guide/concepts.md),
 [Configuration](../user-guide/configuration.md) (the rules, nuclei) and
-[Cluster properties](../user-guide/properties.md) (size, shape), all in
+[Cluster properties](../user-guide/properties.md) (size, shape) and the home page's
+steps, all in
 `docs/assets/concepts/`, are drawn by `scripts/docs_figures.py`; change them there
 and rerun it rather than editing the SVG files:
 
 ```bash
 uv run python scripts/docs_figures.py
 ```
+
+The home page's picture (`docs/assets/home/droplet.webp`) is frame 990 of the
+`tests/data/met-mal` run with the quick start's rules, ray-traced by VMD 1.9.3's
+Tachyon with the scripts in `scripts/docs_snapshot/`. Tachyon writes no alpha
+channel, so the scene is rendered on white and on black and `matte.py` recovers
+the transparency from the two. VMD runs on Linux (or WSL); the rest anywhere:
+
+```bash
+uv run molclusters tests/data/met-mal/met-traj.trr tests/data/met-mal/met-mal.tpr \
+    config.yml --output-dir run   # the quick start's config.yml, with report_compression: none
+uv run python scripts/docs_snapshot/frame.py run/molclusters.jsonl 990 work/frame990.pdb
+sh scripts/docs_snapshot/render.sh work/frame990.pdb work          # in Linux or WSL
+uv run --with pillow python scripts/docs_snapshot/matte.py work/black.tga work/white.tga \
+    docs/assets/home/droplet.webp
+```
+
+Which six clusters are coloured is set in `scene.tcl`, for this frame and view.
 
 ## Docstrings
 

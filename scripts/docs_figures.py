@@ -338,8 +338,14 @@ EVENTS: list[tuple[str, str, Frame, Frame]] = [
 BOX_W, BOX_H = 150, 112
 
 
-def draw_frame(svg: Svg, ox: float, oy: float, frame: Frame) -> None:
-    """Draw one frame: hairline box, then clusters' hulls, connections and molecules."""
+def draw_frame(
+    svg: Svg, ox: float, oy: float, frame: Frame, hulls: bool = True
+) -> None:
+    """Draw one frame: hairline box, then clusters' hulls, connections and molecules.
+
+    A cluster of id 0 gets a grey hull: a cluster without an id yet. Without
+    `hulls`, only the connections are drawn.
+    """
     mols, clusters = frame
     svg.rect(ox, oy, BOX_W, BOX_H, rx=8)
     for members, cid, label in clusters:
@@ -348,11 +354,22 @@ def draw_frame(svg: Svg, ox: float, oy: float, frame: Frame) -> None:
         pad = R + 5
         x0, y0 = ox + min(xs) - pad, oy + min(ys) - pad
         w, h = max(xs) - min(xs) + 2 * pad, max(ys) - min(ys) + 2 * pad
-        color = idcolor(svg, cid)
-        svg.rect(
-            x0, y0, w, h, rx=pad, stroke=color, fill=color, fill_opacity=0.1, width=1.5
-        )
-        svg.text(x0 + 2, y0 - 4, label, size=12, color="ink", weight="bold")
+        if hulls:
+            color = idcolor(svg, cid) or svg.t["ink2"]
+            svg.rect(
+                x0,
+                y0,
+                w,
+                h,
+                rx=pad,
+                stroke=color,
+                fill=color,
+                fill_opacity=0.1,
+                width=1.5,
+                dash=None if cid else "4 3",
+            )
+            if label:
+                svg.text(x0 + 2, y0 - 4, label, size=12, color="ink", weight="bold")
         # connections: each molecule to its nearest one among those before it
         for k in range(1, len(members)):
             a = mols[members[k]]
@@ -432,6 +449,85 @@ def events(theme: str) -> Svg:
             anchor="middle",
         )
         svg.text(ox, oy + 24 + BOX_H + 35, caption, size=13)
+    return svg
+
+
+# --- Pipeline -------------------------------------------------------------------
+
+# One frame's molecules (x, y) and the groups they form; the same in every panel.
+PIPE_MOLS = [
+    (26, 34),
+    (46, 34),
+    (36, 51),
+    (56, 51),  # a cluster of 4
+    (100, 30),
+    (120, 38),
+    (106, 52),  # a cluster of 3
+    (36, 96),
+    (58, 96),  # a dimer
+    (96, 88),
+    (128, 80),  # free molecules
+]
+PIPE_GROUPS = [[0, 1, 2, 3], [4, 5, 6], [7, 8]]
+
+
+def pipeline(theme: str) -> Svg:
+    """Draw what MolClusters does to each frame, in four steps.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    gap = 42
+    svg = Svg(4 * BOX_W + 3 * gap, 24 + BOX_H + 40, theme)
+    grey = [(x, y, 0) for x, y in PIPE_MOLS]
+    ided = [(x, y, 0) for x, y in PIPE_MOLS]
+    for cid, members in enumerate(PIPE_GROUPS, start=1):
+        for i in members:
+            ided[i] = (*PIPE_MOLS[i][:2], cid)
+    steps = [
+        (
+            "1. connect",
+            "molecules, by your rules",
+            (grey, [(g, 0, "") for g in PIPE_GROUPS]),
+            False,
+        ),
+        (
+            "2. find clusters",
+            "connected groups",
+            (grey, [(g, 0, "") for g in PIPE_GROUPS]),
+            True,
+        ),
+        (
+            "3. track",
+            "ids kept frame to frame",
+            (ided, [(g, c, str(c)) for c, g in enumerate(PIPE_GROUPS, 1)]),
+            True,
+        ),
+    ]
+    for k, (title, caption, frame, hulls) in enumerate(steps):
+        ox = k * (BOX_W + gap)
+        svg.text(ox, 14, title, size=14, color="ink", weight="bold")
+        draw_frame(svg, ox, 24, frame, hulls)
+        svg.text(ox, 24 + BOX_H + 18, caption, size=12)
+        svg.arrow(ox + BOX_W + 8, 24 + BOX_H / 2, ox + BOX_W + gap - 8)
+    # 4. analyse: a plot, a table and the report
+    ox = 3 * (BOX_W + gap)
+    svg.text(ox, 14, "4. analyse", size=14, color="ink", weight="bold")
+    svg.rect(ox, 24, BOX_W, BOX_H, rx=8)
+    blue = idcolor(svg, 1)
+    px0, py0 = ox + 14, 24 + 56
+    svg.line(px0, py0, px0 + 56, py0, "axis", 1)
+    svg.line(px0, py0, px0, py0 - 40, "axis", 1)
+    pts = [(0, 34), (8, 26), (16, 30), (24, 16), (32, 20), (40, 8), (48, 12), (56, 4)]
+    d = "M" + " L".join(f"{px0 + x:g},{py0 - 40 + y:g}" for x, y in pts)
+    svg.path(d, blue, 2)
+    tx, ty = ox + 84, 24 + 16
+    for r in range(4):
+        svg.rect(tx, ty + r * 10, 52, 10, rx=1, stroke="axis", width=1)
+    svg.line(tx + 22, ty, tx + 22, ty + 40, "axis", 1)
+    svg.text(ox, 24 + BOX_H + 18, "tables and a JSON report", size=12)
     return svg
 
 
@@ -1051,6 +1147,7 @@ def main() -> None:
         ("events", events),
         ("id-assignment", id_assignment),
         ("lifetimes", lifetimes),
+        ("pipeline", pipeline),
         ("rule-cm", rule_cm),
         ("rule-hb", rule_hb),
         ("size", size),

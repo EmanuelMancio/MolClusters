@@ -1,5 +1,12 @@
 # MolClusters
 
+<figure class="hero" markdown="span">
+  ![A droplet of a few dozen molecules, drawn as space-filling atoms. Six of the clusters it holds are coloured blue, orange, green, yellow, pink and violet, the other clusters are grey, and free molecules nearby are faint.](assets/home/droplet.webp){ width="300" }
+  <figcaption>One droplet of 2-methylerythritol and malic acid (the test system, at
+  47.5 ns), resolved into clusters by the quick start's rules: each colour is one
+  cluster, grey ones are other clusters, faint ones free molecules.</figcaption>
+</figure>
+
 **MolClusters** follows molecular clusters through a molecular dynamics trajectory:
 which molecules are connected to which, how the clusters they form are born, grow,
 split, merge and dissolve, how long they live, and what they look like — size,
@@ -73,6 +80,9 @@ For every frame of the trajectory, MolClusters
 4. **runs the analyses** on them: cluster sizes over time, births and deaths
    (lineage and lifetimes), solute-solvent clusters, nuclei inside clusters,
    coordinates of the clusters holding solutes, and a full JSON report.
+
+![Four panels. 1, connect: molecules linked by connections where a rule holds. 2, find clusters: the connected groups are outlined. 3, track: each cluster gets an id, 1, 2 and 3, kept from frame to frame. 4, analyse: a plot and a table, for the output files and the JSON report.](assets/concepts/pipeline-light.svg#only-light)
+![Four panels. 1, connect: molecules linked by connections where a rule holds. 2, find clusters: the connected groups are outlined. 3, track: each cluster gets an id, 1, 2 and 3, kept from frame to frame. 4, analyse: a plot and a table, for the output files and the JSON report.](assets/concepts/pipeline-dark.svg#only-dark)
 
 ```bash
 molclusters traj.xtc topol.tpr config.yml --output-dir results

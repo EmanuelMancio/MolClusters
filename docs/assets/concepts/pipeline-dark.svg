@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="726" height="176" viewBox="0 0 726 176" font-family="Roboto, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <text x="0" y="14" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">1. connect</text>
+  <rect x="0" y="24" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <line x1="39" y1="58" x2="33" y2="58" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="32.4509" y1="68.9665" x2="29.5491" y2="64.0335" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="52.4509" y1="68.9665" x2="49.5491" y2="64.0335" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="113.501" y1="59.4003" x2="106.499" y2="56.5997" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="110.95" y1="71.0503" x2="115.05" y2="66.9497" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="51" y1="120" x2="43" y2="120" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="26" cy="58" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="46" cy="58" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="36" cy="75" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="56" cy="75" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="100" cy="54" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="120" cy="62" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="106" cy="76" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="36" cy="120" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="58" cy="120" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="96" cy="112" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="128" cy="104" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="0" y="154" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">molecules, by your rules</text>
+  <line x1="158" y1="80" x2="182" y2="80" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M184,80 l-7,-4 v8 z" fill="#898781"/>
+  <text x="192" y="14" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">2. find clusters</text>
+  <rect x="192" y="24" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="206" y="46" width="54" height="41" rx="12" fill="#c3c2b7" stroke="#c3c2b7" stroke-width="1.5" fill-opacity="0.1" stroke-dasharray="4 3"/>
+  <line x1="231" y1="58" x2="225" y2="58" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="224.451" y1="68.9665" x2="221.549" y2="64.0335" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="244.451" y1="68.9665" x2="241.549" y2="64.0335" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="280" y="42" width="44" height="46" rx="12" fill="#c3c2b7" stroke="#c3c2b7" stroke-width="1.5" fill-opacity="0.1" stroke-dasharray="4 3"/>
+  <line x1="305.501" y1="59.4003" x2="298.499" y2="56.5997" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="302.95" y1="71.0503" x2="307.05" y2="66.9497" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="216" y="108" width="46" height="24" rx="12" fill="#c3c2b7" stroke="#c3c2b7" stroke-width="1.5" fill-opacity="0.1" stroke-dasharray="4 3"/>
+  <line x1="243" y1="120" x2="235" y2="120" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="218" cy="58" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="238" cy="58" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="228" cy="75" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="248" cy="75" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="292" cy="54" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="312" cy="62" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="298" cy="76" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="228" cy="120" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="250" cy="120" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="288" cy="112" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="320" cy="104" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="192" y="154" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">connected groups</text>
+  <line x1="350" y1="80" x2="374" y2="80" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M376,80 l-7,-4 v8 z" fill="#898781"/>
+  <text x="384" y="14" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">3. track</text>
+  <rect x="384" y="24" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="398" y="46" width="54" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="400" y="42" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="423" y1="58" x2="417" y2="58" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="416.451" y1="68.9665" x2="413.549" y2="64.0335" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="436.451" y1="68.9665" x2="433.549" y2="64.0335" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="472" y="42" width="44" height="46" rx="12" fill="#d95926" stroke="#d95926" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="474" y="38" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">2</text>
+  <line x1="497.501" y1="59.4003" x2="490.499" y2="56.5997" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="494.95" y1="71.0503" x2="499.05" y2="66.9497" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="408" y="108" width="46" height="24" rx="12" fill="#199e70" stroke="#199e70" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="410" y="104" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">3</text>
+  <line x1="435" y1="120" x2="427" y2="120" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="410" cy="58" r="7" fill="#3987e5"/>
+  <circle cx="430" cy="58" r="7" fill="#3987e5"/>
+  <circle cx="420" cy="75" r="7" fill="#3987e5"/>
+  <circle cx="440" cy="75" r="7" fill="#3987e5"/>
+  <circle cx="484" cy="54" r="7" fill="#d95926"/>
+  <circle cx="504" cy="62" r="7" fill="#d95926"/>
+  <circle cx="490" cy="76" r="7" fill="#d95926"/>
+  <circle cx="420" cy="120" r="7" fill="#199e70"/>
+  <circle cx="442" cy="120" r="7" fill="#199e70"/>
+  <circle cx="480" cy="112" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="512" cy="104" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="384" y="154" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">ids kept frame to frame</text>
+  <line x1="542" y1="80" x2="566" y2="80" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M568,80 l-7,-4 v8 z" fill="#898781"/>
+  <text x="576" y="14" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">4. analyse</text>
+  <rect x="576" y="24" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <line x1="590" y1="80" x2="646" y2="80" stroke="#383835" stroke-width="1" stroke-linecap="round"/>
+  <line x1="590" y1="80" x2="590" y2="40" stroke="#383835" stroke-width="1" stroke-linecap="round"/>
+  <path d="M590,74 L598,66 L606,70 L614,56 L622,60 L630,48 L638,52 L646,44" fill="none" stroke="#3987e5" stroke-width="2"/>
+  <rect x="660" y="40" width="52" height="10" rx="1" fill="none" stroke="#383835" stroke-width="1"/>
+  <rect x="660" y="50" width="52" height="10" rx="1" fill="none" stroke="#383835" stroke-width="1"/>
+  <rect x="660" y="60" width="52" height="10" rx="1" fill="none" stroke="#383835" stroke-width="1"/>
+  <rect x="660" y="70" width="52" height="10" rx="1" fill="none" stroke="#383835" stroke-width="1"/>
+  <line x1="682" y1="40" x2="682" y2="80" stroke="#383835" stroke-width="1" stroke-linecap="round"/>
+  <text x="576" y="154" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">tables and a JSON report</text>
+</svg>
