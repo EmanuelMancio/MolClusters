@@ -134,6 +134,36 @@ class TestCenterOfMassRule:
         assert len(list(table)) == 0
         assert table.rule_connections["MOL", "MOL"] == 0
 
+    @pytest.mark.parametrize("partner", ["MOL", "SOL"], ids=["self", "cross"])
+    def test_skewed_triclinic_box_misses_no_pair(
+        self, make_universe: UniverseFactory, partner: str
+    ):
+        # Pairs BOND_STEP apart in a truncated octahedron, enough of them for
+        # MDAnalysis to pick its grid search, which before 2.11 missed ~3% of
+        # them (MDAnalysis issue #4906)
+        n_pairs = 300
+        edge = 30.0
+        uni = make_universe([[]], 2 * n_pairs, ["MOL", partner] * n_pairs)
+        uni.dimensions = [edge, edge, edge, 109.4712, 109.4712, 109.4712]
+        rng = np.random.default_rng(0)
+        firsts = rng.uniform(0.0, edge, (n_pairs, 3))
+        steps = rng.normal(size=(n_pairs, 3))
+        seconds = firsts + BOND_STEP * steps / np.linalg.norm(steps, axis=1)[:, None]
+        # each residue's C at its center, its O 1.2 A above, as make_universe does
+        positions = np.empty((4 * n_pairs, 3))
+        positions[0::4], positions[2::4] = firsts, seconds
+        positions[1::2] = positions[0::2] + [0.0, 0.0, 1.2]
+        uni.atoms.positions = positions
+
+        table = build(uni, {"MOL": {partner: f"cm {CUTOFF}"}})
+
+        missed = [
+            (i, i + 1)
+            for i in range(1, 2 * n_pairs, 2)
+            if i not in table or i + 1 not in table.mols_connected_to(i)
+        ]
+        assert not missed
+
 
 class TestDistanceBackend:
     def test_defaults_to_serial(self, chain_table: ConnectionTable):
