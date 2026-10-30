@@ -65,6 +65,9 @@ V = \tfrac{4}{3}\pi R^3,
 \rho = \frac{m}{V}.
 \]
 
+![Cross-section of a cluster drawn as atoms packed in a disk, with three circles about its center: a dashed one of radius Rg, the radius of gyration; one of radius the square root of 5/3 times Rg, reaching the outer atoms' centers; and, half an atom's van der Waals radius further out, the equivalent sphere of radius R, which cuts the outer atoms halfway through.](../assets/concepts/size-light.svg#only-light)
+![Cross-section of a cluster drawn as atoms packed in a disk, with three circles about its center: a dashed one of radius Rg, the radius of gyration; one of radius the square root of 5/3 times Rg, reaching the outer atoms' centers; and, half an atom's van der Waals radius further out, the equivalent sphere of radius R, which cuts the outer atoms halfway through.](../assets/concepts/size-dark.svg#only-dark)
+
 Half, not the full van der Waals radius, because bonded atoms' van der Waals spheres
 overlap. On methanol-malic acid mixtures the full radius puts a lone malic acid at
 0.70 g/cm³ and half at 1.21 g/cm³ (the solid is 1.61 g/cm³), and the choice barely
@@ -118,6 +121,13 @@ S = 27\,\frac{\prod_i (\lambda_i - \bar\lambda)}{\left(\sum_i \lambda_i\right)^3
 
 0 for a sphere, negative for oblate (flattened) shapes down to −0.25 for a disk, and
 positive for prolate (elongated) ones up to 2 for a rod.
+
+![Sphericity against shape parameter S. Every shape falls inside a curved triangle with corners at the sphere (S 0, sphericity 1), the disk or ring (S -0.25, sphericity 0.75) and the rod (S 2, sphericity 0). Its upper edges are the oblate spheroids, from sphere to disk, and the prolate ones, from sphere to rod, with a cigar at S 0.56, sphericity 0.57. Its lower edge is the flat shapes, from disk to rod, with an A4 sheet at S 0, sphericity 0.67.](../assets/concepts/shape-light.svg#only-light)
+![Sphericity against shape parameter S. Every shape falls inside a curved triangle with corners at the sphere (S 0, sphericity 1), the disk or ring (S -0.25, sphericity 0.75) and the rod (S 2, sphericity 0). Its upper edges are the oblate spheroids, from sphere to disk, and the prolate ones, from sphere to rod, with a cigar at S 0.56, sphericity 0.57. Its lower edge is the flat shapes, from disk to rod, with an A4 sheet at S 0, sphericity 0.67.](../assets/concepts/shape-dark.svg#only-dark)
+
+The two are best read together: a flat sheet with sides \(\sqrt2 : 1\) (an A4 sheet,
+whose gyration eigenvalues are 1 : ½ : 0) has \(S = 0\) like a sphere, but a
+sphericity of 0.67.
 
 ## Connections
 

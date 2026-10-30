@@ -34,11 +34,11 @@ A new page needs an entry in `nav` in `mkdocs.yml`. Pages are covered by the
 
 | When you change... | Update |
 | --- | --- |
-| a configuration key | [Configuration](../user-guide/configuration.md) |
+| a configuration key | [Configuration](../user-guide/configuration.md), and its figures for `rules` and `nucleus` |
 | the command-line arguments or their help | [Command line](../user-guide/cli.md), which quotes `molclusters -h` |
 | an output file or its columns | [Output files](../user-guide/outputs.md) |
 | the report format | [The JSON report](../user-guide/report.md), and `report.py`'s docstring |
-| a property's definition | [Cluster properties](../user-guide/properties.md) |
+| a property's definition | [Cluster properties](../user-guide/properties.md) and its figures |
 | id assignment | [How clusters are tracked](../user-guide/concepts.md) and its figures, [The tracking algorithm](tracking.md) |
 | a public class or function | its docstring (the reference follows); a new module gets a reference page |
 
@@ -53,8 +53,10 @@ describes what the figure shows for readers who can't see it:
 ![Alt text.](../assets/concepts/events-dark.svg#only-dark)
 ```
 
-The schematic figures of [How clusters are tracked](../user-guide/concepts.md)
-(`docs/assets/concepts/`) are drawn by `scripts/docs_figures.py`; change them there
+The schematic figures of [How clusters are tracked](../user-guide/concepts.md),
+[Configuration](../user-guide/configuration.md) (the rules, nuclei) and
+[Cluster properties](../user-guide/properties.md) (size, shape), all in
+`docs/assets/concepts/`, are drawn by `scripts/docs_figures.py`; change them there
 and rerun it rather than editing the SVG files:
 
 ```bash

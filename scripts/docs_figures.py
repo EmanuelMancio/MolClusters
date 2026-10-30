@@ -13,6 +13,7 @@ first categorical slots for cluster ids, grey ink for text and hairlines, on a
 transparent background.
 """
 
+import math
 from collections.abc import Callable
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -153,6 +154,24 @@ class Svg:
         self.add(
             f'<path d="{d}" fill="none" stroke="{self.t.get(color, color)}" '
             f'stroke-width="{width:g}"{extra}/>'
+        )
+
+    def atom(self, x: float, y: float, r: float, label: str = "") -> None:
+        """Draw an atom: a translucent grey disc, with an optional letter."""
+        c = self.t["muted"]
+        self.add(
+            f'<circle cx="{x:g}" cy="{y:g}" r="{r:g}" fill="{c}" fill-opacity="0.3" '
+            f'stroke="{c}" stroke-width="1.2"/>'
+        )
+        if label:
+            self.text(x, y + 4.5, label, color="ink", anchor="middle", weight="bold")
+
+    def ellipse(self, x: float, y: float, rx: float, ry: float, color: str) -> None:
+        """Draw an outlined, lightly filled ellipse."""
+        c = self.t.get(color, color)
+        self.add(
+            f'<ellipse cx="{x:g}" cy="{y:g}" rx="{rx:g}" ry="{ry:g}" fill="{c}" '
+            f'fill-opacity="0.15" stroke="{c}" stroke-width="1.5"/>'
         )
 
     def arrow(self, x1: float, y: float, x2: float, color: str = "muted") -> None:
@@ -677,6 +696,354 @@ def lifetimes(theme: str) -> Svg:
     return svg
 
 
+# --- Connection rules ------------------------------------------------------------
+
+MOLECULE = [(0, 0, 8), (15, -7, 7), (11, 13, 6), (-13, 9, 6)]  # atoms: dx, dy, r
+
+
+def molecule(svg: Svg, x: float, y: float, label: str) -> None:
+    """Draw a small molecule with its center of mass marked by a cross."""
+    for dx, dy, r in MOLECULE:
+        svg.atom(x + dx, y + dy, r)
+    svg.line(x - 5, y - 5, x + 5, y + 5, "ink", 1.6)
+    svg.line(x - 5, y + 5, x + 5, y - 5, "ink", 1.6)
+    svg.text(x, y + 38, label, size=12, color="muted", anchor="middle")
+
+
+def rule_cm(theme: str) -> Svg:
+    """Draw a cm rule: centers of mass within the cutoff connect.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(600, 250, theme)
+    blue = idcolor(svg, 1)
+    a, b, c, cut = (150, 125), (228, 100), (355, 175), 112
+    svg.add(
+        f'<circle cx="{a[0]}" cy="{a[1]}" r="{cut}" fill="{blue}" fill-opacity="0.06" '
+        f'stroke="{blue}" stroke-width="1.5" stroke-dasharray="5 4"/>'
+    )
+    svg.line(*a, *b, blue, 2.5)
+    svg.line(*a, *c, "muted", 1.5, dash="2 4")
+    # the cutoff, as a radius pointing down-left
+    ang = math.radians(215)
+    ex, ey = a[0] + cut * math.cos(ang), a[1] - cut * math.sin(ang)
+    svg.line(*a, ex, ey, "ink2", 1.2)
+    svg.text((a[0] + ex) / 2 - 6, (a[1] + ey) / 2 - 8, "cutoff", anchor="end")
+    for (x, y), label in ((a, "molecule 1"), (b, "molecule 2"), (c, "molecule 3")):
+        molecule(svg, x, y, label)
+    svg.text(400, 70, "1 and 2: centers of mass at", color="ink")
+    svg.text(400, 88, "most the cutoff apart:", color="ink")
+    svg.text(400, 106, "connected", color="ink", weight="bold")
+    svg.text(400, 200, "1 and 3: farther apart:")
+    svg.text(400, 218, "not connected", weight="bold")
+    svg.line(400, 238, 410, 248, "ink", 1.6)
+    svg.line(400, 248, 410, 238, "ink", 1.6)
+    svg.text(418, 247, "center of mass", size=12)
+    return svg
+
+
+def arc(cx: float, cy: float, r: float, a1: float, a2: float) -> str:
+    """Give the SVG path of the short arc from angle a1 to a2 (radians, screen axes).
+
+    Returns
+    -------
+    str
+        The path's ``d`` attribute.
+    """
+    delta = (a2 - a1 + math.pi) % (2 * math.pi) - math.pi
+    x1, y1 = cx + r * math.cos(a1), cy + r * math.sin(a1)
+    x2, y2 = cx + r * math.cos(a2), cy + r * math.sin(a2)
+    return f"M{x1:g},{y1:g} A{r:g},{r:g} 0 0 {1 if delta > 0 else 0} {x2:g},{y2:g}"
+
+
+def rule_hb(theme: str) -> Svg:
+    """Draw an hb rule's geometry: the D-A distance and the D-H-A angle.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(600, 280, theme)
+    blue, orange = idcolor(svg, 1), idcolor(svg, 2)
+    d, h, a = (190, 140), (232, 122), (360, 114)
+    d2, a2 = (148, 168), (400, 142)  # the atoms D and A are bonded to
+    svg.line(*d2, *d, "muted", 2)
+    svg.line(*d, *h, "muted", 2)
+    svg.line(*a, *a2, "muted", 2)
+    svg.line(*h, *a, "ink2", 1.5, dash="2 4")
+    # D-A distance, drawn below the atoms
+    off = 82
+    svg.line(d[0], d[1] + 16, d[0], d[1] + off + 4, "axis", 1)
+    svg.line(a[0], a[1] + 16, a[0], a[1] + off + 12, "axis", 1)
+    y1, y2 = d[1] + off, a[1] + off + 8
+    svg.line(d[0], y1, a[0], y2, blue, 2)
+    svg.text(
+        (d[0] + a[0]) / 2,
+        (y1 + y2) / 2 + 24,
+        "donor-acceptor distance: at most d",
+        color="ink",
+        anchor="middle",
+    )
+    # D-H-A angle at H
+    ad = math.atan2(d[1] - h[1], d[0] - h[0])
+    aa = math.atan2(a[1] - h[1], a[0] - h[0])
+    svg.path(arc(*h, 24, ad, aa), orange, 2)
+    svg.line(h[0] + 4, h[1] + 25, h[0] + 20, h[1] + 44, "axis", 1)
+    svg.text(
+        h[0] + 24, h[1] + 54, "D-H-A angle: at least a (180° is straight)", color="ink"
+    )
+    svg.atom(*d2, 8)
+    svg.atom(*a2, 8)
+    svg.atom(*d, 13, "D")
+    svg.atom(*h, 9, "H")
+    svg.atom(*a, 13, "A")
+    svg.text(d[0] - 22, d[1] - 30, "donor: the atom", size=12, anchor="end")
+    svg.text(d[0] - 22, d[1] - 15, "H is bonded to", size=12, anchor="end")
+    svg.text(a[0] + 22, a[1] - 18, "acceptor: charge < aq", size=12)
+    svg.line(h[0], h[1] - 11, h[0], h[1] - 34, "axis", 1)
+    svg.text(h[0], h[1] - 54, "hydrogen: mass between hmin", size=12, anchor="middle")
+    svg.text(h[0], h[1] - 39, "and hmax, charge > hq", size=12, anchor="middle")
+    svg.text(110, 200, "molecule 1", size=12, color="muted", anchor="middle")
+    svg.text(416, 150, "molecule 2", size=12, color="muted")
+    return svg
+
+
+# --- Size ------------------------------------------------------------------------
+
+
+def size(theme: str) -> Svg:
+    """Draw the equivalent sphere: R_g, the sqrt(5/3) R_g sphere, and R.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(640, 300, theme)
+    blue = idcolor(svg, 1)
+    cx, cy, rs, ra, n = 150, 150, 100, 13, 46
+    rg = rs * math.sqrt(3 / 5)
+    big = rs + ra / 2
+    # atoms spread evenly over a disk (Vogel's spiral), the outer ones' centers at rs
+    for k in range(n):
+        r = rs * math.sqrt((k + 0.5) / (n - 0.5))
+        t = k * math.pi * (3 - math.sqrt(5))
+        svg.atom(cx + r * math.cos(t), cy + r * math.sin(t), ra)
+    svg.add(
+        f'<circle cx="{cx}" cy="{cy}" r="{rg:g}" fill="none" stroke="{svg.t["ink2"]}" '
+        f'stroke-width="1.5" stroke-dasharray="5 4"/>'
+    )
+    svg.circle(cx, cy, rs, stroke="ink2", width=1.5)
+    svg.circle(cx, cy, big, stroke=blue, width=2.5)
+    svg.circle(cx, cy, 3, fill="ink")
+    labels = [
+        (-42, big, blue, "R = √(5/3) Rg + ½ r̄vdW: the equivalent sphere"),
+        (-14, rs, "ink2", "√(5/3) Rg: as far as the outer atoms' centers"),
+        (14, rg, "ink2", "Rg: radius of gyration (dashed)"),
+        (40, rs + ra, "ink2", "atoms, at their van der Waals radius"),
+    ]
+    for deg, r, color, text in labels:
+        t = math.radians(deg)
+        px, py = cx + r * math.cos(t), cy + r * math.sin(t)
+        ty = cy + 108 * math.sin(t)
+        svg.line(px, py, 300, ty, color, 1)
+        svg.circle(px, py, 2.5, fill=color)
+        svg.text(306, ty + 4, text, color="ink" if color == blue else "ink2")
+    return svg
+
+
+# --- Shape -----------------------------------------------------------------------
+
+
+def descriptors(lam: tuple[float, float, float]) -> tuple[float, float]:
+    """Give the shape parameter and sphericity of gyration-tensor eigenvalues.
+
+    Returns
+    -------
+    tuple of float
+        S and 1 - asphericity, as defined on the Cluster properties page.
+    """
+    total = sum(lam)
+    dev = [x - total / 3 for x in lam]
+    asph = 1.5 * sum(x * x for x in dev) / total**2
+    return 27 * dev[0] * dev[1] * dev[2] / total**3, 1 - asph
+
+
+def shape(theme: str) -> Svg:
+    """Draw where shapes fall by shape parameter and sphericity.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(620, 340, theme)
+    blue = idcolor(svg, 1)
+    x0, x1, y0, y1 = 80, 590, 290, 30  # plot area: S -0.25..2, sphericity 0..1
+
+    def px(sv: float) -> float:
+        return x0 + (sv + 0.25) / 2.25 * (x1 - x0)
+
+    def py(v: float) -> float:
+        return y0 + v * (y1 - y0)
+
+    for v in (0, 0.25, 0.5, 0.75, 1):
+        svg.line(x0, py(v), x1, py(v), "hair", 1)
+        svg.text(x0 - 8, py(v) + 4, f"{v:g}", size=12, color="muted", anchor="end")
+    for sv in (-0.25, 0, 0.5, 1, 1.5, 2):
+        svg.line(px(sv), y0, px(sv), y0 + 5, "axis", 1)
+        label = f"{sv:g}".replace("-", "−")
+        svg.text(px(sv), y0 + 20, label, size=12, color="muted", anchor="middle")
+    svg.line(x0, y0, x1, y0, "axis", 1)
+    svg.text((x0 + x1) / 2, y0 + 42, "shape parameter S", anchor="middle")
+    ym = (y0 + y1) / 2
+    svg.add(
+        f'<text x="24" y="{ym:g}" font-size="13" fill="{svg.t["ink2"]}" '
+        f'text-anchor="middle" transform="rotate(-90 24 {ym:g})">sphericity</text>'
+    )
+    # every set of eigenvalues falls between the spheroids and the flat shapes
+    steps = [k / 100 for k in range(101)]
+    prolate = [descriptors((1, 1 - b, 1 - b)) for b in steps]  # sphere -> rod
+    flat = [descriptors((1, b, 0)) for b in steps]  # rod -> disk
+    oblate = [descriptors((1, 1, b)) for b in steps]  # disk -> sphere
+    pts = " ".join(f"{px(sv):.1f},{py(v):.1f}" for sv, v in prolate + flat + oblate)
+    svg.add(
+        f'<polygon points="{pts}" fill="{blue}" fill-opacity="0.1" stroke="{blue}" '
+        f'stroke-width="1.5" stroke-linejoin="round"/>'
+    )
+    for lam, label, dx, dy, anchor in (
+        ((1, 0.35, 0.35), "prolate", 10, -8, "start"),
+        ((1, 0.25, 0), "flat", -4, 22, "end"),
+        ((1, 1, 0.4), "oblate", -10, 4, "end"),
+    ):
+        sv, v = descriptors(lam)
+        svg.text(px(sv) + dx, py(v) + dy, label, size=12, anchor=anchor)
+    # reference shapes: eigenvalues, label offset, sketch offset and (rx, ry)
+    marks = [
+        ((1, 1, 1), "sphere, cube", (12, 4), (112, 0), (10, 10)),
+        ((1, 1, 0), "disk, ring", (-8, 74), (24, 94), (16, 4)),
+        ((1, 0, 0), "rod", (-12, -14), (-24, -38), (20, 2.5)),
+        ((1, 0.15, 0.15), "cigar", (12, 4), (76, 0), (16, 6)),
+        ((1, 0.5, 0), "A4 sheet", (14, 22), (36, 46), (14, 10)),
+    ]
+    for lam, label, (dx, dy), (ix, iy), (rx, ry) in marks:
+        sv, v = descriptors(lam)
+        x, y = px(sv), py(v)
+        svg.circle(x, y, 4, fill="ink")
+        anchor = "end" if dx < 0 and dy < 40 else "start"
+        if dy > 40:  # a label far below its point: draw a leader
+            svg.line(x, y + 7, x, y + dy - 16, "axis", 1)
+        svg.text(x + dx, y + dy, label, color="ink", weight="bold", anchor=anchor)
+        svg.ellipse(x + ix, y + iy, rx, ry, "ink2")
+    return svg
+
+
+# --- Nucleus ---------------------------------------------------------------------
+
+# A cluster of solutes (S) and solvent molecules (V): positions, then connections.
+NUC_MOLS = {
+    "S1": (70, 130),
+    "S2": (102, 106),
+    "S3": (102, 154),
+    "V1": (142, 130),
+    "V2": (182, 130),
+    "V5": (184, 172),
+    "S4": (222, 130),
+    "V3": (262, 106),
+    "S5": (302, 106),
+    "S6": (334, 130),
+    "V4": (298, 158),
+}
+NUC_EDGES = [
+    ("S1", "S2"),
+    ("S1", "S3"),
+    ("S2", "S3"),
+    ("S2", "V1"),
+    ("S3", "V1"),
+    ("V1", "V2"),
+    ("V2", "S4"),
+    ("V2", "V5"),
+    ("S4", "V3"),
+    ("V3", "S5"),
+    ("S5", "S6"),
+    ("S6", "V4"),
+]
+NUCLEI = [
+    (["S1", "S2", "S3"], "nucleus 1", -1),
+    (["S4"], "nucleus 2", 1),
+    (["S5", "S6"], "nucleus 3", -1),
+]
+
+
+def nucleus(theme: str) -> Svg:
+    """Draw a cluster's nuclei: its graph restricted to the solutes, in pieces.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(560, 230, theme)
+    blue, orange = idcolor(svg, 1), idcolor(svg, 2)
+    r = 10
+    xs = [x for x, _ in NUC_MOLS.values()]
+    ys = [y for _, y in NUC_MOLS.values()]
+    pad = r + 16
+    x0, y0 = min(xs) - pad, min(ys) - pad - 14
+    svg.rect(
+        x0,
+        y0,
+        max(xs) - min(xs) + 2 * pad,
+        max(ys) - min(ys) + 2 * pad + 14,
+        rx=24,
+        stroke="axis",
+        width=1.5,
+    )
+    svg.text(x0 + 4, y0 - 8, "cluster", size=12, color="ink", weight="bold")
+    for members, label, side in NUCLEI:
+        mx = [NUC_MOLS[m][0] for m in members]
+        my = [NUC_MOLS[m][1] for m in members]
+        p = r + 5
+        svg.rect(
+            min(mx) - p,
+            min(my) - p,
+            max(mx) - min(mx) + 2 * p,
+            max(my) - min(my) + 2 * p,
+            rx=p,
+            stroke=orange,
+            width=1.5,
+            dash="4 3",
+        )
+        ty = max(my) + p + 15 if side > 0 else min(my) - p - 6
+        svg.text(
+            (min(mx) + max(mx)) / 2, ty, label, size=12, color="ink", anchor="middle"
+        )
+    for u, v in NUC_EDGES:
+        (x1, y1), (x2, y2) = NUC_MOLS[u], NUC_MOLS[v]
+        dist = math.hypot(x2 - x1, y2 - y1)
+        ux, uy = (x2 - x1) / dist * r, (y2 - y1) / dist * r
+        svg.line(x1 + ux, y1 + uy, x2 - ux, y2 - uy, "muted", 1.5)
+    for name, (x, y) in NUC_MOLS.items():
+        if name[0] == "S":
+            svg.circle(x, y, r, fill=blue)
+        else:
+            svg.circle(x, y, r - 0.75, stroke="muted")
+    kx = 410
+    svg.circle(kx + 8, 82, r, fill=blue)
+    svg.text(kx + 26, 87, "solute", size=12)
+    svg.circle(kx + 8, 112, r - 0.75, stroke="muted")
+    svg.text(kx + 26, 117, "solvent", size=12)
+    svg.rect(kx - 4, 133, 24, 18, rx=8, stroke=orange, width=1.5, dash="4 3")
+    svg.text(kx + 26, 146, "nucleus", size=12)
+    svg.line(kx - 2, 172, kx + 18, 172, "muted", 1.5)
+    svg.text(kx + 26, 176, "connection", size=12)
+    return svg
+
+
 def main() -> None:
     """Write every figure in both themes."""
     OUT.mkdir(parents=True, exist_ok=True)
@@ -684,6 +1051,11 @@ def main() -> None:
         ("events", events),
         ("id-assignment", id_assignment),
         ("lifetimes", lifetimes),
+        ("rule-cm", rule_cm),
+        ("rule-hb", rule_hb),
+        ("size", size),
+        ("shape", shape),
+        ("nucleus", nucleus),
     ):
         for theme in THEMES:
             draw(theme).write(OUT / f"{name}-{theme}.svg")
