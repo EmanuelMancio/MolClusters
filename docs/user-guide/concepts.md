@@ -23,21 +23,10 @@ through other molecules, and to nothing else: a connected component of the graph
 whose nodes are molecules and whose edges are connections. A molecule connected to
 nothing is **free**, and belongs to no cluster.
 
-```mermaid
-flowchart LR
-  subgraph c1 ["cluster 1"]
-    direction TB
-    A((12)) --- B((57)) --- C((33))
-    B --- D((80))
-  end
-  subgraph c2 ["cluster 2"]
-    direction TB
-    E((5)) --- F((91))
-  end
-  G((44))
-  %% invisible links: lay the groups out side by side, in this order
-  c1 ~~~ c2 ~~~ G
-```
+<figure markdown="span">
+  ![Seven molecules, numbered by resid. Cluster 1 holds 12, 57, 33 and 80: 57 is connected to each of the other three. Cluster 2 holds 5 and 91, connected to each other. Molecule 44 is connected to nothing: it is free.](../assets/concepts/graph-light.svg#only-light)
+  ![Seven molecules, numbered by resid. Cluster 1 holds 12, 57, 33 and 80: 57 is connected to each of the other three. Cluster 2 holds 5 and 91, connected to each other. Molecule 44 is connected to nothing: it is free.](../assets/concepts/graph-dark.svg#only-dark)
+</figure>
 
 Here molecule 44 is free, and molecules 12 and 80 belong to cluster 1 although they
 are not connected to each other directly.

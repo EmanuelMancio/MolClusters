@@ -452,6 +452,83 @@ def events(theme: str) -> Svg:
     return svg
 
 
+# --- Clusters as a graph ---------------------------------------------------------
+
+# Molecules by resid: position and cluster id (0: free); then the connections.
+GRAPH_MOLS = {
+    12: (66, 52, 1),
+    57: (66, 104, 1),
+    33: (36, 152, 1),
+    80: (96, 152, 1),
+    5: (236, 76, 2),
+    91: (236, 130, 2),
+    44: (336, 104, 0),
+}
+GRAPH_EDGES = [(12, 57), (57, 33), (57, 80), (5, 91)]
+
+
+def graph(theme: str) -> Svg:
+    """Draw a frame's clusters as the connected components of its connection graph.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(380, 190, theme)
+    r = 14
+    for cid in (1, 2):
+        xs = [x for x, _, c in GRAPH_MOLS.values() if c == cid]
+        ys = [y for _, y, c in GRAPH_MOLS.values() if c == cid]
+        pad = r + 9
+        color = idcolor(svg, cid)
+        x0, y0 = min(xs) - pad, min(ys) - pad
+        svg.rect(
+            x0,
+            y0,
+            max(xs) - min(xs) + 2 * pad,
+            max(ys) - min(ys) + 2 * pad,
+            rx=pad,
+            stroke=color,
+            fill=color,
+            fill_opacity=0.1,
+            width=1.5,
+        )
+        svg.text(x0 + 2, y0 - 6, f"cluster {cid}", size=12, color="ink", weight="bold")
+    for a, b in GRAPH_EDGES:
+        (x1, y1, _), (x2, y2, _) = GRAPH_MOLS[a], GRAPH_MOLS[b]
+        d = math.hypot(x2 - x1, y2 - y1)
+        ux, uy = (x2 - x1) / d * r, (y2 - y1) / d * r
+        svg.line(x1 + ux, y1 + uy, x2 - ux, y2 - uy, "muted", 1.5)
+    for resid, (x, y, cid) in GRAPH_MOLS.items():
+        if cid:
+            svg.circle(x, y, r, fill=idcolor(svg, cid))
+            svg.text(
+                x,
+                y + 4.5,
+                str(resid),
+                size=12,
+                color="#ffffff",
+                anchor="middle",
+                weight="bold",
+            )
+        else:
+            svg.circle(x, y, r - 0.75, stroke="muted")
+            svg.text(
+                x,
+                y + 4.5,
+                str(resid),
+                size=12,
+                color="ink2",
+                anchor="middle",
+                weight="bold",
+            )
+    svg.text(
+        336, 104 + r + 16, "free", size=12, color="ink", anchor="middle", weight="bold"
+    )
+    return svg
+
+
 # --- Pipeline -------------------------------------------------------------------
 
 # One frame's molecules (x, y) and the groups they form; the same in every panel.
@@ -1234,6 +1311,7 @@ def main() -> None:
         ("lifetimes", lifetimes),
         ("pipeline", pipeline),
         ("pbc", pbc),
+        ("graph", graph),
         ("rule-cm", rule_cm),
         ("rule-hb", rule_hb),
         ("size", size),
