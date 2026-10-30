@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -33,10 +33,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1041,6 +1041,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#skewed-triclinic-boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skewed triclinic boxes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#other-changes-in-v070-not-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1900,6 +1911,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#skewed-triclinic-boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skewed triclinic boxes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#other-changes-in-v070-not-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1942,6 +1964,13 @@
 <strong>v0.7.0</strong>. Don't use those versions for new work, and check results you
 obtained with them against this page: some can be corrected by a constant
 factor, others need the analysis run again.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Skewed triclinic boxes, up to v0.8.0</p>
+<p>Runs with MDAnalysis 2.10 or earlier, which every release up to and including
+<strong>v0.8.0</strong> allowed, can miss connections in some triclinic boxes, such as
+GROMACS' truncated octahedron. See
+<a href="#skewed-triclinic-boxes">Skewed triclinic boxes</a>.</p>
 </div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <table>
@@ -2102,6 +2131,26 @@ id could go to the wrong piece. v0.7.0 also assigns ids with a new, order-indepe
 algorithm (see <a href="../concepts/">How clusters are tracked</a>), so ids can differ from earlier
 versions anyway. Cluster membership and sizes are not affected; per-id results
 (<code>cls-id*.gro</code>, anything following a cluster by id) can be.</p>
+<h2 id="skewed-triclinic-boxes">Skewed triclinic boxes<a class="headerlink" href="#skewed-triclinic-boxes" title="Permanent link">&para;</a></h2>
+<p>(Up to v0.8.0, with MDAnalysis 2.10 or earlier.) MDAnalysis' neighbour search
+missed some pairs within the cutoff in triclinic boxes whose second box vector has an
+x component and whose third has a y component
+(<a href="https://github.com/MDAnalysis/mdanalysis/issues/4906">MDAnalysis issue #4906</a>, fixed
+in MDAnalysis 2.11.0). In a <code>.gro</code> file's box line, <code>v1(x) v2(y) v3(z) v1(y) v1(z)
+v2(x) v2(z) v3(x) v3(y)</code>, those are the 6th and 9th numbers: the box is affected if
+both are nonzero. GROMACS' truncated octahedron is, and so is the rhombic
+dodecahedron with a hexagonal xy face (angles 60°, 60°, 60°); the one with a square xy
+face (60°, 60°, 90°), rectangular boxes and hexagonal prisms aren't.</p>
+<p>Both "cm" and "hb" rules use the search, so molecules that should have been connected
+sometimes weren't: with pairs of molecules 2 Å apart and a 3 Å cutoff in a 30 Å box,
+about 3% of the pairs were missed in a truncated octahedron, 1% in the hexagonal
+dodecahedron. A missed connection splits a cluster, and through id continuity can
+change the ids of later frames too. Systems smaller than 100 molecules of a residue
+name (a "cm" rule within it) or 10 donors and acceptors, or molecules of each name (an
+"hb" rule, a "cm" rule between two names), aren't affected, as MDAnalysis compares
+every pair for them.</p>
+<p><strong>Affected:</strong> which molecules cluster, so every output, in such boxes.
+<strong>Fix:</strong> upgrade (later releases require MDAnalysis 2.11 or later) and run again.</p>
 <h2 id="other-changes-in-v070-not-errors">Other changes in v0.7.0 (not errors)<a class="headerlink" href="#other-changes-in-v070-not-errors" title="Permanent link">&para;</a></h2>
 <p>These change results between versions without the old ones being wrong:</p>
 <ul>
@@ -2216,10 +2265,10 @@ versions anyway. Cluster membership and sizes are not affected; per-id results
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.annotate", "content.code.copy", "content.tabs.link", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.tracking", "search.highlight", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.annotate", "content.code.copy", "content.tabs.link", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.tracking", "search.highlight", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/mathjax.js"></script>
       

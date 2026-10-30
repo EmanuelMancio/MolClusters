@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -33,10 +33,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -582,6 +582,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#container-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container image
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#dependencies" class="md-nav__link">
@@ -1669,6 +1680,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#container-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dependencies" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1769,6 +1791,60 @@ environment), for instance to use MolClusters from Python as well:</p>
 and what changed in each are listed in the <a href="../../changelog/">changelog</a>. The latest
 development version, not yet released, installs from the repository's <code>dev</code> branch:
 <code>git+https://github.com/EmanuelMancio/MolClusters@dev</code> in place of <code>molclusters</code>.</p>
+<h2 id="container-image">Container image<a class="headerlink" href="#container-image" title="Permanent link">&para;</a></h2>
+<p>Each release from the one after v0.8.0 is also published as a container image on the
+GitHub Container Registry, <code>ghcr.io/emanuelmancio/molclusters</code>, for computers where
+installing Python packages is awkward, such as HPC clusters. It's a standard
+<a href="https://opencontainers.org/">OCI</a> image (linux/amd64 and linux/arm64), so Docker,
+Podman, Apptainer and Singularity all run it. It holds only MolClusters and its
+dependencies, at the exact versions it was tested with, and runs the <code>molclusters</code>
+command with the arguments you give it.</p>
+<p>Tags: <code>X.Y.Z</code> for a release (e.g. <code>0.9.0</code>), <code>X.Y</code> for the latest release of a minor
+version, and <code>latest</code>. Pin a release (<code>X.Y.Z</code>) in anything you need to reproduce, or
+better its digest (<code>ghcr.io/emanuelmancio/molclusters@sha256:...</code>), which <code>docker
+inspect</code> or the package page on GitHub shows and which can't change.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Apptainer / Singularity</label><label for="__tabbed_2_2">Docker / Podman</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Convert the image into a single <code>.sif</code> file once, then run it like a command.
+Apptainer runs it as you, in the current directory, with your home directory
+and the current directory available, so paths work as usual:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>apptainer<span class="w"> </span>pull<span class="w"> </span>molclusters.sif<span class="w"> </span>docker://ghcr.io/emanuelmancio/molclusters:X.Y.Z
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>apptainer<span class="w"> </span>run<span class="w"> </span>molclusters.sif<span class="w"> </span>traj.xtc<span class="w"> </span>topol.tpr<span class="w"> </span>input.yaml
+</span></code></pre></div>
+<p><code>singularity</code> takes the same commands. Data outside your home and the current
+directory (e.g. a scratch file system) needs binding: <code>apptainer run --bind
+/scratch molclusters.sif ...</code>. In a batch job, put the <code>apptainer run</code> line
+where the <code>molclusters</code> command would go.</p>
+</div>
+<div class="tabbed-block">
+<p>The image's working directory is <code>/data</code>: mount the directory with your files
+there, and run as yourself, so that MolClusters can write its results there and
+they are yours:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--user<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">"</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">:/data"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span>ghcr.io/emanuelmancio/molclusters:X.Y.Z<span class="w"> </span>traj.xtc<span class="w"> </span>topol.tpr<span class="w"> </span>input.yaml
+</span></code></pre></div>
+<p>Without <code>--user</code> it runs as uid 1000, never as root. With rootless Podman, use
+<code>--userns=keep-id</code> in place of <code>--user</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>podman<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--userns<span class="o">=</span>keep-id<span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">:/data"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span>ghcr.io/emanuelmancio/molclusters:X.Y.Z<span class="w"> </span>traj.xtc<span class="w"> </span>topol.tpr<span class="w"> </span>input.yaml
+</span></code></pre></div>
+<p>Paths given to <code>molclusters</code> are paths inside the container: files outside the
+mounted directory need their own <code>-v</code> (<code>:ro</code> for inputs it only reads).</p>
+</div>
+</div>
+</div>
+<p><code>molclusters --help</code> is the image's default command, and <code>--version</code> tells which
+release it holds. The <a href="../cli/">command-line options</a> are the same as for an
+installed <code>molclusters</code>. Use <code>--traj-memory</code> only if the container may use the
+memory it needs (Docker's <code>--memory</code>, or the job's limit).</p>
+<p>Each image is signed with a build provenance attestation: <a href="https://cli.github.com/">GitHub's
+CLI</a> checks that it was built by MolClusters' own release
+workflow, from the repository's sources, and not altered since:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/emanuelmancio/molclusters:X.Y.Z<span class="w"> </span>-R<span class="w"> </span>EmanuelMancio/MolClusters
+</span></code></pre></div>
+<p>To build the image yourself, e.g. from the <code>dev</code> branch, run <code>docker build -t
+molclusters .</code> (or <code>podman build</code>) in a clone of the repository.</p>
 <h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h2>
 <p>They are installed automatically:</p>
 <table>
@@ -1909,10 +1985,10 @@ development version, not yet released, installs from the repository's <code>dev<
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.annotate", "content.code.copy", "content.tabs.link", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.tracking", "search.highlight", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.annotate", "content.code.copy", "content.tabs.link", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.tracking", "search.highlight", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/mathjax.js"></script>
       
