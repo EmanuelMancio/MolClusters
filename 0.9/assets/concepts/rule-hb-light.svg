@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="280" viewBox="0 0 600 280" font-family="Roboto, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <line x1="148" y1="168" x2="190" y2="140" stroke="#898781" stroke-width="2" stroke-linecap="round"/>
+  <line x1="190" y1="140" x2="232" y2="122" stroke="#898781" stroke-width="2" stroke-linecap="round"/>
+  <line x1="360" y1="114" x2="400" y2="142" stroke="#898781" stroke-width="2" stroke-linecap="round"/>
+  <line x1="232" y1="122" x2="360" y2="114" stroke="#52514e" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2 4"/>
+  <line x1="190" y1="156" x2="190" y2="226" stroke="#c3c2b7" stroke-width="1" stroke-linecap="round"/>
+  <line x1="360" y1="130" x2="360" y2="208" stroke="#c3c2b7" stroke-width="1" stroke-linecap="round"/>
+  <line x1="190" y1="222" x2="360" y2="204" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+  <text x="275" y="237" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="normal">donor-acceptor distance: at most d</text>
+  <path d="M209.941,131.454 A24,24 0 0 0 255.953,120.503" fill="none" stroke="#eb6834" stroke-width="2"/>
+  <line x1="236" y1="147" x2="252" y2="166" stroke="#c3c2b7" stroke-width="1" stroke-linecap="round"/>
+  <text x="256" y="176" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="normal">D-H-A angle: at least a (180° is straight)</text>
+  <circle cx="148" cy="168" r="8" fill="#898781" fill-opacity="0.3" stroke="#898781" stroke-width="1.2"/>
+  <circle cx="400" cy="142" r="8" fill="#898781" fill-opacity="0.3" stroke="#898781" stroke-width="1.2"/>
+  <circle cx="190" cy="140" r="13" fill="#898781" fill-opacity="0.3" stroke="#898781" stroke-width="1.2"/>
+  <text x="190" y="144.5" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">D</text>
+  <circle cx="232" cy="122" r="9" fill="#898781" fill-opacity="0.3" stroke="#898781" stroke-width="1.2"/>
+  <text x="232" y="126.5" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">H</text>
+  <circle cx="360" cy="114" r="13" fill="#898781" fill-opacity="0.3" stroke="#898781" stroke-width="1.2"/>
+  <text x="360" y="118.5" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">A</text>
+  <text x="168" y="110" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">donor: the atom</text>
+  <text x="168" y="125" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">H is bonded to</text>
+  <text x="382" y="96" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">acceptor: charge &lt; aq</text>
+  <line x1="232" y1="111" x2="232" y2="88" stroke="#c3c2b7" stroke-width="1" stroke-linecap="round"/>
+  <text x="232" y="68" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">hydrogen: mass between hmin</text>
+  <text x="232" y="83" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">and hmax, charge &gt; hq</text>
+  <text x="110" y="200" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">molecule 1</text>
+  <text x="416" y="150" font-size="12" fill="#898781" text-anchor="start" font-weight="normal">molecule 2</text>
+</svg>

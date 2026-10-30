@@ -1256,6 +1256,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#figures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Figures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#docstrings" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1713,6 +1724,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#figures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Figures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#docstrings" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1778,7 +1800,7 @@ parsed) into errors; CI builds with it.</p>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>├── developer-guide/         # for people working on MolClusters
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>├── reference/               # API reference: one page per module, `::: module` directives
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>├── changelog.md             # includes CHANGELOG.md
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├── assets/, javascripts/    # favicon, MathJax setup
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├── assets/, javascripts/    # favicon, figures, MathJax setup
 </span></code></pre></div>
 <p>A new page needs an entry in <code>nav</code> in <code>mkdocs.yml</code>. Pages are covered by the
 <code>docs/**</code> annotation in <code>REUSE.toml</code>, so they need no license header of their own.</p>
@@ -1793,7 +1815,7 @@ parsed) into errors; CI builds with it.</p>
 <tbody>
 <tr>
 <td>a configuration key</td>
-<td><a href="../../user-guide/configuration/">Configuration</a></td>
+<td><a href="../../user-guide/configuration/">Configuration</a>, and its figures for <code>rules</code> and <code>nucleus</code></td>
 </tr>
 <tr>
 <td>the command-line arguments or their help</td>
@@ -1809,11 +1831,11 @@ parsed) into errors; CI builds with it.</p>
 </tr>
 <tr>
 <td>a property's definition</td>
-<td><a href="../../user-guide/properties/">Cluster properties</a></td>
+<td><a href="../../user-guide/properties/">Cluster properties</a> and its figures</td>
 </tr>
 <tr>
 <td>id assignment</td>
-<td><a href="../../user-guide/concepts/">How clusters are tracked</a>, <a href="../tracking/">The tracking algorithm</a></td>
+<td><a href="../../user-guide/concepts/">How clusters are tracked</a> and its figures, <a href="../tracking/">The tracking algorithm</a></td>
 </tr>
 <tr>
 <td>a public class or function</td>
@@ -1821,6 +1843,49 @@ parsed) into errors; CI builds with it.</p>
 </tr>
 </tbody>
 </table>
+<h2 id="figures">Figures<a class="headerlink" href="#figures" title="Permanent link">&para;</a></h2>
+<p>Each figure is a pair of SVG files, <code>&lt;name&gt;-light.svg</code> and <code>&lt;name&gt;-dark.svg</code>, shown
+with Material's <code>#only-light</code> and <code>#only-dark</code> and the same alt text, which
+describes what the figure shows for readers who can't see it:</p>
+<div class="language-markdown highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>![<span class="nt">Alt text.</span>](<span class="na">../assets/concepts/events-light.svg#only-light</span>)
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>![<span class="nt">Alt text.</span>](<span class="na">../assets/concepts/events-dark.svg#only-dark</span>)
+</span></code></pre></div>
+<p>The schematic figures of <a href="../../user-guide/concepts/">How clusters are tracked</a>,
+<a href="../../user-guide/configuration/">Configuration</a> (the rules, nuclei) and
+<a href="../../user-guide/properties/">Cluster properties</a> (size, shape) and the home page's
+steps, all in
+<code>docs/assets/concepts/</code>, are drawn by <code>scripts/docs_figures.py</code>; change them there
+and rerun it rather than editing the SVG files:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_figures.py
+</span></code></pre></div>
+<p>The home page's picture (<code>docs/assets/home/droplet.webp</code>) is frame 990 of the
+<code>tests/data/met-mal</code> run with the quick start's rules, ray-traced by VMD 1.9.3's
+Tachyon with the scripts in <code>scripts/docs_snapshot/</code>. Tachyon writes no alpha
+channel, so the scene is rendered on white and on black and <code>matte.py</code> recovers
+the transparency from the two. VMD runs on Linux (or WSL); the rest anywhere:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>molclusters<span class="w"> </span>tests/data/met-mal/met-traj.trr<span class="w"> </span>tests/data/met-mal/met-mal.tpr<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span>config.yml<span class="w"> </span>--output-dir<span class="w"> </span>run<span class="w">   </span><span class="c1"># the quick start's config.yml, with report_compression: none</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/frame.py<span class="w"> </span>run/molclusters.jsonl<span class="w"> </span><span class="m">990</span><span class="w"> </span>work/frame990.pdb
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>sh<span class="w"> </span>scripts/docs_snapshot/render.sh<span class="w"> </span>work/frame990.pdb<span class="w"> </span>work<span class="w">          </span><span class="c1"># in Linux or WSL</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>uv<span class="w"> </span>run<span class="w"> </span>--with<span class="w"> </span>pillow<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/matte.py<span class="w"> </span>work/black.tga<span class="w"> </span>work/white.tga<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>docs/assets/home/droplet.webp
+</span></code></pre></div>
+<p>Which six clusters are coloured is set in <code>scene.tcl</code>, for this frame and view.</p>
+<p>The plots of the quick start (<code>evo</code>) and of <a href="../../user-guide/outputs/">Output files</a>
+(lifetimes, solute-solvent clusters) come from the quick start's run on all frames
+of the test data, with its <code>config.yml</code> as it stands (coordinates included):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--with<span class="w"> </span>matplotlib<span class="w"> </span>python<span class="w"> </span>scripts/docs_plots.py<span class="w"> </span>run
+</span></code></pre></div>
+<p>The Output files page's picture of <code>cls-id2872.gro</code> is four of that file's frames,
+side by side, labelled with their time and size:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/cluster_row.py<span class="w"> </span>run/coordinates/cls-id2872.gro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span>work/row.pdb<span class="w"> </span><span class="m">40</span><span class="w"> </span><span class="m">11328</span><span class="w"> </span><span class="m">11664</span><span class="w"> </span><span class="m">11904</span><span class="w"> </span><span class="m">14736</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>vmd<span class="w"> </span>-dispdev<span class="w"> </span>text<span class="w"> </span>-e<span class="w"> </span>scripts/docs_snapshot/cluster.tcl<span class="w"> </span>-args<span class="w"> </span>work/row.pdb<span class="w"> </span>work/scene.dat
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Tachyon on white and on black as in render.sh, at -res 3600 3600, then:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>uv<span class="w"> </span>run<span class="w"> </span>--with<span class="w"> </span>pillow<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/matte.py<span class="w"> </span>work/black.tga<span class="w"> </span>work/white.tga<span class="w"> </span>work/row.png
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>uv<span class="w"> </span>run<span class="w"> </span>--with<span class="w"> </span>pillow<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/label_row.py<span class="w"> </span>work/row.png<span class="w"> </span>docs/assets/outputs/cls-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="s2">"11.33 ns|4 molecules, new"</span><span class="w"> </span><span class="s2">"11.66 ns|13 molecules"</span><span class="w"> </span><span class="s2">"11.90 ns|17, its largest"</span><span class="w"> </span><span class="s2">"14.74 ns|4, its last frame"</span>
+</span></code></pre></div>
 <h2 id="docstrings">Docstrings<a class="headerlink" href="#docstrings" title="Permanent link">&para;</a></h2>
 <p>Docstrings use NumPy style and are rendered as they are, so the reference is only as
 good as they are. Backticked names (<code>`ClusterTracker`</code>) render as code; to link
@@ -1846,7 +1911,7 @@ from the repository's <em>Actions</em> tab.</p>
 <p>Set up once: <em>Settings → Pages → Build and deployment → Source</em> to <strong>Deploy from a
 branch</strong>, <code>gh-pages</code> / root; and after the first deployment from <code>main</code> (which creates
 <code>latest</code>) make the bare URL open it:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>docs<span class="w"> </span>mike<span class="w"> </span>set-default<span class="w"> </span>--push<span class="w"> </span>latest
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>docs<span class="w"> </span>mike<span class="w"> </span>set-default<span class="w"> </span>--push<span class="w"> </span>latest
 </span></code></pre></div>
 <p>To preview the versioned site locally, <code>uv run --group docs mike serve</code> (it serves
 the <code>gh-pages</code> branch, so it shows nothing until a deployment exists). An old

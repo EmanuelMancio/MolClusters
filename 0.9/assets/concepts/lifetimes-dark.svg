@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="298" viewBox="0 0 760 298" font-family="Roboto, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <circle cx="7" cy="12" r="5.5" fill="#3987e5"/>
+  <text x="20" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">seen in the frame</text>
+  <circle cx="145" cy="12" r="5" fill="none" stroke="#c3c2b7" stroke-width="1.5"/>
+  <text x="158" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">first frame gone (DeathTime)</text>
+  <line x1="340" y1="12" x2="370" y2="12" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <text x="378" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">formed or ended somewhere in here</text>
+  <line x1="590" y1="8" x2="590" y2="16" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="590" y1="12" x2="616" y2="12" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="616" y1="8" x2="616" y2="16" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="624" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">recorded Lifetime</text>
+  <line x1="150" y1="40" x2="150" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="150" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">0</text>
+  <line x1="196" y1="40" x2="196" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="196" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">Δt</text>
+  <line x1="242" y1="40" x2="242" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="242" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">2Δt</text>
+  <line x1="288" y1="40" x2="288" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="288" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">3Δt</text>
+  <line x1="334" y1="40" x2="334" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="334" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">4Δt</text>
+  <line x1="380" y1="40" x2="380" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="380" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">5Δt</text>
+  <line x1="426" y1="40" x2="426" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="426" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">6Δt</text>
+  <line x1="472" y1="40" x2="472" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="472" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">7Δt</text>
+  <line x1="518" y1="40" x2="518" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="518" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">8Δt</text>
+  <line x1="564" y1="40" x2="564" y2="236" stroke="#2c2c2a" stroke-width="1" stroke-linecap="round"/>
+  <text x="564" y="254" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">9Δt</text>
+  <line x1="120" y1="236" x2="594" y2="236" stroke="#383835" stroke-width="1" stroke-linecap="round"/>
+  <text x="150" y="272" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">first frame</text>
+  <text x="564" y="272" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">last frame</text>
+  <text x="110" y="66" font-size="13" fill="#f0efec" text-anchor="end" font-weight="bold">cluster 1</text>
+  <line x1="116" y1="62" x2="150" y2="62" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <line x1="150" y1="62" x2="288" y2="62" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+  <line x1="288" y1="62" x2="334" y2="62" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <circle cx="334" cy="62" r="5" fill="none" stroke="#c3c2b7" stroke-width="1.5"/>
+  <circle cx="150" cy="62" r="5.5" fill="#3987e5"/>
+  <circle cx="196" cy="62" r="5.5" fill="#3987e5"/>
+  <circle cx="242" cy="62" r="5.5" fill="#3987e5"/>
+  <circle cx="288" cy="62" r="5.5" fill="#3987e5"/>
+  <line x1="150" y1="73" x2="150" y2="79" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="150" y1="76" x2="334" y2="76" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="334" y1="73" x2="334" y2="79" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="614" y="66" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">born at start: ≥ 4Δt</text>
+  <text x="110" y="112" font-size="13" fill="#f0efec" text-anchor="end" font-weight="bold">cluster 2</text>
+  <line x1="196" y1="108" x2="242" y2="108" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <line x1="242" y1="108" x2="426" y2="108" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+  <line x1="426" y1="108" x2="472" y2="108" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <circle cx="472" cy="108" r="5" fill="none" stroke="#c3c2b7" stroke-width="1.5"/>
+  <circle cx="242" cy="108" r="5.5" fill="#3987e5"/>
+  <circle cx="288" cy="108" r="5.5" fill="#3987e5"/>
+  <circle cx="334" cy="108" r="5.5" fill="#3987e5"/>
+  <circle cx="380" cy="108" r="5.5" fill="#3987e5"/>
+  <circle cx="426" cy="108" r="5.5" fill="#3987e5"/>
+  <line x1="242" y1="119" x2="242" y2="125" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="242" y1="122" x2="472" y2="122" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="472" y1="119" x2="472" y2="125" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="614" y="112" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">lifetime 5Δt</text>
+  <text x="110" y="158" font-size="13" fill="#f0efec" text-anchor="end" font-weight="bold">cluster 3</text>
+  <line x1="334" y1="154" x2="380" y2="154" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <line x1="380" y1="154" x2="426" y2="154" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <circle cx="426" cy="154" r="5" fill="none" stroke="#c3c2b7" stroke-width="1.5"/>
+  <circle cx="380" cy="154" r="5.5" fill="#3987e5"/>
+  <line x1="380" y1="165" x2="380" y2="171" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="380" y1="168" x2="426" y2="168" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="426" y1="165" x2="426" y2="171" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="614" y="158" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">one frame: lifetime Δt</text>
+  <text x="110" y="204" font-size="13" fill="#f0efec" text-anchor="end" font-weight="bold">cluster 4</text>
+  <line x1="380" y1="200" x2="426" y2="200" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <line x1="426" y1="200" x2="564" y2="200" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+  <line x1="564" y1="200" x2="598" y2="200" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4"/>
+  <circle cx="426" cy="200" r="5.5" fill="#3987e5"/>
+  <circle cx="472" cy="200" r="5.5" fill="#3987e5"/>
+  <circle cx="518" cy="200" r="5.5" fill="#3987e5"/>
+  <circle cx="564" cy="200" r="5.5" fill="#3987e5"/>
+  <line x1="426" y1="211" x2="426" y2="217" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="426" y1="214" x2="564" y2="214" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="564" y1="211" x2="564" y2="217" stroke="#c3c2b7" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="614" y="204" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">alive at end: ≥ 3Δt</text>
+</svg>

@@ -1895,10 +1895,12 @@ V = \tfrac{4}{3}\pi R^3,
 \qquad
 \rho = \frac{m}{V}.
 \]</div>
+<p><img alt="Cross-section of a cluster drawn as atoms packed in a disk, with three circles about its center: a dashed one of radius Rg, the radius of gyration; one of radius the square root of 5/3 times Rg, reaching the outer atoms' centers; and, half an atom's van der Waals radius further out, the equivalent sphere of radius R, which cuts the outer atoms halfway through." src="../../assets/concepts/size-light.svg#only-light" />
+<img alt="Cross-section of a cluster drawn as atoms packed in a disk, with three circles about its center: a dashed one of radius Rg, the radius of gyration; one of radius the square root of 5/3 times Rg, reaching the outer atoms' centers; and, half an atom's van der Waals radius further out, the equivalent sphere of radius R, which cuts the outer atoms halfway through." src="../../assets/concepts/size-dark.svg#only-dark" /></p>
 <p>Half, not the full van der Waals radius, because bonded atoms' van der Waals spheres
-overlap. On methanol-malic acid mixtures the full radius puts a lone malic acid at
-0.70 g/cm³ and half at 1.21 g/cm³ (the solid is 1.61 g/cm³), and the choice barely
-changes large clusters. The density of small clusters is an estimate; compare it
+overlap. On mixtures of 2-methylerythritol and malic acid the full radius puts a lone
+malic acid at 0.70 g/cm³ and half at 1.21 g/cm³ (the solid is 1.61 g/cm³), and the
+choice barely changes large clusters. The density of small clusters is an estimate; compare it
 between clusters rather than with bulk densities.</p>
 <p>The report also gives <span class="arithmatex">\(R_g\)</span> itself, as <code>radius_of_gyration</code>, for analyses that
 need it without the equivalent sphere's assumptions.</p>
@@ -1931,6 +1933,11 @@ S = 27\,\frac{\prod_i (\lambda_i - \bar\lambda)}{\left(\sum_i \lambda_i\right)^3
 \]</div>
 <p>0 for a sphere, negative for oblate (flattened) shapes down to −0.25 for a disk, and
 positive for prolate (elongated) ones up to 2 for a rod.</p>
+<p><img alt="Sphericity against shape parameter S. Every shape falls inside a curved triangle with corners at the sphere (S 0, sphericity 1), the disk or ring (S -0.25, sphericity 0.75) and the rod (S 2, sphericity 0). Its upper edges are the oblate spheroids, from sphere to disk, and the prolate ones, from sphere to rod, with a cigar at S 0.56, sphericity 0.57. Its lower edge is the flat shapes, from disk to rod, with an A4 sheet at S 0, sphericity 0.67." src="../../assets/concepts/shape-light.svg#only-light" />
+<img alt="Sphericity against shape parameter S. Every shape falls inside a curved triangle with corners at the sphere (S 0, sphericity 1), the disk or ring (S -0.25, sphericity 0.75) and the rod (S 2, sphericity 0). Its upper edges are the oblate spheroids, from sphere to disk, and the prolate ones, from sphere to rod, with a cigar at S 0.56, sphericity 0.57. Its lower edge is the flat shapes, from disk to rod, with an A4 sheet at S 0, sphericity 0.67." src="../../assets/concepts/shape-dark.svg#only-dark" /></p>
+<p>The two are best read together: a flat sheet with sides <span class="arithmatex">\(\sqrt2 : 1\)</span> (an A4 sheet,
+whose gyration eigenvalues are 1 : ½ : 0) has <span class="arithmatex">\(S = 0\)</span> like a sphere, but a
+sphericity of 0.67.</p>
 <h2 id="connections">Connections<a class="headerlink" href="#connections" title="Permanent link">&para;</a></h2>
 <p>For each connection, the report records the distance between the two molecules:
 their centers of mass' distance for <code>cm</code> rules, and the donor-acceptor distance of

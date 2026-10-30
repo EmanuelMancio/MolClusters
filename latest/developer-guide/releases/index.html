@@ -1940,8 +1940,12 @@ directory of the job's own, not the Actions cache that every workflow (pull requ
 included) writes to, so the published image is built only from the tagged sources and
 the pinned base images. The base images (<code>python</code>, <code>uv</code>) are pinned by digest in
 <code>Dockerfile</code>, and updated weekly by Dependabot like the Python dependencies.</p>
-<p>The <em>Tests</em> workflow builds and checks the linux/amd64 image on every push and pull
-request too, so a change that breaks it shows up before a release. To check the image
+<p>The <em>Container</em> workflow (<code>.github/workflows/container.yml</code>) builds and checks the
+linux/amd64 image too, on pushes and pull requests to <code>main</code> and <code>dev</code> that change a file
+the image depends on beyond the code (<code>Dockerfile</code>, <code>.dockerignore</code>, <code>pyproject.toml</code>,
+<code>uv.lock</code>, <code>scripts/check_container.sh</code>), so such a change that breaks it shows up before
+a release; run it by hand (<em>Actions → Container → Run workflow</em>) for anything else you
+suspect. To check the image
 locally (Docker or Podman, from the repository's root):</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>molclusters:test<span class="w"> </span>.
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scripts/check_container.sh<span class="w"> </span>molclusters:test<span class="w">        </span><span class="c1"># ENGINE=podman for Podman</span>

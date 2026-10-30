@@ -1765,6 +1765,13 @@
 
 
 <h1 id="molclusters">MolClusters<a class="headerlink" href="#molclusters" title="Permanent link">&para;</a></h1>
+<figure class="hero">
+  <img alt="A droplet of a few dozen molecules, drawn as space-filling atoms. Six of the clusters it holds are coloured blue, orange, green, yellow, pink and violet, the other clusters are grey, and free molecules nearby are faint." src="assets/home/droplet.webp" width="300" />
+<br />
+<figcaption>One droplet of 2-methylerythritol and malic acid (the test system, at
+  47.5 ns), resolved into clusters by the <a href="user-guide/quickstart/">quick start</a>'s rules: each colour is one
+  cluster, grey ones are other clusters, faint ones free molecules.</figcaption>
+</figure>
 <p><strong>MolClusters</strong> follows molecular clusters through a molecular dynamics trajectory:
 which molecules are connected to which, how the clusters they form are born, grow,
 split, merge and dissolve, how long they live, and what they look like — size,
@@ -1828,6 +1835,8 @@ write files and add fields to the report.</p>
    (lineage and lifetimes), solute-solvent clusters, nuclei inside clusters,
    coordinates of the clusters holding solutes, and a full JSON report.</li>
 </ol>
+<p><img alt="Four panels. 1, connect: molecules linked by connections where a rule holds. 2, find clusters: the connected groups are outlined. 3, track: each cluster gets an id, 1, 2 and 3, kept from frame to frame. 4, analyse: a plot and a table, for the output files and the JSON report." src="assets/concepts/pipeline-light.svg#only-light" />
+<img alt="Four panels. 1, connect: molecules linked by connections where a rule holds. 2, find clusters: the connected groups are outlined. 3, track: each cluster gets an id, 1, 2 and 3, kept from frame to frame. 4, analyse: a plot and a table, for the output files and the JSON report." src="assets/concepts/pipeline-dark.svg#only-dark" /></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>molclusters<span class="w"> </span>traj.xtc<span class="w"> </span>topol.tpr<span class="w"> </span>config.yml<span class="w"> </span>--output-dir<span class="w"> </span>results
 </span></code></pre></div>
 <h2 id="citing">Citing<a class="headerlink" href="#citing" title="Permanent link">&para;</a></h2>

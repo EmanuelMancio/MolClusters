@@ -1806,23 +1806,16 @@ for their pair of residue names holds:</p>
 <p>Residue-name pairs without a rule never connect. Distances follow the minimum-image
 convention of the periodic box, and a molecule split across the box boundary is made
 whole before its center of mass is computed.</p>
+<p><img alt="Three panels of a periodic box. 1: a molecule on the box's right edge, stored with some of its atoms wrapped to the left edge; the average of its atoms' positions falls mid-box, far from the molecule. 2: the same molecule made whole, its atoms joined across the edge into the next box, its center of mass on the edge. 3: molecules 1 and 2 near opposite edges are far apart through the box, but 1 is close to the image of 2 beyond the left edge; that shorter distance is the one used." src="../../assets/concepts/pbc-light.svg#only-light" />
+<img alt="Three panels of a periodic box. 1: a molecule on the box's right edge, stored with some of its atoms wrapped to the left edge; the average of its atoms' positions falls mid-box, far from the molecule. 2: the same molecule made whole, its atoms joined across the edge into the next box, its center of mass on the edge. 3: molecules 1 and 2 near opposite edges are far apart through the box, but 1 is close to the image of 2 beyond the left edge; that shorter distance is the one used." src="../../assets/concepts/pbc-dark.svg#only-dark" /></p>
 <p>A <strong>cluster</strong> is a set of two or more molecules linked to each other, directly or
 through other molecules, and to nothing else: a connected component of the graph
 whose nodes are molecules and whose edges are connections. A molecule connected to
 nothing is <strong>free</strong>, and belongs to no cluster.</p>
-<pre class="mermaid"><code>flowchart LR
-  subgraph c1 ["cluster 1"]
-    direction TB
-    A((12)) --- B((57)) --- C((33))
-    B --- D((80))
-  end
-  subgraph c2 ["cluster 2"]
-    direction TB
-    E((5)) --- F((91))
-  end
-  G((44))
-  %% invisible links: lay the groups out side by side, in this order
-  c1 ~~~ c2 ~~~ G</code></pre>
+<figure>
+  <img alt="Seven molecules, numbered by resid. Cluster 1 holds 12, 57, 33 and 80: 57 is connected to each of the other three. Cluster 2 holds 5 and 91, connected to each other. Molecule 44 is connected to nothing: it is free." src="../../assets/concepts/graph-light.svg#only-light" />
+  <img alt="Seven molecules, numbered by resid. Cluster 1 holds 12, 57, 33 and 80: 57 is connected to each of the other three. Cluster 2 holds 5 and 91, connected to each other. Molecule 44 is connected to nothing: it is free." src="../../assets/concepts/graph-dark.svg#only-dark" />
+</figure>
 <p>Here molecule 44 is free, and molecules 12 and 80 belong to cluster 1 although they
 are not connected to each other directly.</p>
 <p>Connected groups whose set of residue names matches an
@@ -1845,9 +1838,13 @@ trajectories (<code>cls-id&lt;id&gt;.gro</code>) and lineage meaningful.</p>
    those that picked it; on a tie, the oldest (the lowest id). A group that no
    previous cluster picked is a <strong>new cluster</strong>, with a new id.</li>
 </ol>
+<p><img alt="Two diagrams of the same pair of frames. At frame t there are cluster 7 with 6 molecules, cluster 9 with 4, cluster 12 with 2, and 2 free molecules. At frame t + 1 group A holds 4 molecules from 7, 2 from 9 and 1 free one; group B holds 2 from 7; group C holds 1 from 9, 1 from 12 and 1 free one; 1 molecule from 9 and 1 from 12 are free. Step 1: 7 picks A (4 of its 6), 9 picks A (2 of its 4), 12 picks nothing, since it only sent single molecules. Step 2: A was picked by 7 and 9 and continues 7, which gave it 4 molecules against 2; 9 ends, merged into 7, and 12 ends, dissolved. B and C, picked by nobody, get the new ids 13 and 14." src="../../assets/concepts/id-assignment-light.svg#only-light" />
+<img alt="Two diagrams of the same pair of frames. At frame t there are cluster 7 with 6 molecules, cluster 9 with 4, cluster 12 with 2, and 2 free molecules. At frame t + 1 group A holds 4 molecules from 7, 2 from 9 and 1 free one; group B holds 2 from 7; group C holds 1 from 9, 1 from 12 and 1 free one; 1 molecule from 9 and 1 from 12 are free. Step 1: 7 picks A (4 of its 6), 9 picks A (2 of its 4), 12 picks nothing, since it only sent single molecules. Step 2: A was picked by 7 and 9 and continues 7, which gave it 4 molecules against 2; 9 ends, merged into 7, and 12 ends, dissolved. B and C, picked by nobody, get the new ids 13 and 14." src="../../assets/concepts/id-assignment-dark.svg#only-dark" /></p>
 <h2 id="events">Events<a class="headerlink" href="#events" title="Permanent link">&para;</a></h2>
 <p>The following events come out of these two rules. They are what
 <a href="../outputs/#cluster_eventscsv"><code>cluster_events.csv</code></a> records.</p>
+<p><img alt="Six panels, each a frame t and the next frame t + 1, with molecules coloured by the cluster they were in at frame t and each frame's clusters outlined and labelled with their id. Formation: free molecules come together into new cluster 3. Growth: two free molecules join cluster 1, which keeps its id. Split: cluster 1 of 6 molecules breaks into 4 and 2; the 4 keep id 1, the 2 become new cluster 3. Merge: cluster 1 (4 molecules) and cluster 2 (2) come together; the result is cluster 1 and 2 ends. Dissolution: cluster 1 of 3 molecules leaves two free molecules and one that joins cluster 2; 1 ends. Mixed dimer: one molecule from cluster 1 and one from cluster 2 pair up; the pair is new cluster 3, while 1 and 2 carry on with their remaining molecules." src="../../assets/concepts/events-light.svg#only-light" />
+<img alt="Six panels, each a frame t and the next frame t + 1, with molecules coloured by the cluster they were in at frame t and each frame's clusters outlined and labelled with their id. Formation: free molecules come together into new cluster 3. Growth: two free molecules join cluster 1, which keeps its id. Split: cluster 1 of 6 molecules breaks into 4 and 2; the 4 keep id 1, the 2 become new cluster 3. Merge: cluster 1 (4 molecules) and cluster 2 (2) come together; the result is cluster 1 and 2 ends. Dissolution: cluster 1 of 3 molecules leaves two free molecules and one that joins cluster 2; 1 ends. Mixed dimer: one molecule from cluster 1 and one from cluster 2 pair up; the pair is new cluster 3, while 1 and 2 carry on with their remaining molecules." src="../../assets/concepts/events-dark.svg#only-dark" /></p>
 <table>
 <thead>
 <tr>
@@ -1909,6 +1906,8 @@ frame lived one spacing.</p>
 <p>Lifetimes are <em>censored</em> when the cluster was already there at the first frame or is
 still there at the last: it lived at least that long. The lifetimes table flags both
 cases (<code>BornAtStart</code>, <code>AliveAtEnd</code>).</p>
+<p><img alt="Four clusters over ten frames, 0 to 9 Δt. Cluster 1 is seen in frames 0 to 3 and gone at 4Δt: it was there at the first frame, so its lifetime of 4Δt is a lower bound. Cluster 2 is seen in frames 2Δt to 6Δt and gone at 7Δt: lifetime 5Δt. Cluster 3 is seen only at 5Δt and gone at 6Δt: lifetime Δt. Cluster 4 is seen from 6Δt to the last frame, 9Δt: it is still there at the end, so its lifetime of 3Δt is a lower bound. Before each first sighting and after each last one, a dashed stretch marks the frame spacing in which the cluster formed or ended." src="../../assets/concepts/lifetimes-light.svg#only-light" />
+<img alt="Four clusters over ten frames, 0 to 9 Δt. Cluster 1 is seen in frames 0 to 3 and gone at 4Δt: it was there at the first frame, so its lifetime of 4Δt is a lower bound. Cluster 2 is seen in frames 2Δt to 6Δt and gone at 7Δt: lifetime 5Δt. Cluster 3 is seen only at 5Δt and gone at 6Δt: lifetime Δt. Cluster 4 is seen from 6Δt to the last frame, 9Δt: it is still there at the end, so its lifetime of 3Δt is a lower bound. Before each first sighting and after each last one, a dashed stretch marks the frame spacing in which the cluster formed or ended." src="../../assets/concepts/lifetimes-dark.svg#only-dark" /></p>
 <h3 id="how-precise-the-times-are">How precise the times are<a class="headerlink" href="#how-precise-the-times-are" title="Permanent link">&para;</a></h3>
 <p>MolClusters only sees the clusters at the frames of the trajectory, <span class="arithmatex">\(\Delta t\)</span>
 apart: the spacing of the saved frames, multiplied by <code>--in-memory-step</code> if frames
