@@ -1261,6 +1261,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#container-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dois-zenodo" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1768,6 +1779,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#container-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dois-zenodo" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1866,8 +1888,10 @@ workflow (<code>.github/workflows/release.yml</code>):</p>
 <li><strong>build</strong>: checks the tag matches the package version, runs the tests, builds the
    wheel and sdist and checks their metadata (<code>twine check</code>);</li>
 <li><strong>pypi</strong>: uploads them to <a href="https://pypi.org/project/molclusters/">PyPI</a>;</li>
+<li><strong>container</strong>: builds the <a href="#container-image">container image</a>, checks it, and
+   pushes it to the GitHub Container Registry;</li>
 <li><strong>github-release</strong>: publishes the GitHub release, with the same files attached and
-   the version's <code>CHANGELOG.md</code> section as its notes.</li>
+   the version's <code>CHANGELOG.md</code> section as its notes (plus the image's name).</li>
 </ol>
 <p>If it fails for a passing reason (a network error), re-run it from the Actions tab; if
 the tagged code itself fails, don't move the tag: fix it on <code>dev</code> and cut the next
@@ -1888,6 +1912,47 @@ It was set up once, before the first upload:</p>
 work on GitHub but not on PyPI.</p>
 <p>The release commit must not carry <code>[skip ci]</code>: GitHub would then skip every workflow
 triggered by the push, the tag's included.</p>
+<h2 id="container-image">Container image<a class="headerlink" href="#container-image" title="Permanent link">&para;</a></h2>
+<p><code>Dockerfile</code> builds an image holding only MolClusters, installed with <code>uv sync
+--locked --no-dev</code> so its dependencies are exactly those of <code>uv.lock</code>, which the tests
+ran with; <code>.dockerignore</code> lists the only files it is built from, so nothing else in a
+clone (<code>.git</code>, <code>.env</code>, local data) can end up in it. The image runs <code>molclusters</code> as
+its entrypoint, as uid 1000 rather than root. The <em>container</em> job of the <em>Release</em>
+workflow:</p>
+<ol>
+<li>builds it for linux/amd64 and runs <code>scripts/check_container.sh</code> on it, which checks
+   that it doesn't run as root, checks <code>molclusters --version</code> against the tag, and
+   runs the met-mal test system as a non-root user with a mounted directory, as users
+   run it;</li>
+<li>builds it for linux/amd64 and linux/arm64 (the latter emulated with QEMU, which only
+   unpacks wheels) and pushes it to <code>ghcr.io/emanuelmancio/molclusters</code> as an OCI image
+   index: OCI media types (<code>oci-mediatypes=true</code>), with the
+   <code>org.opencontainers.image.*</code> labels and annotations (source, version, revision,
+   license, ...) set by <code>docker/metadata-action</code>, and tags <code>X.Y.Z</code>, <code>X.Y</code> and <code>latest</code>;</li>
+<li>attests its build provenance (<code>actions/attest-build-provenance</code>, signed with the
+   workflow's OIDC identity and stored next to the image), which <code>gh attestation
+   verify</code> checks.</li>
+</ol>
+<p>Being able to publish packages, the job is hardened beyond the rest of the workflow:
+its actions are pinned to commit SHAs (with the version in a comment; Dependabot
+updates both), the checkout doesn't keep the token, and its build cache is a
+directory of the job's own, not the Actions cache that every workflow (pull requests'
+included) writes to, so the published image is built only from the tagged sources and
+the pinned base images. The base images (<code>python</code>, <code>uv</code>) are pinned by digest in
+<code>Dockerfile</code>, and updated weekly by Dependabot like the Python dependencies.</p>
+<p>The <em>Tests</em> workflow builds and checks the linux/amd64 image on every push and pull
+request too, so a change that breaks it shows up before a release. To check the image
+locally (Docker or Podman, from the repository's root):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>molclusters:test<span class="w"> </span>.
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scripts/check_container.sh<span class="w"> </span>molclusters:test<span class="w">        </span><span class="c1"># ENGINE=podman for Podman</span>
+</span></code></pre></div>
+<p>The job pushes with the workflow's own token, so nothing needs storing. The first
+push creates the package private: once, on GitHub, open <em>Packages → molclusters →
+Package settings</em>, set <em>Change visibility</em> to <strong>Public</strong>, and check that it is linked
+to this repository (the <code>org.opencontainers.image.source</code> label links it), so the
+repository's <em>Actions</em> keep write access. Like a PyPI upload, a published tag
+shouldn't be overwritten: if a release's image is broken, fix it on <code>dev</code> and cut the
+next version.</p>
 <h2 id="dois-zenodo">DOIs (Zenodo)<a class="headerlink" href="#dois-zenodo" title="Permanent link">&para;</a></h2>
 <p>Each published GitHub release, as the <em>Release</em> workflow makes, is archived on
 <a href="https://zenodo.org/">Zenodo</a>, which gives it a DOI; a tag alone isn't. Zenodo takes the record's title, description, authors
