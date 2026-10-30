@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="730" height="622" viewBox="0 0 730 622" font-family="Roboto, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <circle cx="7" cy="12" r="7" fill="#3987e5"/>
+  <circle cx="25" cy="12" r="7" fill="#d95926"/>
+  <text x="40" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">in cluster 1 or 2 at t (molecules keep this colour)</text>
+  <circle cx="337" cy="12" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="352" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">free at t</text>
+  <rect x="420" y="3" width="30" height="18" rx="9" fill="#199e70" stroke="#199e70" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="458" y="16" font-size="12" fill="#c3c2b7" text-anchor="start" font-weight="normal">a cluster in that frame, with its id</text>
+  <text x="0" y="48" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">formation</text>
+  <rect x="0" y="58" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <circle cx="30" cy="88" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="72" cy="106" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="42" cy="140" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="118" cy="134" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <line x1="158" y1="114" x2="190" y2="114" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M192,114 l-7,-4 v8 z" fill="#898781"/>
+  <rect x="200" y="58" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="238" y="88" width="44" height="41" rx="12" fill="#199e70" stroke="#199e70" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="240" y="84" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">3 new</text>
+  <line x1="263" y1="100" x2="257" y2="100" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="256.451" y1="110.966" x2="253.549" y2="106.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="250" cy="100" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="270" cy="100" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="260" cy="117" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="318" cy="138" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="75" y="185" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t</text>
+  <text x="275" y="185" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t + 1</text>
+  <text x="0" y="205" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">Free molecules come together: a new id.</text>
+  <text x="380" y="48" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">growth</text>
+  <rect x="380" y="58" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="406" y="96" width="44" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="408" y="92" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="431" y1="108" x2="425" y2="108" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="424.451" y1="118.966" x2="421.549" y2="114.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="418" cy="108" r="7" fill="#3987e5"/>
+  <circle cx="438" cy="108" r="7" fill="#3987e5"/>
+  <circle cx="428" cy="125" r="7" fill="#3987e5"/>
+  <circle cx="492" cy="92" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="496" cy="144" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <line x1="538" y1="114" x2="570" y2="114" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M572,114 l-7,-4 v8 z" fill="#898781"/>
+  <rect x="580" y="58" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="606" y="96" width="64" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="608" y="92" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="631" y1="108" x2="625" y2="108" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="624.451" y1="118.966" x2="621.549" y2="114.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="644.451" y1="118.966" x2="641.549" y2="114.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="654.451" y1="114.034" x2="651.549" y2="118.966" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="618" cy="108" r="7" fill="#3987e5"/>
+  <circle cx="638" cy="108" r="7" fill="#3987e5"/>
+  <circle cx="628" cy="125" r="7" fill="#3987e5"/>
+  <circle cx="648" cy="125" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="658" cy="108" r="6.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="455" y="185" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t</text>
+  <text x="655" y="185" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t + 1</text>
+  <text x="380" y="205" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">Molecules join: the cluster keeps its id.</text>
+  <text x="0" y="250" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">split</text>
+  <rect x="0" y="260" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="18" y="298" width="94" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="20" y="294" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="43" y1="310" x2="37" y2="310" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="36.4509" y1="320.966" x2="33.5491" y2="316.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="56.4509" y1="320.966" x2="53.5491" y2="316.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="73" y1="327" x2="67" y2="327" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="93" y1="327" x2="87" y2="327" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="30" cy="310" r="7" fill="#3987e5"/>
+  <circle cx="50" cy="310" r="7" fill="#3987e5"/>
+  <circle cx="40" cy="327" r="7" fill="#3987e5"/>
+  <circle cx="60" cy="327" r="7" fill="#3987e5"/>
+  <circle cx="80" cy="327" r="7" fill="#3987e5"/>
+  <circle cx="100" cy="327" r="7" fill="#3987e5"/>
+  <line x1="158" y1="316" x2="190" y2="316" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M192,316 l-7,-4 v8 z" fill="#898781"/>
+  <rect x="200" y="260" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="214" y="298" width="54" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="216" y="294" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="239" y1="310" x2="233" y2="310" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="232.451" y1="320.966" x2="229.549" y2="316.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="252.451" y1="320.966" x2="249.549" y2="316.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="288" y="320" width="44" height="24" rx="12" fill="#199e70" stroke="#199e70" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="290" y="316" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">3 new</text>
+  <line x1="313" y1="332" x2="307" y2="332" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="226" cy="310" r="7" fill="#3987e5"/>
+  <circle cx="246" cy="310" r="7" fill="#3987e5"/>
+  <circle cx="236" cy="327" r="7" fill="#3987e5"/>
+  <circle cx="256" cy="327" r="7" fill="#3987e5"/>
+  <circle cx="300" cy="332" r="7" fill="#3987e5"/>
+  <circle cx="320" cy="332" r="7" fill="#3987e5"/>
+  <text x="75" y="387" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t</text>
+  <text x="275" y="387" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t + 1</text>
+  <text x="0" y="407" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">The piece with most of its molecules keeps the id.</text>
+  <text x="380" y="250" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">merge</text>
+  <rect x="380" y="260" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="394" y="292" width="54" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="396" y="288" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="419" y1="304" x2="413" y2="304" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="412.451" y1="314.966" x2="409.549" y2="310.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="432.451" y1="314.966" x2="429.549" y2="310.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="470" y="326" width="44" height="24" rx="12" fill="#d95926" stroke="#d95926" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="472" y="322" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">2</text>
+  <line x1="495" y1="338" x2="489" y2="338" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="406" cy="304" r="7" fill="#3987e5"/>
+  <circle cx="426" cy="304" r="7" fill="#3987e5"/>
+  <circle cx="416" cy="321" r="7" fill="#3987e5"/>
+  <circle cx="436" cy="321" r="7" fill="#3987e5"/>
+  <circle cx="482" cy="338" r="7" fill="#d95926"/>
+  <circle cx="502" cy="338" r="7" fill="#d95926"/>
+  <line x1="538" y1="316" x2="570" y2="316" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M572,316 l-7,-4 v8 z" fill="#898781"/>
+  <rect x="580" y="260" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="594" y="304" width="94" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="596" y="300" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="619" y1="316" x2="613" y2="316" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="612.451" y1="326.966" x2="609.549" y2="322.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="632.451" y1="326.966" x2="629.549" y2="322.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="649" y1="333" x2="643" y2="333" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="669" y1="333" x2="663" y2="333" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="606" cy="316" r="7" fill="#3987e5"/>
+  <circle cx="626" cy="316" r="7" fill="#3987e5"/>
+  <circle cx="616" cy="333" r="7" fill="#3987e5"/>
+  <circle cx="636" cy="333" r="7" fill="#3987e5"/>
+  <circle cx="656" cy="333" r="7" fill="#d95926"/>
+  <circle cx="676" cy="333" r="7" fill="#d95926"/>
+  <text x="455" y="387" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t</text>
+  <text x="655" y="387" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t + 1</text>
+  <text x="380" y="407" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">1 gave more molecules and keeps its id; 2 ends.</text>
+  <text x="0" y="452" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">dissolution</text>
+  <rect x="0" y="462" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="18" y="490" width="44" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="20" y="486" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="43" y1="502" x2="37" y2="502" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="36.4509" y1="512.966" x2="33.5491" y2="508.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="80" y="526" width="44" height="41" rx="12" fill="#d95926" stroke="#d95926" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="82" y="522" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">2</text>
+  <line x1="105" y1="538" x2="99" y2="538" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="98.4509" y1="548.966" x2="95.5491" y2="544.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="30" cy="502" r="7" fill="#3987e5"/>
+  <circle cx="50" cy="502" r="7" fill="#3987e5"/>
+  <circle cx="40" cy="519" r="7" fill="#3987e5"/>
+  <circle cx="92" cy="538" r="7" fill="#d95926"/>
+  <circle cx="112" cy="538" r="7" fill="#d95926"/>
+  <circle cx="102" cy="555" r="7" fill="#d95926"/>
+  <line x1="158" y1="518" x2="190" y2="518" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M192,518 l-7,-4 v8 z" fill="#898781"/>
+  <rect x="200" y="462" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="260" y="526" width="64" height="41" rx="12" fill="#d95926" stroke="#d95926" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="262" y="522" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">2</text>
+  <line x1="285" y1="538" x2="279" y2="538" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="305" y1="538" x2="299" y2="538" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="298.451" y1="548.966" x2="295.549" y2="544.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="224" cy="492" r="7" fill="#3987e5"/>
+  <circle cx="240" cy="524" r="7" fill="#3987e5"/>
+  <circle cx="272" cy="538" r="7" fill="#3987e5"/>
+  <circle cx="292" cy="538" r="7" fill="#d95926"/>
+  <circle cx="312" cy="538" r="7" fill="#d95926"/>
+  <circle cx="302" cy="555" r="7" fill="#d95926"/>
+  <text x="75" y="589" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t</text>
+  <text x="275" y="589" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t + 1</text>
+  <text x="0" y="609" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">1 leaves single molecules only: it ends.</text>
+  <text x="380" y="452" font-size="14" fill="#f0efec" text-anchor="start" font-weight="bold">mixed dimer</text>
+  <rect x="380" y="462" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="394" y="490" width="44" height="41" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="396" y="486" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="419" y1="502" x2="413" y2="502" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="412.451" y1="512.966" x2="409.549" y2="508.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="466" y="524" width="44" height="41" rx="12" fill="#d95926" stroke="#d95926" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="468" y="520" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">2</text>
+  <line x1="491" y1="536" x2="485" y2="536" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="484.451" y1="546.966" x2="481.549" y2="542.034" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="406" cy="502" r="7" fill="#3987e5"/>
+  <circle cx="426" cy="502" r="7" fill="#3987e5"/>
+  <circle cx="416" cy="519" r="7" fill="#3987e5"/>
+  <circle cx="478" cy="536" r="7" fill="#d95926"/>
+  <circle cx="498" cy="536" r="7" fill="#d95926"/>
+  <circle cx="488" cy="553" r="7" fill="#d95926"/>
+  <line x1="538" y1="518" x2="570" y2="518" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M572,518 l-7,-4 v8 z" fill="#898781"/>
+  <rect x="580" y="462" width="150" height="112" rx="8" fill="none" stroke="#2c2c2a" stroke-width="1"/>
+  <rect x="590" y="486" width="44" height="24" rx="12" fill="#3987e5" stroke="#3987e5" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="592" y="482" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">1</text>
+  <line x1="615" y1="498" x2="609" y2="498" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="678" y="490" width="44" height="24" rx="12" fill="#d95926" stroke="#d95926" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="680" y="486" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">2</text>
+  <line x1="703" y1="502" x2="697" y2="502" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="634" y="522" width="44" height="24" rx="12" fill="#199e70" stroke="#199e70" stroke-width="1.5" fill-opacity="0.1"/>
+  <text x="636" y="518" font-size="12" fill="#f0efec" text-anchor="start" font-weight="bold">3 new</text>
+  <line x1="659" y1="534" x2="653" y2="534" stroke="#898781" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="602" cy="498" r="7" fill="#3987e5"/>
+  <circle cx="622" cy="498" r="7" fill="#3987e5"/>
+  <circle cx="646" cy="534" r="7" fill="#3987e5"/>
+  <circle cx="666" cy="534" r="7" fill="#d95926"/>
+  <circle cx="690" cy="502" r="7" fill="#d95926"/>
+  <circle cx="710" cy="502" r="7" fill="#d95926"/>
+  <text x="455" y="589" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t</text>
+  <text x="655" y="589" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">t + 1</text>
+  <text x="380" y="609" font-size="13" fill="#c3c2b7" text-anchor="start" font-weight="normal">One molecule from each of two clusters: always new.</text>
+</svg>

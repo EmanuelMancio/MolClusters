@@ -24,7 +24,7 @@ docs/
 ├── developer-guide/         # for people working on MolClusters
 ├── reference/               # API reference: one page per module, `::: module` directives
 ├── changelog.md             # includes CHANGELOG.md
-├── assets/, javascripts/    # favicon, MathJax setup
+├── assets/, javascripts/    # favicon, figures, MathJax setup
 ```
 
 A new page needs an entry in `nav` in `mkdocs.yml`. Pages are covered by the
@@ -39,8 +39,27 @@ A new page needs an entry in `nav` in `mkdocs.yml`. Pages are covered by the
 | an output file or its columns | [Output files](../user-guide/outputs.md) |
 | the report format | [The JSON report](../user-guide/report.md), and `report.py`'s docstring |
 | a property's definition | [Cluster properties](../user-guide/properties.md) |
-| id assignment | [How clusters are tracked](../user-guide/concepts.md), [The tracking algorithm](tracking.md) |
+| id assignment | [How clusters are tracked](../user-guide/concepts.md) and its figures, [The tracking algorithm](tracking.md) |
 | a public class or function | its docstring (the reference follows); a new module gets a reference page |
+
+## Figures
+
+Each figure is a pair of SVG files, `<name>-light.svg` and `<name>-dark.svg`, shown
+with Material's `#only-light` and `#only-dark` and the same alt text, which
+describes what the figure shows for readers who can't see it:
+
+```markdown
+![Alt text.](../assets/concepts/events-light.svg#only-light)
+![Alt text.](../assets/concepts/events-dark.svg#only-dark)
+```
+
+The schematic figures of [How clusters are tracked](../user-guide/concepts.md)
+(`docs/assets/concepts/`) are drawn by `scripts/docs_figures.py`; change them there
+and rerun it rather than editing the SVG files:
+
+```bash
+uv run python scripts/docs_figures.py
+```
 
 ## Docstrings
 

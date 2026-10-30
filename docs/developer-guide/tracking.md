@@ -39,6 +39,9 @@ change it. The user-facing summary is [How clusters are tracked](../user-guide/c
    cluster), `born`, `merged` (every other cluster that picked a group → the one that
    continued in it) and `dissolved` (ended without merging).
 
+The [id-assignment figure](../user-guide/concepts.md#cluster-ids) walks through steps
+3 and 4 on a frame pair whose group A is the example of step 2.
+
 ## Resulting events
 
 | Event | How it arises |
