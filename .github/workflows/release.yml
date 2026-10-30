@@ -4,12 +4,14 @@
 
 # Releases a version tag pushed by `cz bump` (see the developer guide's "Commits and
 # releases"): checks the tag matches the package version, runs the tests and builds the
-# package once, uploads it to PyPI, then publishes the GitHub release with the same
-# files and the version's CHANGELOG.md section as notes. Zenodo archives each published
-# GitHub release and gives it a DOI.
+# package once, uploads it to PyPI, pushes the container image (an OCI image for
+# linux/amd64 and linux/arm64) to ghcr.io, then publishes the GitHub release with the
+# same files and the version's CHANGELOG.md section as notes. Zenodo archives each
+# published GitHub release and gives it a DOI.
 #
 # PyPI uses trusted publishing (no token): the PyPI project must list this repository,
-# this workflow (release.yml) and the `pypi` environment as a trusted publisher.
+# this workflow (release.yml) and the `pypi` environment as a trusted publisher. The
+# image is pushed with the workflow's own token (`packages: write`).
 
 name: Release
 
@@ -69,6 +71,8 @@ jobs:
             echo "::error::CHANGELOG.md has no '## $TAG ' section."
             exit 1
           fi
+          echo "Container image: \`ghcr.io/${GITHUB_REPOSITORY,,}:${TAG#v}\`." >> notes.md
+          echo >> notes.md
           echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$TAG/CHANGELOG.md) for every version." >> notes.md
 
       - name: Keep the package
@@ -101,8 +105,103 @@ jobs:
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@v1.14.3
 
-  github-release:
+  # The image is built from the tagged sources and uv.lock (Dockerfile), tested on
+  # linux/amd64, then built for both platforms and pushed as an OCI image index (OCI
+  # media types, org.opencontainers.image.* labels and annotations) tagged X.Y.Z, X.Y
+  # and latest, with a signed build provenance attestation.
+  #
+  # This job can write packages, so its actions are pinned to commit SHAs (a moved tag
+  # can't change what runs; Dependabot updates them), and its build cache stays within
+  # the job: the shared Actions cache, which other workflows write, never reaches a
+  # published image.
+  container:
     needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write      # signing the attestation
+      attestations: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Name the image (lowercase, as registries require)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU (to build for linux/arm64)
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Name, tag and annotate the image
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=MolClusters
+            org.opencontainers.image.licenses=LGPL-3.0-or-later
+            org.opencontainers.image.documentation=https://emanuelmancio.github.io/MolClusters/
+          annotations: |
+            org.opencontainers.image.title=MolClusters
+            org.opencontainers.image.licenses=LGPL-3.0-or-later
+            org.opencontainers.image.documentation=https://emanuelmancio.github.io/MolClusters/
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+      # Its layers, cached in the job's own directory, are reused by the push below, so
+      # the published linux/amd64 image is the one checked here.
+      - name: Build the image for testing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: molclusters:test
+          cache-to: type=local,dest=${{ runner.temp }}/buildx-cache,mode=max
+
+      - name: Check the image
+        run: scripts/check_container.sh molclusters:test "${TAG#v}"
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push the image
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          outputs: type=registry,oci-mediatypes=true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=local,src=${{ runner.temp }}/buildx-cache
+
+      # Lets anyone check the image was built by this workflow from this repository:
+      # `gh attestation verify oci://ghcr.io/emanuelmancio/molclusters:X.Y.Z -R EmanuelMancio/MolClusters`
+      - name: Attest the image's build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  github-release:
+    needs: [pypi, container]
     runs-on: ubuntu-latest
     permissions:
       contents: write

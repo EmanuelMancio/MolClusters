@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# The image is built from these files only (see Dockerfile).
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!COPYING
+!LICENSES/
+!src/
+**/__pycache__

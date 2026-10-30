@@ -37,6 +37,10 @@ uv tool install molclusters   # the molclusters command, in an environment of it
 pip install molclusters       # into your current environment, e.g. to use it from Python
 ```
 
+Releases are also published as an OCI container image, `ghcr.io/emanuelmancio/molclusters`,
+for Docker, Podman, Apptainer and Singularity (see
+[Installation](https://emanuelmancio.github.io/MolClusters/latest/user-guide/installation/#container-image)).
+
 The latest development version installs from this repository with
 `pip install git+https://github.com/EmanuelMancio/MolClusters@dev`.
 
