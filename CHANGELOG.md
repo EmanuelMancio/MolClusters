@@ -6,6 +6,16 @@ SPDX-License-Identifier: LGPL-3.0-or-later
 
 # CHANGELOG
 
+## v0.9.0 (2026-10-30)
+
+### Feat
+
+- **container**: publish an OCI container image with each release (#48)
+
+### Fix
+
+- **deps**: require MDAnalysis 2.11 for the neighbour search in triclinic boxes
+
 ## v0.8.0 (2026-10-24)
 
 ### Feat

@@ -19,8 +19,8 @@ authors:
     given-names: Kaline
     affiliation: "Instituto de Física, Universidade de São Paulo, São Paulo, Brasil"
     orcid: "https://orcid.org/0000-0002-7586-3324"
-version: 0.8.0
-date-released: "2026-10-24"
+version: 0.9.0
+date-released: "2026-10-30"
 # Zenodo's concept DOI: it resolves to the latest version, and each version's own DOI
 # is listed on its Zenodo record.
 doi: 10.5281/zenodo.23023320

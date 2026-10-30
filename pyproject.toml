@@ -4,7 +4,7 @@
 
 [project]
 name = "MolClusters"
-version = "0.8.0"
+version = "0.9.0"
 description = "Track the formation, growth, splitting, merging and lifetime of molecular clusters in molecular dynamics trajectories"
 # the same authors, description and keywords as CITATION.cff, which Zenodo credits
 authors = [
