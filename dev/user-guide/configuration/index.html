@@ -2149,23 +2149,31 @@ part of the same cluster, including a species with itself.</p>
 Write each pair once. If both are written, they must be the same rule: different
 rules for the same pair are an error.</p>
 <h3 id="cm-center-of-mass-distance"><code>cm</code>: center-of-mass distance<a class="headerlink" href="#cm-center-of-mass-distance" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">MOL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cm 6.0</span>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cm &lt;distance&gt;
 </span></code></pre></div>
-<p>Connects two molecules whose centers of mass are at most the given distance apart,
-in ångströms. Each molecule is made whole across the periodic boundaries before its
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">MOL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cm 6.0</span>
+</span></code></pre></div>
+<p>The distance is <strong>required</strong>. Connects two molecules whose centers of mass are at
+most that distance apart, in ångströms. Each molecule is made whole across the periodic boundaries before its
 center of mass is computed, and the distance follows the minimum-image convention.
 Finding these connections needs only masses; the clusters' charge and dipole moment
 need partial charges as well (see <a href="../quickstart/#1-what-you-need">Quick start</a>).</p>
+<p><img alt="Three small molecules, each with its center of mass marked. A dashed circle of radius cutoff is drawn around molecule 1's center of mass. Molecule 2's center of mass is inside it: 1 and 2 are connected. Molecule 3's is outside: 1 and 3 are not." src="../../assets/concepts/rule-cm-light.svg#only-light" />
+<img alt="Three small molecules, each with its center of mass marked. A dashed circle of radius cutoff is drawn around molecule 1's center of mass. Molecule 2's center of mass is inside it: 1 and 2 are connected. Molecule 3's is outside: 1 and 3 are not." src="../../assets/concepts/rule-cm-dark.svg#only-dark" /></p>
 <h3 id="hb-hydrogen-bond"><code>hb</code>: hydrogen bond<a class="headerlink" href="#hb-hydrogen-bond" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">MAL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hb d 3.5 a 120</span>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>hb [d &lt;distance&gt;] [a &lt;angle&gt;] [hmin &lt;mass&gt;] [hmax &lt;mass&gt;] [hq &lt;charge&gt;] [aq &lt;charge&gt;]
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">MAL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hb d 3.5 a 120</span>
 </span></code></pre></div>
 <p>Connects two molecules that share at least one hydrogen bond, as found by
 MDAnalysis' <a href="https://docs.mdanalysis.org/stable/documentation_pages/analysis/hydrogenbonds.html"><code>HydrogenBondAnalysis</code></a>.
-The rule takes any of these <code>flag value</code> pairs, in any order, each optional:</p>
+Every argument is <strong>optional</strong>: the rule takes any of these <code>flag value</code> pairs, in
+any order, each at most once, and a flag left out takes its default:</p>
 <table>
 <thead>
 <tr>
 <th>Flag</th>
+<th>Required</th>
 <th>Default</th>
 <th>Meaning</th>
 </tr>
@@ -2173,31 +2181,37 @@ The rule takes any of these <code>flag value</code> pairs, in any order, each op
 <tbody>
 <tr>
 <td><code>d</code></td>
+<td>no</td>
 <td>3.5</td>
 <td>donor-acceptor distance cutoff (Å)</td>
 </tr>
 <tr>
 <td><code>a</code></td>
+<td>no</td>
 <td>150</td>
 <td>donor-hydrogen-acceptor angle cutoff (degrees): a straight bond is 180°</td>
 </tr>
 <tr>
 <td><code>hmin</code></td>
+<td>no</td>
 <td>0.9</td>
 <td>hydrogens have a mass (amu) above this...</td>
 </tr>
 <tr>
 <td><code>hmax</code></td>
+<td>no</td>
 <td>1.1</td>
 <td>...and below this</td>
 </tr>
 <tr>
 <td><code>hq</code></td>
+<td>no</td>
 <td>0.3</td>
 <td>hydrogens have a partial charge (e) above this</td>
 </tr>
 <tr>
 <td><code>aq</code></td>
+<td>no</td>
 <td>-0.5</td>
 <td>acceptors have a partial charge (e) below this</td>
 </tr>
@@ -2208,6 +2222,8 @@ own defaults for guessing hydrogens and acceptors. Donors are the atoms the
 hydrogens are bonded to. This rule therefore needs <strong>masses, partial charges and
 bonds</strong> in the topology (a GROMACS <code>.tpr</code> or a CHARMM <code>.psf</code> has them). Hydrogen
 bonds within a molecule are ignored.</p>
+<p><img alt="A hydrogen bond between two molecules: donor D of molecule 1, bonded to hydrogen H, and acceptor A of molecule 2. The donor-acceptor distance, D to A, must be at most d; the D-H-A angle, at the hydrogen, must be at least a, 180 degrees being straight. The hydrogen is recognised by a mass between hmin and hmax and a charge above hq, the acceptor by a charge below aq, and the donor is the atom the hydrogen is bonded to." src="../../assets/concepts/rule-hb-light.svg#only-light" />
+<img alt="A hydrogen bond between two molecules: donor D of molecule 1, bonded to hydrogen H, and acceptor A of molecule 2. The donor-acceptor distance, D to A, must be at most d; the D-H-A angle, at the hydrogen, must be at least a, 180 degrees being straight. The hydrogen is recognised by a mass between hmin and hmax and a charge above hq, the acceptor by a charge below aq, and the donor is the atom the hydrogen is bonded to." src="../../assets/concepts/rule-hb-dark.svg#only-dark" /></p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>United-atom or coarse-grained models, or topologies whose charges are all zero
@@ -2238,8 +2254,12 @@ molecules of these residue names inside a cluster: the cluster's graph restricte
 them, split into its connected pieces. A cluster can hold several nuclei. Setting it
 turns on the <a href="../outputs/#nucleus_datacsv"><code>Nucleus</code></a> analysis, which also adds each
 cluster's nuclei to the <a href="../report/">report</a>.</p>
+<p><img alt="One cluster of solute and solvent molecules, with three nuclei outlined. Nucleus 1 is three solutes connected to each other. Nucleus 2 is a single solute, linked to the rest only through solvent molecules. Nucleus 3 is two connected solutes, linked to nucleus 2 only through a solvent molecule, so they are separate nuclei." src="../../assets/concepts/nucleus-light.svg#only-light" />
+<img alt="One cluster of solute and solvent molecules, with three nuclei outlined. Nucleus 1 is three solutes connected to each other. Nucleus 2 is a single solute, linked to the rest only through solvent molecules. Nucleus 3 is two connected solutes, linked to nucleus 2 only through a solvent molecule, so they are separate nuclei." src="../../assets/concepts/nucleus-dark.svg#only-dark" /></p>
+<p>Solutes linked only through solvent molecules are separate nuclei, and a solute with
+no solute neighbour is a nucleus of its own.</p>
 <h2 id="follow"><code>follow</code><a class="headerlink" href="#follow" title="Permanent link">&para;</a></h2>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">follow</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">solute</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">follow</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">solute</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <p>Writes, for each solute molecule, a <code>coordinates/solute-&lt;resid&gt;.gro</code> file with the
 cluster it belongs to in every frame where that cluster holds no other solute. Only
@@ -2250,9 +2270,9 @@ ignored.</p>
 group whose set of residue names is exactly one of these is not treated as a
 cluster: it gets no id and appears in no output, and its molecules count as free.
 Only which residue names are present matters, not how many molecules of each.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">ignore_composition</span><span class="p">:</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">MOL</span><span class="p p-Indicator">]</span><span class="w">         </span><span class="c1"># groups of MOL only</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">MOL</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">SOL</span><span class="p p-Indicator">]</span><span class="w">    </span><span class="c1"># groups made of MOL and SOL, and nothing else</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">ignore_composition</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">MOL</span><span class="p p-Indicator">]</span><span class="w">         </span><span class="c1"># groups of MOL only</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">MOL</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">SOL</span><span class="p p-Indicator">]</span><span class="w">    </span><span class="c1"># groups made of MOL and SOL, and nothing else</span>
 </span></code></pre></div>
 <h2 id="analyses"><code>analyses</code><a class="headerlink" href="#analyses" title="Permanent link">&para;</a></h2>
 <p>Turns built-in analyses on or off by class name. An analysis left out runs when
@@ -2298,9 +2318,9 @@ the options it needs are set:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">analyses</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">ClusterCoordinates</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">   </span><span class="c1"># skip the .gro files, which can be many</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">JsonReport</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">analyses</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">ClusterCoordinates</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">   </span><span class="c1"># skip the .gro files, which can be many</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">JsonReport</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 </span></code></pre></div>
 <p>An unknown name, or an analysis turned on (<code>true</code>) without an option it needs, is
 an error.</p>
@@ -2327,10 +2347,10 @@ how long writing takes, not what's written.</p>
 <p>LAMMPS topologies have molecule ids but no residue names. This maps each name used
 elsewhere in the file to the LAMMPS molecule id(s) it stands for: a single id, an
 inclusive range <code>"first-last"</code>, or a list of them.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">lammps_resnames</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">SOL</span><span class="p">:</span><span class="w"> </span><span class="s">"1-500"</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">NA</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">501</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">CL</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">502</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"510-519"</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">lammps_resnames</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">SOL</span><span class="p">:</span><span class="w"> </span><span class="s">"1-500"</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">NA</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">501</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">CL</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">502</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"510-519"</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <p>Every molecule id of the topology must be covered. See <a href="../lammps/">LAMMPS systems</a>.</p>
 <h2 id="lammps_timestep"><code>lammps_timestep</code><a class="headerlink" href="#lammps_timestep" title="Permanent link">&para;</a></h2>
