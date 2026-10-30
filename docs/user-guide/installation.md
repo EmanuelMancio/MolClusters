@@ -95,21 +95,37 @@ inspect` or the package page on GitHub shows and which can't change.
 === "Docker / Podman"
 
     The image's working directory is `/data`: mount the directory with your files
-    there, and run as yourself so the results are yours, not root's:
+    there, and run as yourself, so that MolClusters can write its results there and
+    they are yours:
 
     ```bash
     docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/data" \
         ghcr.io/emanuelmancio/molclusters:X.Y.Z traj.xtc topol.tpr input.yaml
     ```
 
-    `podman` takes the same commands (rootless Podman already runs as you, so
-    `--user` can be left out). Paths given to `molclusters` are paths inside the
-    container: files outside the mounted directory need their own `-v`.
+    Without `--user` it runs as uid 1000, never as root. With rootless Podman, use
+    `--userns=keep-id` in place of `--user`:
+
+    ```bash
+    podman run --rm --userns=keep-id -v "$PWD:/data" \
+        ghcr.io/emanuelmancio/molclusters:X.Y.Z traj.xtc topol.tpr input.yaml
+    ```
+
+    Paths given to `molclusters` are paths inside the container: files outside the
+    mounted directory need their own `-v` (`:ro` for inputs it only reads).
 
 `molclusters --help` is the image's default command, and `--version` tells which
 release it holds. The [command-line options](cli.md) are the same as for an
 installed `molclusters`. Use `--traj-memory` only if the container may use the
 memory it needs (Docker's `--memory`, or the job's limit).
+
+Each image is signed with a build provenance attestation: [GitHub's
+CLI](https://cli.github.com/) checks that it was built by MolClusters' own release
+workflow, from the repository's sources, and not altered since:
+
+```bash
+gh attestation verify oci://ghcr.io/emanuelmancio/molclusters:X.Y.Z -R EmanuelMancio/MolClusters
+```
 
 To build the image yourself, e.g. from the `dev` branch, run `docker build -t
 molclusters .` (or `podman build`) in a clone of the repository.

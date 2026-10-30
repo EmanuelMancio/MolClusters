@@ -110,22 +110,35 @@ triggered by the push, the tag's included.
 
 `Dockerfile` builds an image holding only MolClusters, installed with `uv sync
 --locked --no-dev` so its dependencies are exactly those of `uv.lock`, which the tests
-ran with; `.dockerignore` lists the only files it is built from. The image runs
-`molclusters` as its entrypoint. The *container* job of the *Release* workflow:
+ran with; `.dockerignore` lists the only files it is built from, so nothing else in a
+clone (`.git`, `.env`, local data) can end up in it. The image runs `molclusters` as
+its entrypoint, as uid 1000 rather than root. The *container* job of the *Release*
+workflow:
 
 1. builds it for linux/amd64 and runs `scripts/check_container.sh` on it, which checks
-   `molclusters --version` against the tag and runs the met-mal test system as a
-   non-root user with a mounted directory, as users run it;
+   that it doesn't run as root, checks `molclusters --version` against the tag, and
+   runs the met-mal test system as a non-root user with a mounted directory, as users
+   run it;
 2. builds it for linux/amd64 and linux/arm64 (the latter emulated with QEMU, which only
    unpacks wheels) and pushes it to `ghcr.io/emanuelmancio/molclusters` as an OCI image
    index: OCI media types (`oci-mediatypes=true`), with the
    `org.opencontainers.image.*` labels and annotations (source, version, revision,
-   license, ...) set by `docker/metadata-action`, and tags `X.Y.Z`, `X.Y` and `latest`.
+   license, ...) set by `docker/metadata-action`, and tags `X.Y.Z`, `X.Y` and `latest`;
+3. attests its build provenance (`actions/attest-build-provenance`, signed with the
+   workflow's OIDC identity and stored next to the image), which `gh attestation
+   verify` checks.
+
+Being able to publish packages, the job is hardened beyond the rest of the workflow:
+its actions are pinned to commit SHAs (with the version in a comment; Dependabot
+updates both), the checkout doesn't keep the token, and its build cache is a
+directory of the job's own, not the Actions cache that every workflow (pull requests'
+included) writes to, so the published image is built only from the tagged sources and
+the pinned base images. The base images (`python`, `uv`) are pinned by digest in
+`Dockerfile`, and updated weekly by Dependabot like the Python dependencies.
 
 The *Tests* workflow builds and checks the linux/amd64 image on every push and pull
-request too, so a change that breaks it shows up before a release. Dependabot updates
-the base images (`python`, `uv`) in `Dockerfile` weekly. To check the image locally
-(Docker or Podman, from the repository's root):
+request too, so a change that breaks it shows up before a release. To check the image
+locally (Docker or Podman, from the repository's root):
 
 ```bash
 docker build -t molclusters:test .
