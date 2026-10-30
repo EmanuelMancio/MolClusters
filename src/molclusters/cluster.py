@@ -865,9 +865,10 @@ class MolGroup:
         The radius of gyration only sees the atoms' centers, so a sphere built from
         it ends at the outer atoms' centers and leaves their size out. Adding half,
         not all, of the atoms' van der Waals radius to it roughly accounts for
-        that, since bonded atoms' van der Waals spheres overlap: on methanol-malic
-        acid mixtures, the full radius puts a lone malic acid at 0.70 g/cm^3 and
-        half at 1.21 (1.61 for the solid), and barely changes large clusters.
+        that, since bonded atoms' van der Waals spheres overlap: on mixtures of
+        2-methylerythritol and malic acid, the full radius puts a lone malic acid
+        at 0.70 g/cm^3 and half at 1.21 (1.61 for the solid), and barely changes
+        large clusters.
 
         Returns
         -------

@@ -45,11 +45,11 @@ The terminal shows what was understood before the run starts, a progress bar,
 and a summary at the end:
 
 ```text
-12:57:55 | INFO     | System: 3600 atoms in 200 residues (100 MOL, 100 MAL)
-12:57:55 | INFO     | Trajectory: 53 frame(s) from 0 to 49920 ps, every 960 ps
-12:57:55 | INFO     | Box (first frame): 324.60 x 324.60 x 324.60 angstrom
-12:57:55 | INFO     | Topology has no elements, guessing them from atom names
-12:57:55 | INFO     | Effective configuration:
+15:16:44 | INFO     | System: 3600 atoms in 200 residues (100 MOL, 100 MAL)
+15:16:44 | INFO     | Trajectory: 1042 frame(s) from 0 to 49968 ps, every 48 ps
+15:16:44 | INFO     | Box (first frame): 324.60 x 324.60 x 324.60 angstrom
+15:16:44 | INFO     | Topology has no elements, guessing them from atom names
+15:16:44 | INFO     | Effective configuration:
 rules (distances in angstrom, angles in degrees):
   MAL - MAL: hb d 3.5 a 120.0 hmin 0.9 hmax 1.1 hq 0.3 aq -0.5
   MAL - MOL: cm 6.0
@@ -61,12 +61,12 @@ follow: solute (one solute-<resid>.gro per solute)
 ...
 analyses: SizeEvolution, Lineage, SoluteSolvent, ClusterCoordinates, Nucleus, JsonReport
 report_compression: zstd (molclusters.jsonl.zst)
-12:57:55 | INFO     | Tracking clusters over 53 frame(s)
-100%|##########| 53/53 [00:07<00:00,  7.03it/s]
-12:58:02 | INFO     | Connections per frame, by rule: MAL - MAL (hb ...) 42.2, MAL - MOL (cm 6.0) 37.5, MOL - MOL (cm 6.0) 12.8
-12:58:02 | INFO     | [SizeEvolution] Found 23.3 cluster(s) per frame on average (0-32); the largest held 81 molecule(s).
-12:58:02 | INFO     | [Lineage] Cluster lineage: 120 cluster(s) formed of free molecules and 719 split off others; ...
-12:58:03 | INFO     | Results written to results: evo.txt, cluster_events.csv, cluster_lifetimes.csv, ...
+15:16:44 | INFO     | Tracking clusters over 1042 frame(s)
+100%|##########| 1042/1042 [01:37<00:00, 10.72it/s]
+15:18:21 | INFO     | Connections per frame, by rule: MAL - MAL (hb ...) 42.8, MAL - MOL (cm 6.0) 37.6, MOL - MOL (cm 6.0) 13.0
+15:18:21 | INFO     | [SizeEvolution] Found 22.9 cluster(s) per frame on average (0-37); the largest held 100 molecule(s).
+15:18:21 | INFO     | [Lineage] Cluster lineage: 1766 cluster(s) formed of free molecules and 11640 split off others; ...
+15:18:22 | INFO     | Results written to results: evo.txt, cluster_events.csv, cluster_lifetimes.csv, ...
 ```
 
 !!! tip "Check the effective configuration"
@@ -110,8 +110,8 @@ bottom.set_xlabel("Time (ns)")
 plt.show()
 ```
 
-![Two panels over 50 ns. The number of clusters rises from 0 to 20 by about 4 ns, then fluctuates between 16 and 32. The largest cluster grows from a few molecules to about 30 over the first 20 ns, peaks at 81 molecules at about 22 ns, and then mostly holds 13 to 45.](../assets/quickstart/evo-light.svg#only-light)
-![Two panels over 50 ns. The number of clusters rises from 0 to 20 by about 4 ns, then fluctuates between 16 and 32. The largest cluster grows from a few molecules to about 30 over the first 20 ns, peaks at 81 molecules at about 22 ns, and then mostly holds 13 to 45.](../assets/quickstart/evo-dark.svg#only-dark)
+![Two panels over 50 ns, one point per frame (48 ps). The number of clusters rises from 0 to about 20 by 3 ns, reaches about 28 between 8 and 16 ns (37 at most), then settles near 23, mostly between 17 and 29. The largest cluster grows from 2 molecules to about 15 by 12 ns and to about 23 by 20 ns, peaks at 100 molecules at about 22 ns, and then fluctuates mostly between 14 and 58 molecules, averaging about 30.](../assets/quickstart/evo-light.svg#only-light)
+![Two panels over 50 ns, one point per frame (48 ps). The number of clusters rises from 0 to about 20 by 3 ns, reaches about 28 between 8 and 16 ns (37 at most), then settles near 23, mostly between 17 and 29. The largest cluster grows from 2 molecules to about 15 by 12 ns and to about 23 by 20 ns, peaks at 100 molecules at about 22 ns, and then fluctuates mostly between 14 and 58 molecules, averaging about 30.](../assets/quickstart/evo-dark.svg#only-dark)
 
 The two quantities are counts of different things (clusters, and molecules in one
 cluster), so each gets its own panel rather than sharing an axis.
@@ -126,20 +126,20 @@ print(clusters[["time", "id", "size", "radius", "density", "dipole_moment"]])
 ```
 
 ```text
-         time   id  size    radius   density  dipole_moment
-0       960.0    1     3  6.005953  0.736076       6.543105
-1       960.0    2     2  4.611475  1.084071       7.514518
-2       960.0    3     2  4.888258  0.910154       4.044914
-3       960.0    4     2  5.473106  0.648448       7.408297
-4       960.0    5     2  5.301664  0.713412       2.192518
-...       ...  ...   ...       ...       ...            ...
-1229  49920.0  835     2  5.200793  0.761538       8.052136
-1230  49920.0  836     2  5.154270  0.782346       6.681270
-1231  49920.0  837     2  5.029856  0.841848       6.834615
-1232  49920.0  838     2  5.216615  0.760383       0.000000
-1233  49920.0  839     2  5.298673  0.725600       0.000000
+          time     id  size    radius   density  dipole_moment
+0         48.0      1     2  4.939751  0.888761       4.150092
+1         48.0      2     2  4.975403  0.869793       3.345977
+2         96.0      3     2  5.362132  0.694845       4.776185
+3        144.0      4     3  5.867330  0.789490       2.908561
+4        144.0      5     2  5.636959  0.593530       2.679938
+...        ...    ...   ...       ...       ...            ...
+23873  49968.0  13402     2  4.654313  1.054412       8.852622
+23874  49968.0  13403     2  5.586917  0.609622      12.104313
+23875  49968.0  13404     2  4.888511  0.917003       5.546337
+23876  49968.0  13405     2  5.190601  0.766033       7.929750
+23877  49968.0  13406     2  5.359340  0.695932       3.543585
 
-[1234 rows x 6 columns]
+[23878 rows x 6 columns]
 ```
 
 Where to go next:

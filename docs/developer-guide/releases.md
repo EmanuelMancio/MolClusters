@@ -136,8 +136,12 @@ included) writes to, so the published image is built only from the tagged source
 the pinned base images. The base images (`python`, `uv`) are pinned by digest in
 `Dockerfile`, and updated weekly by Dependabot like the Python dependencies.
 
-The *Tests* workflow builds and checks the linux/amd64 image on every push and pull
-request too, so a change that breaks it shows up before a release. To check the image
+The *Container* workflow (`.github/workflows/container.yml`) builds and checks the
+linux/amd64 image too, on pushes and pull requests to `main` and `dev` that change a file
+the image depends on beyond the code (`Dockerfile`, `.dockerignore`, `pyproject.toml`,
+`uv.lock`, `scripts/check_container.sh`), so such a change that breaks it shows up before
+a release; run it by hand (*Actions → Container → Run workflow*) for anything else you
+suspect. To check the image
 locally (Docker or Podman, from the repository's root):
 
 ```bash

@@ -109,3 +109,27 @@ code.doc-symbol-type_parameter::after {
 .md-version__current:focus {
   color: var(--md-primary-bg-color);
 }
+
+/* The home page's picture, beside the introduction on wide screens and above it on
+   narrow ones, with a small caption. */
+.md-typeset figure.hero {
+  float: right;
+  width: 300px;
+  max-width: 45%;
+  margin: 0 0 1em 1.5em;
+}
+.md-typeset figure.hero figcaption {
+  font-size: 0.7rem;
+  max-width: none;
+  margin-top: 0;
+  text-align: left;
+  color: var(--md-default-fg-color--light);
+}
+@media screen and (max-width: 44.9375em) {
+  .md-typeset figure.hero {
+    float: none;
+    width: auto;
+    max-width: 300px;
+    margin: 0 auto 1em;
+  }
+}

@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="492" viewBox="0 0 760 492" font-family="Roboto, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <text x="0" y="16" font-size="14" fill="#0b0b0b" text-anchor="start" font-weight="bold">1. Each cluster of frame t picks the group holding most of its molecules</text>
+  <text x="212" y="38" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">frame t</text>
+  <text x="512" y="38" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">frame t + 1</text>
+  <path d="M276,58.8 C362,58.8 362,57.2 448,57.2" fill="none" stroke="#2a78d6" stroke-width="12.2"/>
+  <path d="M276,68.4 C362,68.4 362,106 448,106" fill="none" stroke="#2a78d6" stroke-width="5.8" stroke-opacity="0.4"/>
+  <path d="M276,102.8 C362,102.8 362,66.8 448,66.8" fill="none" stroke="#eb6834" stroke-width="5.8"/>
+  <path d="M276,107.6 C362,107.6 362,146.8 448,146.8" fill="none" stroke="#eb6834" stroke-width="2.6" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M276,110.8 C362,110.8 362,192.4 448,192.4" fill="none" stroke="#eb6834" stroke-width="2.6" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M276,148.4 C362,148.4 362,150 448,150" fill="none" stroke="#1baf7a" stroke-width="2.6" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M276,151.6 C362,151.6 362,195.6 448,195.6" fill="none" stroke="#1baf7a" stroke-width="2.6" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M276,192.4 C362,192.4 362,71.6 448,71.6" fill="none" stroke="#898781" stroke-width="2.6" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M276,195.6 C362,195.6 362,153.2 448,153.2" fill="none" stroke="#898781" stroke-width="2.6" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <rect x="150" y="47" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="180" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="196" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="212" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="228" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="244" cy="62" r="6" fill="#2a78d6"/>
+  <text x="140" y="60" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">cluster 7</text>
+  <text x="140" y="75" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">picks A (4 of 6)</text>
+  <rect x="150" y="91" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="106" r="6" fill="#eb6834"/>
+  <circle cx="180" cy="106" r="6" fill="#eb6834"/>
+  <circle cx="196" cy="106" r="6" fill="#eb6834"/>
+  <circle cx="212" cy="106" r="6" fill="#eb6834"/>
+  <text x="140" y="104" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">cluster 9</text>
+  <text x="140" y="119" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">picks A (2 of 4)</text>
+  <rect x="150" y="135" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="150" r="6" fill="#1baf7a"/>
+  <circle cx="180" cy="150" r="6" fill="#1baf7a"/>
+  <text x="140" y="148" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">cluster 12</text>
+  <text x="140" y="163" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">picks nothing</text>
+  <rect x="150" y="179" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="194" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="180" cy="194" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="140" y="198" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">free</text>
+  <rect x="450" y="47" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="480" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="496" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="512" cy="62" r="6" fill="#2a78d6"/>
+  <circle cx="528" cy="62" r="6" fill="#eb6834"/>
+  <circle cx="544" cy="62" r="6" fill="#eb6834"/>
+  <circle cx="560" cy="62" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="584" y="60" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">group A</text>
+  <text x="584" y="75" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">picked by 7 and 9</text>
+  <rect x="450" y="91" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="106" r="6" fill="#2a78d6"/>
+  <circle cx="480" cy="106" r="6" fill="#2a78d6"/>
+  <text x="584" y="104" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">group B</text>
+  <text x="584" y="119" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">picked by nobody</text>
+  <rect x="450" y="135" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="150" r="6" fill="#eb6834"/>
+  <circle cx="480" cy="150" r="6" fill="#1baf7a"/>
+  <circle cx="496" cy="150" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="584" y="148" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">group C</text>
+  <text x="584" y="163" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">picked by nobody</text>
+  <rect x="450" y="179" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="194" r="6" fill="#eb6834"/>
+  <circle cx="480" cy="194" r="6" fill="#1baf7a"/>
+  <text x="584" y="198" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">free</text>
+  <text x="0" y="272" font-size="14" fill="#0b0b0b" text-anchor="start" font-weight="bold">2. Each group continues the cluster that gave it most molecules, among those that picked it</text>
+  <text x="212" y="294" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">frame t</text>
+  <text x="512" y="294" font-size="12" fill="#898781" text-anchor="middle" font-weight="normal">frame t + 1</text>
+  <path d="M276,318 C362,318 362,314.8 448,314.8" fill="none" stroke="#2a78d6" stroke-width="12.2"/>
+  <path d="M276,362 C362,362 362,324.4 448,324.4" fill="none" stroke="#eb6834" stroke-width="5.8" stroke-opacity="0.4"/>
+  <rect x="150" y="303" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="180" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="196" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="212" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="228" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="244" cy="318" r="6" fill="#2a78d6"/>
+  <text x="140" y="316" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">cluster 7</text>
+  <text x="140" y="331" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">continues in A</text>
+  <rect x="150" y="347" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="362" r="6" fill="#eb6834"/>
+  <circle cx="180" cy="362" r="6" fill="#eb6834"/>
+  <circle cx="196" cy="362" r="6" fill="#eb6834"/>
+  <circle cx="212" cy="362" r="6" fill="#eb6834"/>
+  <text x="140" y="360" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">cluster 9</text>
+  <text x="140" y="375" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">ends: merged into 7</text>
+  <rect x="150" y="391" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="406" r="6" fill="#1baf7a"/>
+  <circle cx="180" cy="406" r="6" fill="#1baf7a"/>
+  <text x="140" y="404" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">cluster 12</text>
+  <text x="140" y="419" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">ends: dissolved</text>
+  <rect x="150" y="435" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="164" cy="450" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <circle cx="180" cy="450" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="140" y="454" font-size="13" fill="#0b0b0b" text-anchor="end" font-weight="bold">free</text>
+  <rect x="450" y="303" width="124" height="30" rx="8" fill="none" stroke="#2a78d6" stroke-width="1.5"/>
+  <circle cx="464" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="480" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="496" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="512" cy="318" r="6" fill="#2a78d6"/>
+  <circle cx="528" cy="318" r="6" fill="#eb6834"/>
+  <circle cx="544" cy="318" r="6" fill="#eb6834"/>
+  <circle cx="560" cy="318" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="584" y="316" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">group A</text>
+  <text x="584" y="331" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">continues 7 (4 beat 2)</text>
+  <rect x="450" y="347" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="362" r="6" fill="#2a78d6"/>
+  <circle cx="480" cy="362" r="6" fill="#2a78d6"/>
+  <text x="584" y="360" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">group B</text>
+  <text x="584" y="375" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">new id 13</text>
+  <rect x="450" y="391" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="406" r="6" fill="#eb6834"/>
+  <circle cx="480" cy="406" r="6" fill="#1baf7a"/>
+  <circle cx="496" cy="406" r="5.25" fill="none" stroke="#898781" stroke-width="1.5"/>
+  <text x="584" y="404" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">group C</text>
+  <text x="584" y="419" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">new id 14</text>
+  <rect x="450" y="435" width="124" height="30" rx="8" fill="none" stroke="#c3c2b7" stroke-width="1"/>
+  <circle cx="464" cy="450" r="6" fill="#eb6834"/>
+  <circle cx="480" cy="450" r="6" fill="#1baf7a"/>
+  <text x="584" y="454" font-size="13" fill="#0b0b0b" text-anchor="start" font-weight="bold">free</text>
+</svg>

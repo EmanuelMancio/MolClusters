@@ -87,17 +87,28 @@ rules for the same pair are an error.
 
 ### `cm`: center-of-mass distance
 
+```text
+cm <distance>
+```
+
 ```yaml
 MOL: cm 6.0
 ```
 
-Connects two molecules whose centers of mass are at most the given distance apart,
-in ångströms. Each molecule is made whole across the periodic boundaries before its
+The distance is **required**. Connects two molecules whose centers of mass are at
+most that distance apart, in ångströms. Each molecule is made whole across the periodic boundaries before its
 center of mass is computed, and the distance follows the minimum-image convention.
 Finding these connections needs only masses; the clusters' charge and dipole moment
 need partial charges as well (see [Quick start](quickstart.md#1-what-you-need)).
 
+![Three small molecules, each with its center of mass marked. A dashed circle of radius cutoff is drawn around molecule 1's center of mass. Molecule 2's center of mass is inside it: 1 and 2 are connected. Molecule 3's is outside: 1 and 3 are not.](../assets/concepts/rule-cm-light.svg#only-light)
+![Three small molecules, each with its center of mass marked. A dashed circle of radius cutoff is drawn around molecule 1's center of mass. Molecule 2's center of mass is inside it: 1 and 2 are connected. Molecule 3's is outside: 1 and 3 are not.](../assets/concepts/rule-cm-dark.svg#only-dark)
+
 ### `hb`: hydrogen bond
+
+```text
+hb [d <distance>] [a <angle>] [hmin <mass>] [hmax <mass>] [hq <charge>] [aq <charge>]
+```
 
 ```yaml
 MAL: hb d 3.5 a 120
@@ -105,22 +116,26 @@ MAL: hb d 3.5 a 120
 
 Connects two molecules that share at least one hydrogen bond, as found by
 MDAnalysis' [`HydrogenBondAnalysis`](https://docs.mdanalysis.org/stable/documentation_pages/analysis/hydrogenbonds.html).
-The rule takes any of these `flag value` pairs, in any order, each optional:
+Every argument is **optional**: the rule takes any of these `flag value` pairs, in
+any order, each at most once, and a flag left out takes its default:
 
-| Flag | Default | Meaning |
-| --- | --- | --- |
-| `d` | 3.5 | donor-acceptor distance cutoff (Å) |
-| `a` | 150 | donor-hydrogen-acceptor angle cutoff (degrees): a straight bond is 180° |
-| `hmin` | 0.9 | hydrogens have a mass (amu) above this... |
-| `hmax` | 1.1 | ...and below this |
-| `hq` | 0.3 | hydrogens have a partial charge (e) above this |
-| `aq` | -0.5 | acceptors have a partial charge (e) below this |
+| Flag | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `d` | no | 3.5 | donor-acceptor distance cutoff (Å) |
+| `a` | no | 150 | donor-hydrogen-acceptor angle cutoff (degrees): a straight bond is 180° |
+| `hmin` | no | 0.9 | hydrogens have a mass (amu) above this... |
+| `hmax` | no | 1.1 | ...and below this |
+| `hq` | no | 0.3 | hydrogens have a partial charge (e) above this |
+| `aq` | no | -0.5 | acceptors have a partial charge (e) below this |
 
 So `hb` alone is `hb d 3.5 a 150 hmin 0.9 hmax 1.1 hq 0.3 aq -0.5`, MDAnalysis'
 own defaults for guessing hydrogens and acceptors. Donors are the atoms the
 hydrogens are bonded to. This rule therefore needs **masses, partial charges and
 bonds** in the topology (a GROMACS `.tpr` or a CHARMM `.psf` has them). Hydrogen
 bonds within a molecule are ignored.
+
+![A hydrogen bond between two molecules: donor D of molecule 1, bonded to hydrogen H, and acceptor A of molecule 2. The donor-acceptor distance, D to A, must be at most d; the D-H-A angle, at the hydrogen, must be at least a, 180 degrees being straight. The hydrogen is recognised by a mass between hmin and hmax and a charge above hq, the acceptor by a charge below aq, and the donor is the atom the hydrogen is bonded to.](../assets/concepts/rule-hb-light.svg#only-light)
+![A hydrogen bond between two molecules: donor D of molecule 1, bonded to hydrogen H, and acceptor A of molecule 2. The donor-acceptor distance, D to A, must be at most d; the D-H-A angle, at the hydrogen, must be at least a, 180 degrees being straight. The hydrogen is recognised by a mass between hmin and hmax and a charge above hq, the acceptor by a charge below aq, and the donor is the atom the hydrogen is bonded to.](../assets/concepts/rule-hb-dark.svg#only-dark)
 
 !!! tip
     United-atom or coarse-grained models, or topologies whose charges are all zero
@@ -158,6 +173,12 @@ molecules of these residue names inside a cluster: the cluster's graph restricte
 them, split into its connected pieces. A cluster can hold several nuclei. Setting it
 turns on the [`Nucleus`](outputs.md#nucleus_datacsv) analysis, which also adds each
 cluster's nuclei to the [report](report.md).
+
+![One cluster of solute and solvent molecules, with three nuclei outlined. Nucleus 1 is three solutes connected to each other. Nucleus 2 is a single solute, linked to the rest only through solvent molecules. Nucleus 3 is two connected solutes, linked to nucleus 2 only through a solvent molecule, so they are separate nuclei.](../assets/concepts/nucleus-light.svg#only-light)
+![One cluster of solute and solvent molecules, with three nuclei outlined. Nucleus 1 is three solutes connected to each other. Nucleus 2 is a single solute, linked to the rest only through solvent molecules. Nucleus 3 is two connected solutes, linked to nucleus 2 only through a solvent molecule, so they are separate nuclei.](../assets/concepts/nucleus-dark.svg#only-dark)
+
+Solutes linked only through solvent molecules are separate nuclei, and a solute with
+no solute neighbour is a nucleus of its own.
 
 ## `follow`
 
