@@ -2026,7 +2026,7 @@ in <code>describe()</code>, and a section in the <a href="../../user-guide/confi
 <ul>
 <li><code>distance_backend</code> only affects the <code>cm</code> rules' <code>capped_distance</code> calls, and
   MDAnalysis ignores it under its auto-selected <code>nsgrid</code> method. The PyPI Windows
-  wheel of MDAnalysis (checked on 2.10.0) has its OpenMP extension compiled without
+  wheel of MDAnalysis (checked on 2.10.0 and 2.11.0) has its OpenMP extension compiled without
   OpenMP (<code>MDAnalysis.lib.distances.USED_OPENMP is False</code>), so <code>OpenMP</code> silently runs
   serial code there; <code>_warn_if_openmp_unavailable</code> warns about it.</li>
 <li><code>hb</code> rules drive <code>HydrogenBondAnalysis</code> through private methods (<code>_prepare</code>,
