@@ -908,6 +908,91 @@ def rule_hb(theme: str) -> Svg:
     return svg
 
 
+# --- Periodic boundaries ---------------------------------------------------------
+
+
+def cross(svg: Svg, x: float, y: float, color: str = "ink") -> None:
+    """Draw a center-of-mass cross."""
+    svg.line(x - 5, y - 5, x + 5, y + 5, color, 1.6)
+    svg.line(x - 5, y + 5, x + 5, y - 5, color, 1.6)
+
+
+def neighbour(svg: Svg, x0: float, y0: float, h: float, width: float) -> None:
+    """Draw the edge of the next periodic box: dashed, open on its far side."""
+    x1 = x0 + width
+    for y in (y0, y0 + h):
+        svg.line(x0, y, x1, y, "muted", 1.2, dash="4 4")
+
+
+def pbc(theme: str) -> Svg:
+    """Draw a molecule made whole across the box's edge, and a minimum-image distance.
+
+    Returns
+    -------
+    Svg
+        The figure.
+    """
+    svg = Svg(720, 250, theme)
+    blue = idcolor(svg, 1)
+    bw, bh, top = 170, 140, 42
+    boxes = [20, 255, 545]
+    titles = ["1. split by the box's edge", "2. made whole", "3. nearest image"]
+    captions = [
+        "its atoms, as the frame stores them",
+        "joined across the edge: its center of mass",
+        "1 and 2: close through the edge",
+    ]
+    for x0, title, caption in zip(boxes, titles, captions, strict=True):
+        svg.text(x0, 22, title, size=14, color="ink", weight="bold")
+        svg.rect(x0, top, bw, bh, rx=0, stroke="ink2", width=1.5)
+        svg.text(x0, top + bh + 22, caption, size=12)
+    # 1 and 2: a molecule on the right edge, some of its atoms wrapped to the left one
+    cy = top + 70
+    x0 = boxes[0]
+    cx = x0 + bw - 3
+    xs = []
+    for dx, dy, r in MOLECULE:
+        x = cx + dx if cx + dx <= x0 + bw else cx + dx - bw
+        svg.atom(x, cy + dy, r)
+        xs.append(x)
+    naive = sum(xs) / len(xs)
+    cross(svg, naive, cy, "muted")
+    svg.text(
+        naive, cy + 34, "their average: not", size=12, color="muted", anchor="middle"
+    )
+    svg.text(
+        naive, cy + 49, "its center of mass", size=12, color="muted", anchor="middle"
+    )
+    x0 = boxes[1]
+    neighbour(svg, x0 + bw, top, bh, 36)
+    cx = x0 + bw - 3
+    for dx, dy, r in MOLECULE:
+        svg.atom(cx + dx, cy + dy, r)
+    cross(svg, cx, cy)
+    # 3: two molecules near opposite edges, and the image of one beyond the left edge
+    x0 = boxes[2]
+    neighbour(svg, x0 - 56, top, bh, 56)
+    p1, p2 = (x0 + 40, top + 50), (x0 + bw - 22, top + 92)
+    image = (p2[0] - bw, p2[1])
+    svg.line(*p1, *p2, "muted", 1.5, dash="2 4")
+    svg.line(*p1, *image, blue, 2.5)
+    for (x, y), label in ((p1, "1"), (p2, "2"), (image, "image of 2")):
+        for dx, dy, r in MOLECULE:
+            svg.atom(x + dx * 0.8, y + dy * 0.8, r * 0.8)
+        cross(svg, x, y)
+        below = label == "image of 2"
+        svg.text(
+            x,
+            y + 30 if below else y - 18,
+            label,
+            size=12,
+            color="muted" if below else "ink",
+            anchor="middle",
+            weight="bold",
+        )
+    return svg
+
+
 # --- Size ------------------------------------------------------------------------
 
 
@@ -1148,6 +1233,7 @@ def main() -> None:
         ("id-assignment", id_assignment),
         ("lifetimes", lifetimes),
         ("pipeline", pipeline),
+        ("pbc", pbc),
         ("rule-cm", rule_cm),
         ("rule-hb", rule_hb),
         ("size", size),

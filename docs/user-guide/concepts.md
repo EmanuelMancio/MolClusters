@@ -15,6 +15,9 @@ Residue-name pairs without a rule never connect. Distances follow the minimum-im
 convention of the periodic box, and a molecule split across the box boundary is made
 whole before its center of mass is computed.
 
+![Three panels of a periodic box. 1: a molecule on the box's right edge, stored with some of its atoms wrapped to the left edge; the average of its atoms' positions falls mid-box, far from the molecule. 2: the same molecule made whole, its atoms joined across the edge into the next box, its center of mass on the edge. 3: molecules 1 and 2 near opposite edges are far apart through the box, but 1 is close to the image of 2 beyond the left edge; that shorter distance is the one used.](../assets/concepts/pbc-light.svg#only-light)
+![Three panels of a periodic box. 1: a molecule on the box's right edge, stored with some of its atoms wrapped to the left edge; the average of its atoms' positions falls mid-box, far from the molecule. 2: the same molecule made whole, its atoms joined across the edge into the next box, its center of mass on the edge. 3: molecules 1 and 2 near opposite edges are far apart through the box, but 1 is close to the image of 2 beyond the left edge; that shorter distance is the one used.](../assets/concepts/pbc-dark.svg#only-dark)
+
 A **cluster** is a set of two or more molecules linked to each other, directly or
 through other molecules, and to nothing else: a connected component of the graph
 whose nodes are molecules and whose edges are connections. A molecule connected to
