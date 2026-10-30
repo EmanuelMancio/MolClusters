@@ -81,6 +81,27 @@ uv run --with pillow python scripts/docs_snapshot/matte.py work/black.tga work/w
 
 Which six clusters are coloured is set in `scene.tcl`, for this frame and view.
 
+The plots of the quick start (`evo`) and of [Output files](../user-guide/outputs.md)
+(lifetimes, solute-solvent clusters) come from the quick start's run on all frames
+of the test data, with its `config.yml` as it stands (coordinates included):
+
+```bash
+uv run --with matplotlib python scripts/docs_plots.py run
+```
+
+The Output files page's picture of `cls-id2872.gro` is four of that file's frames,
+side by side, labelled with their time and size:
+
+```bash
+uv run python scripts/docs_snapshot/cluster_row.py run/coordinates/cls-id2872.gro \
+    work/row.pdb 40 11328 11664 11904 14736
+vmd -dispdev text -e scripts/docs_snapshot/cluster.tcl -args work/row.pdb work/scene.dat
+# Tachyon on white and on black as in render.sh, at -res 3600 3600, then:
+uv run --with pillow python scripts/docs_snapshot/matte.py work/black.tga work/white.tga work/row.png
+uv run --with pillow python scripts/docs_snapshot/label_row.py work/row.png docs/assets/outputs/cls-id \
+    "11.33 ns|4 molecules, new" "11.66 ns|13 molecules" "11.90 ns|17, its largest" "14.74 ns|4, its last frame"
+```
+
 ## Docstrings
 
 Docstrings use NumPy style and are rendered as they are, so the reference is only as

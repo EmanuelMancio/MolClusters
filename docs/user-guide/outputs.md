@@ -114,6 +114,27 @@ whole = lives[~lives.BornAtStart & ~lives.AliveAtEnd]
 print(whole.Lifetime.describe())
 ```
 
+Their distribution, one bar per multiple of the frame spacing (see
+[How precise the times are](concepts.md#how-precise-the-times-are)), on a log scale
+since most clusters are short-lived:
+
+```python
+import matplotlib.pyplot as plt
+
+counts = whole.Lifetime.value_counts().sort_index()
+dt = counts.index.min()  # the frame spacing, the shortest lifetime
+plt.bar(counts.index / 1000, counts, width=0.8 * dt / 1000)
+plt.yscale("log")
+plt.xlabel("Lifetime (ns)")
+plt.show()
+```
+
+![Bar chart of the number of clusters by lifetime, on a log scale, for the quick start's run analysed frame by frame (48 ps apart). Of the 13,380 clusters born and ended within the run, 9,905 lived a single frame; the counts fall steeply, to about ten per bar around 1 ns, and the longest-lived cluster lasted 3.5 ns.](../assets/outputs/lifetimes-light.svg#only-light)
+![Bar chart of the number of clusters by lifetime, on a log scale, for the quick start's run analysed frame by frame (48 ps apart). Of the 13,380 clusters born and ended within the run, 9,905 lived a single frame; the counts fall steeply, to about ten per bar around 1 ns, and the longest-lived cluster lasted 3.5 ns.](../assets/outputs/lifetimes-dark.svg#only-dark)
+
+In the quick start's system, analysed frame by frame (48 ps apart), three clusters in
+four lived a single frame.
+
 ## `solute_solvent.csv`
 
 The clusters that hold at least one solute and at least one solvent molecule,
@@ -132,6 +153,25 @@ averaged over those clusters, one row per frame:
 | `Shape` | average [shape parameter](properties.md#shape) |
 
 The averages are empty (NaN) in frames without such clusters.
+
+For instance, the solute and solvent molecules of these clusters over time, smoothed
+over 1 ns:
+
+```python
+import matplotlib.pyplot as plt
+import pandas as pd
+
+data = pd.read_csv("results/solute_solvent.csv")
+mean = data.rolling(21, center=True).mean()  # 21 frames: 1 ns at 48 ps per frame
+plt.plot(data.Time / 1000, mean.NSolt, label="solute")
+plt.plot(data.Time / 1000, mean.NSolv, label="solvent")
+plt.xlabel("Time (ns)")
+plt.legend()
+plt.show()
+```
+
+![Two lines over 50 ns, the average number of malic acid (solute) and of 2-methylerythritol (solvent) molecules in the clusters holding both, as a 1 ns running mean. Both rise over the first 20 ns, malic acid from about 1 to 4 and 2-methylerythritol from about 1 to 3, peak around 22 ns at about 6.4 and 4.7, and from 25 ns on hold between about 4 and 6 and between 2 and 4. Malic acid is above 2-methylerythritol almost all the time.](../assets/outputs/solute-solvent-light.svg#only-light)
+![Two lines over 50 ns, the average number of malic acid (solute) and of 2-methylerythritol (solvent) molecules in the clusters holding both, as a 1 ns running mean. Both rise over the first 20 ns, malic acid from about 1 to 4 and 2-methylerythritol from about 1 to 3, peak around 22 ns at about 6.4 and 4.7, and from 25 ns on hold between about 4 and 6 and between 2 and 4. Malic acid is above 2-methylerythritol almost all the time.](../assets/outputs/solute-solvent-dark.svg#only-dark)
 
 ## `nucleus_data.csv`
 
@@ -174,6 +214,17 @@ with `analyses: {ClusterCoordinates: false}` when you don't need them.
     `solute-<resid>.gro` file don't all have the same number of atoms. Most
     trajectory readers expect a constant atom count; read such files frame by
     frame, or split them.
+
+A `cls-id<id>.gro` file follows one cluster through its life. Here is cluster 2872
+of the quick start's run, analysed frame by frame, at four of its 72 frames: it split
+off another cluster with 4 molecules, grew to 17 within 0.6 ns, and was down to 4
+malic acids when it merged into another cluster 3.4 ns after its birth.
+
+![One cluster drawn at four times, side by side at the same scale, malic acid in blue and 2-methylerythritol in grey. At 11.33 ns it holds 4 molecules, two of each, just split off another cluster; at 11.66 ns, 13 molecules; at 11.90 ns, 17, its largest; at 14.74 ns, its last frame, 4 malic acids.](../assets/outputs/cls-id-light.svg#only-light)
+![One cluster drawn at four times, side by side at the same scale, malic acid in blue and 2-methylerythritol in grey. At 11.33 ns it holds 4 molecules, two of each, just split off another cluster; at 11.66 ns, 13 molecules; at 11.90 ns, 17, its largest; at 14.74 ns, its last frame, 4 malic acids.](../assets/outputs/cls-id-dark.svg#only-dark)
+
+The picture was drawn with VMD from four of the file's frames, split as the note
+above says.
 
 ## Re-running in the same directory
 
