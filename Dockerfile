@@ -13,9 +13,9 @@
 # The base images are pinned by digest (as well as tag), so a build uses exactly the
 # images Dependabot last proposed and they reviewed, not whatever the tag points to now.
 
-FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
-FROM python:3.13-slim@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb AS build
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS build
 COPY --from=uv /uv /usr/local/bin/uv
 # The environment is built where it will run: its scripts' shebangs are absolute paths.
 ENV UV_PROJECT_ENVIRONMENT=/opt/molclusters \
@@ -31,7 +31,7 @@ COPY LICENSES LICENSES
 COPY src src
 RUN uv sync --locked --no-dev --no-editable
 
-FROM python:3.13-slim@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 LABEL org.opencontainers.image.title="MolClusters" \
       org.opencontainers.image.description="Track the formation, growth, splitting, merging and lifetime of molecular clusters in molecular dynamics trajectories" \
       org.opencontainers.image.licenses="LGPL-3.0-or-later" \
