@@ -1858,19 +1858,25 @@ steps, all in
 and rerun it rather than editing the SVG files:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_figures.py
 </span></code></pre></div>
-<p>The home page's picture (<code>docs/assets/home/droplet.webp</code>) is frame 990 of the
-<code>tests/data/met-mal</code> run with the quick start's rules, ray-traced by VMD 1.9.3's
-Tachyon with the scripts in <code>scripts/docs_snapshot/</code>. Tachyon writes no alpha
-channel, so the scene is rendered on white and on black and <code>matte.py</code> recovers
-the transparency from the two. VMD runs on Linux (or WSL); the rest anywhere:</p>
+<p>The home page's picture (<code>docs/assets/home/clusters.webp</code>) is three droplets of
+frame 94 (4.5 ns) of the <code>tests/data/met-mal</code> run, ray-traced by VMD 1.9.3's
+Tachyon with the scripts in <code>scripts/docs_snapshot/</code>. It uses that folder's
+<code>config.yml</code> (<code>cm 8.0</code> for every pair), not the quick start's rules: those split a
+droplet into several clusters that touch, which a picture can't tell apart, while
+these make each early droplet one cluster. <code>pick_frame.py</code> lists frames and views
+whose clusters are all well apart, <code>frame.py</code> writes one view, turned so its
+clusters spread across the picture, and <code>scene.tcl</code> gives each cluster a colour.
+Tachyon writes no alpha channel, so the scene is rendered on white and on black
+and <code>matte.py</code> recovers the transparency from the two. VMD runs on Linux (or
+WSL); the rest anywhere:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>molclusters<span class="w"> </span>tests/data/met-mal/met-traj.trr<span class="w"> </span>tests/data/met-mal/met-mal.tpr<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span>config.yml<span class="w"> </span>--output-dir<span class="w"> </span>run<span class="w">   </span><span class="c1"># the quick start's config.yml, with report_compression: none</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/frame.py<span class="w"> </span>run/molclusters.jsonl<span class="w"> </span><span class="m">990</span><span class="w"> </span>work/frame990.pdb
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>sh<span class="w"> </span>scripts/docs_snapshot/render.sh<span class="w"> </span>work/frame990.pdb<span class="w"> </span>work<span class="w">          </span><span class="c1"># in Linux or WSL</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>uv<span class="w"> </span>run<span class="w"> </span>--with<span class="w"> </span>pillow<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/matte.py<span class="w"> </span>work/black.tga<span class="w"> </span>work/white.tga<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>docs/assets/home/droplet.webp
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span>scripts/docs_snapshot/config.yml<span class="w"> </span>--output-dir<span class="w"> </span>pic
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/pick_frame.py<span class="w"> </span>pic/molclusters.jsonl<span class="w"> </span><span class="m">50</span><span class="w">  </span><span class="c1"># frame 94, seed 4</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/frame.py<span class="w"> </span>pic/molclusters.jsonl<span class="w"> </span><span class="m">94</span><span class="w"> </span><span class="m">4</span><span class="w"> </span>work/frame94.pdb<span class="w"> </span><span class="m">50</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>sh<span class="w"> </span>scripts/docs_snapshot/render.sh<span class="w"> </span>work/frame94.pdb<span class="w"> </span>work<span class="w">          </span><span class="c1"># in Linux or WSL</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>uv<span class="w"> </span>run<span class="w"> </span>--with<span class="w"> </span>pillow<span class="w"> </span>python<span class="w"> </span>scripts/docs_snapshot/matte.py<span class="w"> </span>work/black.tga<span class="w"> </span>work/white.tga<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span>docs/assets/home/clusters.webp
 </span></code></pre></div>
-<p>Which six clusters are coloured is set in <code>scene.tcl</code>, for this frame and view.</p>
 <p>The plots of the quick start (<code>evo</code>) and of <a href="../../user-guide/outputs/">Output files</a>
 (lifetimes, solute-solvent clusters) come from the quick start's run on all frames
 of the test data, with its <code>config.yml</code> as it stands (coordinates included):</p>
