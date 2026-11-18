@@ -64,22 +64,27 @@ and rerun it rather than editing the SVG files:
 uv run python scripts/docs_figures.py
 ```
 
-The home page's picture (`docs/assets/home/droplet.webp`) is frame 990 of the
-`tests/data/met-mal` run with the quick start's rules, ray-traced by VMD 1.9.3's
-Tachyon with the scripts in `scripts/docs_snapshot/`. Tachyon writes no alpha
-channel, so the scene is rendered on white and on black and `matte.py` recovers
-the transparency from the two. VMD runs on Linux (or WSL); the rest anywhere:
+The home page's picture (`docs/assets/home/clusters.webp`) is three droplets of
+frame 94 (4.5 ns) of the `tests/data/met-mal` run, ray-traced by VMD 1.9.3's
+Tachyon with the scripts in `scripts/docs_snapshot/`. It uses that folder's
+`config.yml` (`cm 8.0` for every pair), not the quick start's rules: those split a
+droplet into several clusters that touch, which a picture can't tell apart, while
+these make each early droplet one cluster. `pick_frame.py` lists frames and views
+whose clusters are all well apart, `frame.py` writes one view, turned so its
+clusters spread across the picture, and `scene.tcl` gives each cluster a colour.
+Tachyon writes no alpha channel, so the scene is rendered on white and on black
+and `matte.py` recovers the transparency from the two. VMD runs on Linux (or
+WSL); the rest anywhere:
 
 ```bash
 uv run molclusters tests/data/met-mal/met-traj.trr tests/data/met-mal/met-mal.tpr \
-    config.yml --output-dir run   # the quick start's config.yml, with report_compression: none
-uv run python scripts/docs_snapshot/frame.py run/molclusters.jsonl 990 work/frame990.pdb
-sh scripts/docs_snapshot/render.sh work/frame990.pdb work          # in Linux or WSL
+    scripts/docs_snapshot/config.yml --output-dir pic
+uv run python scripts/docs_snapshot/pick_frame.py pic/molclusters.jsonl 50  # frame 94, seed 4
+uv run python scripts/docs_snapshot/frame.py pic/molclusters.jsonl 94 4 work/frame94.pdb 50
+sh scripts/docs_snapshot/render.sh work/frame94.pdb work          # in Linux or WSL
 uv run --with pillow python scripts/docs_snapshot/matte.py work/black.tga work/white.tga \
-    docs/assets/home/droplet.webp
+    docs/assets/home/clusters.webp
 ```
-
-Which six clusters are coloured is set in `scene.tcl`, for this frame and view.
 
 The plots of the quick start (`evo`) and of [Output files](../user-guide/outputs.md)
 (lifetimes, solute-solvent clusters) come from the quick start's run on all frames

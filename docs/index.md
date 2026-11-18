@@ -1,10 +1,11 @@
 # MolClusters
 
 <figure class="hero" markdown="span">
-  ![A droplet of a few dozen molecules, drawn as space-filling atoms. Six of the clusters it holds are coloured blue, orange, green, yellow, pink and violet, the other clusters are grey, and free molecules nearby are faint.](assets/home/droplet.webp){ width="300" }
-  <figcaption markdown="span">One droplet of 2-methylerythritol and malic acid (the test system, at
-  47.5 ns), resolved into clusters by the [quick start](user-guide/quickstart.md)'s rules: each colour is one
-  cluster, grey ones are other clusters, faint ones free molecules.</figcaption>
+  ![Three separate droplets of 18, 17 and 13 molecules, drawn as space-filling atoms, coloured blue, orange and green.](assets/home/clusters.webp){ width="300" }
+  <figcaption markdown="span">Three droplets of 2-methylerythritol and malic acid
+  forming in the test system at 4.5 ns, each found as one cluster (molecules
+  connected when their centers of mass are within 8 Å) and drawn in its own
+  colour.</figcaption>
 </figure>
 
 **MolClusters** follows molecular clusters through a molecular dynamics trajectory:

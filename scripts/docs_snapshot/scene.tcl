@@ -10,10 +10,8 @@ lassign $argv pdb out
 mol new $pdb waitfor all
 mol delrep 0 top
 
-# The six clusters (by size rank) most visible from this view, found by rendering
-# each cluster in red against the others in grey; yellow is kept off orange, the
-# palette's least distinct pair. Other clusters are grey, free molecules faint.
-set shown {2 6 3 14 1 15}
+# Each cluster in the view (by size rank, at most six) in its own colour, free
+# molecules smaller and grey.
 set palette {
   {0.165 0.471 0.839}
   {0.922 0.408 0.204}
@@ -22,20 +20,18 @@ set palette {
   {0.910 0.482 0.643}
   {0.384 0.314 0.839}
 }
-proc addrep {cid rgb sel material} {
+proc addrep {cid rgb sel scale} {
   color change rgb $cid {*}$rgb
-  mol representation VDW 1.0 24
+  mol representation VDW $scale 24
   mol color ColorID $cid
   mol selection $sel
-  mol material $material
+  mol material AOChalky
   mol addrep top
 }
-foreach b $shown rgb $palette cid {23 24 25 26 27 28} {
-  addrep $cid $rgb "beta $b" AOChalky
+foreach rgb $palette cid {23 24 25 26 27 28} rank {1 2 3 4 5 6} {
+  addrep $cid $rgb "beta $rank" 1.0
 }
-addrep 29 {0.537 0.529 0.506} "beta > 0 and not beta $shown" AOChalky
-addrep 30 {0.80 0.80 0.78} "beta 0" Transparent
-material change opacity Transparent 0.3
+addrep 29 {0.62 0.62 0.60} "beta 0" 0.6
 
 color Display Background white
 display projection orthographic
@@ -46,8 +42,8 @@ display aoambient 0.85
 display aodirect 0.45
 axes location off
 display resetview
-rotate x by -15
-rotate y by 20
-scale by 1.15
+rotate x by -20
+rotate y by 15
+scale by 1.6
 render Tachyon $out
 quit

@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: © 2026 Emanuel Mancio <emanuelmancio@usp.br>
+#
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
+# The home page's picture's rules: one center-of-mass cutoff for every pair, loose
+# enough that each droplet of the test system's first nanoseconds is one cluster.
+# (The quick start's tighter rules split a droplet into several clusters that touch.)
+rules:
+  MAL:
+    MAL: cm 8.0
+    MOL: cm 8.0
+  MOL:
+    MOL: cm 8.0
+
+report_compression: none
